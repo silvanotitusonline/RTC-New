@@ -114,6 +114,7 @@ internal fun CommunityPostDetailScreen(
     var editingCommentId by rememberSaveable(postId) { mutableStateOf<String?>(null) }
     var editingText by rememberSaveable(postId) { mutableStateOf("") }
     var mediaGalleryOpen by rememberSaveable(postId) { mutableStateOf(false) }
+    var selectedMediaIndex by rememberSaveable(postId) { mutableStateOf<Int?>(null) }
     var reportOpen by rememberSaveable(postId) { mutableStateOf(false) }
     var guidelinesOpen by rememberSaveable(postId) { mutableStateOf(false) }
     var postCommentAfterGuidelines by rememberSaveable(postId) { mutableStateOf(false) }
@@ -241,7 +242,8 @@ internal fun CommunityPostDetailScreen(
                     if (activePost.media.isNotEmpty()) {
                         CommunityMediaPreview(
                             media = activePost.media,
-                            onOpen = { mediaGalleryOpen = true },
+                            onOpen = { selectedMediaIndex = 0 },
+                            onMediaClick = { index -> selectedMediaIndex = index },
                             onRefreshMediaUrl = communityViewModel::refreshMediaUrl,
                         )
                     }
@@ -548,11 +550,15 @@ internal fun CommunityPostDetailScreen(
         }
     }
     
-    if (mediaGalleryOpen) {
+    if (selectedMediaIndex != null || mediaGalleryOpen) {
         FullScreenMediaGallery(
             media = activePost.media,
+            initialIndex = selectedMediaIndex ?: 0,
             onRefreshMediaUrl = communityViewModel::refreshMediaUrl,
-            onDismiss = { mediaGalleryOpen = false },
+            onDismiss = {
+                mediaGalleryOpen = false
+                selectedMediaIndex = null
+            },
         )
     }
     if (reportOpen) {

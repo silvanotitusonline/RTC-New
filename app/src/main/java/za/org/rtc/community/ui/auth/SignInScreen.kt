@@ -60,6 +60,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -67,8 +73,6 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
 import za.org.rtc.community.ui.components.RtcBrandLockup
 import za.org.rtc.community.ui.components.RtcCard
@@ -104,6 +108,45 @@ fun SignInScreen(
     var isSigningInLocally by remember { mutableStateOf(false) }
     var isPasswordVisible by rememberSaveable { mutableStateOf(false) }
     var showForgotPasswordModal by rememberSaveable { mutableStateOf(false) }
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        Log.d("SignInScreen", "Google Sign-In intent returned. ResultCode: ${result.resultCode}")
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account?.idToken
+            if (idToken != null) {
+                Log.i("SignInScreen", "Google Sign-In account selection successful. Exchanging token...")
+                AuthDiagnosticLogger.logSuccess()
+                isSigningInLocally = false // Hand over loading state to ViewModel
+                viewModel.signInWithGoogle(idToken, "")
+            } else {
+                isSigningInLocally = false
+                Log.e("SignInScreen", "Google Sign-In failed: idToken is null")
+                coroutineScope.launch { snackbarHostState.showSnackbar("No ID token found in Google Sign-In response.") }
+            }
+        } catch (e: ApiException) {
+            isSigningInLocally = false
+            Log.e("SignInScreen", "Google Sign-In API Exception. Status Code: ${e.statusCode}", e)
+            if (e.statusCode != 12501 && e.statusCode != 0) { // 12501 is cancelled
+                val errorMsg = if (e.statusCode == 10) {
+                    "Code 10: App SHA-1 fingerprint not registered in Google Cloud Console"
+                } else {
+                    "Google sign-in failed. Error Code: ${e.statusCode}"
+                }
+                coroutineScope.launch { snackbarHostState.showSnackbar(errorMsg) }
+                AuthDiagnosticLogger.logError("GOOGLE_SIGN_IN_ERROR", "Status Code: ${e.statusCode} Msg: ${e.message ?: e.toString()}")
+            } else if (result.resultCode != android.app.Activity.RESULT_OK && e.statusCode != 12501) {
+                Log.w("SignInScreen", "Sign-in intent canceled by user or OS.")
+            }
+        } catch (e: Exception) {
+            isSigningInLocally = false
+            Log.e("SignInScreen", "Unexpected error parsing Google Sign-In intent", e)
+            coroutineScope.launch { snackbarHostState.showSnackbar("Unexpected authentication error.") }
+        }
+    }
+
 
     // Reactively notify on successful authentication
     LaunchedEffect(uiState.authStatus) {
@@ -115,7 +158,8 @@ fun SignInScreen(
     // Display error message in snackbar if present
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { error ->
-            snackbarHostState.showSnackbar(error)
+            isSigningInLocally = false
+            coroutineScope.launch { snackbarHostState.showSnackbar(error) }
             viewModel.clearError()
         }
     }
@@ -376,81 +420,28 @@ fun SignInScreen(
                         enabled = !isAnyLoading,
                         onClick = {
                             isSigningInLocally = true
-                            AuthDiagnosticLogger.logAttempt()
-
-                            coroutineScope.launch {
-                                val rawNonce = UUID.randomUUID().toString()
-                                val hashedNonce = MessageDigest.getInstance("SHA-256")
-                                    .digest(rawNonce.toByteArray(Charsets.UTF_8))
-                                    .joinToString("") { "%02x".format(it) }
-
-                                val googleIdOption = GetGoogleIdOption.Builder()
-                                    .setFilterByAuthorizedAccounts(false)
-                                    .setServerClientId(RTC_GOOGLE_WEB_CLIENT_ID)
-                                    .setNonce(hashedNonce)
-                                    .setAutoSelectEnabled(false)
-                                    .associateLinkedAccounts(RTC_GOOGLE_WEB_CLIENT_ID, listOf("email", "profile"))
-                                    .build()
-
-                                val request = GetCredentialRequest.Builder()
-                                    .addCredentialOption(googleIdOption)
-                                    .build()
-
-                                try {
-                                    Log.d(TAG, "Invoking androidx.credentials CredentialManager.getCredential...")
-                                    val result = credentialManager.getCredential(
-                                        context = context,
-                                        request = request,
-                                    )
-
-                                    if (result.credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                                        val googleCredential = GoogleIdTokenCredential.createFrom(result.credential.data)
-                                        Log.i(TAG, "Successfully received Google ID token via CredentialManager")
-                                        AuthDiagnosticLogger.logSuccess()
-                                        // Pass idToken and rawNonce to ViewModel
-                                        viewModel.signInWithGoogle(googleCredential.idToken, rawNonce)
-                                    } else {
-                                        Log.w(TAG, "Unsupported credential type received: ${result.credential.type}")
-                                        snackbarHostState.showSnackbar("Received unsupported credential type.")
-                                    }
-                                } catch (e: Exception) {
-                                    val errorMsg = e.localizedMessage ?: e.message ?: e.toString()
-                                    val className = e.javaClass.simpleName
-                                    Log.e(TAG, "CredentialManager sign-in failed: $errorMsg", e)
-                                    AuthDiagnosticLogger.logError("CREDENTIAL_MANAGER_ERROR", errorMsg)
-
-                                    if (className.contains("NoCredential", ignoreCase = true) ||
-                                        errorMsg.contains("no credential", ignoreCase = true) ||
-                                        errorMsg.contains("no account", ignoreCase = true) ||
-                                        className.contains("NoAccount", ignoreCase = true)
-                                    ) {
-                                        try {
-                                            val addAccountIntent = android.content.Intent(android.provider.Settings.ACTION_ADD_ACCOUNT).apply {
-                                                putExtra(android.provider.Settings.EXTRA_ACCOUNT_TYPES, arrayOf("com.google"))
-                                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                                            }
-                                            context.startActivity(addAccountIntent)
-                                        } catch (_: Exception) {
-                                            try {
-                                                val webIntent = android.content.Intent(
-                                                    android.content.Intent.ACTION_VIEW,
-                                                    android.net.Uri.parse("https://accounts.google.com")
-                                                ).apply {
-                                                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                                                }
-                                                context.startActivity(webIntent)
-                                            } catch (_: Exception) {}
-                                        }
-                                    } else if (!errorMsg.contains("Cancellation", ignoreCase = true) &&
-                                        !errorMsg.contains("cancel", ignoreCase = true)
-                                    ) {
-                                        snackbarHostState.showSnackbar(
-                                            "Google sign-in could not be completed: ${e.message ?: "Authentication cancelled or unavailable"}"
-                                        )
-                                    }
-                                } finally {
-                                    isSigningInLocally = false
+                            if (!GooglePlayServicesHelper.isPlayServicesAvailable(context)) {
+                                isSigningInLocally = false
+                                val availability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
+                                val resultCode = availability.isGooglePlayServicesAvailable(context)
+                                val activity = context as? android.app.Activity
+                                if (activity != null && availability.isUserResolvableError(resultCode)) {
+                                    availability.showErrorDialogFragment(activity, resultCode, 9001)
+                                } else {
+                                    // Should show snackbar but we're out of scope for suspend, so just ignore or set error state
                                 }
+                                return@GoogleCredentialSignInButton
+                            }
+                            
+                            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                .requestIdToken(RTC_GOOGLE_WEB_CLIENT_ID)
+                                .requestEmail()
+                                .requestProfile()
+                                .build()
+                                
+                            val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                            googleSignInClient.signOut().addOnCompleteListener {
+                                googleSignInLauncher.launch(googleSignInClient.signInIntent)
                             }
                         },
                         modifier = Modifier

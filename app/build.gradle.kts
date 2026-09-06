@@ -229,6 +229,7 @@ dependencies {
     implementation(libs.recaptcha.enterprise)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services)
+    implementation(libs.play.services.auth)
     implementation(libs.googleid)
 
     testImplementation(libs.junit)

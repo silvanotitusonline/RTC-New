@@ -91,6 +91,7 @@ internal fun CommunityPostCard(
     var expanded by rememberSaveable(post.id) { mutableStateOf(false) }
     var showDeleteConfirmDialog by rememberSaveable(post.id) { mutableStateOf(false) }
     var showEmojiPicker by rememberSaveable(post.id) { mutableStateOf(false) }
+    var selectedMediaIndex by rememberSaveable(post.id) { mutableStateOf<Int?>(null) }
     val standardEmojis = listOf("❤️", "👍", "💡", "🔥", "🙏", "🙌")
     val displayContent = if (canCollapse && !expanded) {
         post.content.take(collapseAt).trimEnd() + "…"
@@ -153,6 +154,7 @@ internal fun CommunityPostCard(
             CommunityMediaPreview(
                 media = post.media,
                 onOpen = { onOpenPost(post) },
+                onMediaClick = { index -> selectedMediaIndex = index },
                 onRefreshMediaUrl = onRefreshMediaUrl,
             )
         }
@@ -334,6 +336,15 @@ internal fun CommunityPostCard(
                     Text("Cancel")
                 }
             },
+        )
+    }
+
+    if (selectedMediaIndex != null) {
+        FullScreenMediaGallery(
+            media = post.media,
+            initialIndex = selectedMediaIndex!!,
+            onRefreshMediaUrl = onRefreshMediaUrl,
+            onDismiss = { selectedMediaIndex = null },
         )
     }
 }

@@ -886,6 +886,7 @@ private fun LiquidAuroraGlassBackground(
         // LEFT EDGE: Dynamic Full-Spectrum Aurora Wave Thread & Aura (Gentle Breeze Wave)
         // -------------------------------------------------------------
         val leftPoints = mutableListOf<Offset>()
+        val leftReflectionPoints = mutableListOf<Offset>()
         val step = 10f
         var y = 0f
         while (y <= h) {
@@ -898,6 +899,7 @@ private fun LiquidAuroraGlassBackground(
             val windBow = sin(normY * PI.toFloat() + breezePhase * 0.5f) * (w * 0.005f * breezeGust)
             val x = (w * 0.016f) + wave1 + breezeWave + windBow
             leftPoints.add(Offset(x, y))
+            leftReflectionPoints.add(Offset(-x, y))
             y += step
         }
 
@@ -906,6 +908,14 @@ private fun LiquidAuroraGlassBackground(
                 moveTo(leftPoints[0].x, leftPoints[0].y)
                 for (i in 1 until leftPoints.size) {
                     lineTo(leftPoints[i].x, leftPoints[i].y)
+                }
+            }
+        }
+        val leftReflectionPath = Path().apply {
+            if (leftReflectionPoints.isNotEmpty()) {
+                moveTo(leftReflectionPoints[0].x, leftReflectionPoints[0].y)
+                for (i in 1 until leftReflectionPoints.size) {
+                    lineTo(leftReflectionPoints[i].x, leftReflectionPoints[i].y)
                 }
             }
         }
@@ -922,6 +932,13 @@ private fun LiquidAuroraGlassBackground(
         )
 
         // Delicate Soft Breathing Multi-Layer Aura & Sleek Inner Core Thread
+        // 0. Mirrored dynamic edge reflection
+        drawPath(
+            path = leftReflectionPath,
+            brush = leftGradient,
+            style = Stroke(width = outerSoftAuraWidth * 1.5f, cap = StrokeCap.Round),
+            alpha = outerSoftAuraAlpha * 1.2f,
+        )
         // 1. Broad soft diffuse aura
         drawPath(
             path = leftPath,
@@ -948,6 +965,7 @@ private fun LiquidAuroraGlassBackground(
         // RIGHT EDGE: Dynamic Full-Spectrum Aurora Wave Thread & Aura (Gentle Breeze Wave)
         // -------------------------------------------------------------
         val rightPoints = mutableListOf<Offset>()
+        val rightReflectionPoints = mutableListOf<Offset>()
         y = 0f
         while (y <= h) {
             val normY = y / h
@@ -959,6 +977,7 @@ private fun LiquidAuroraGlassBackground(
             val windBow = cos(normY * PI.toFloat() - breezePhase * 0.5f) * (w * 0.005f * breezeGust)
             val x = w - (w * 0.016f) + wave1 + breezeWave + windBow
             rightPoints.add(Offset(x, y))
+            rightReflectionPoints.add(Offset(w + (w - x), y))
             y += step
         }
 
@@ -967,6 +986,14 @@ private fun LiquidAuroraGlassBackground(
                 moveTo(rightPoints[0].x, rightPoints[0].y)
                 for (i in 1 until rightPoints.size) {
                     lineTo(rightPoints[i].x, rightPoints[i].y)
+                }
+            }
+        }
+        val rightReflectionPath = Path().apply {
+            if (rightReflectionPoints.isNotEmpty()) {
+                moveTo(rightReflectionPoints[0].x, rightReflectionPoints[0].y)
+                for (i in 1 until rightReflectionPoints.size) {
+                    lineTo(rightReflectionPoints[i].x, rightReflectionPoints[i].y)
                 }
             }
         }
@@ -983,6 +1010,13 @@ private fun LiquidAuroraGlassBackground(
         )
 
         // Delicate Soft Breathing Multi-Layer Aura & Sleek Inner Core Thread
+        // 0. Mirrored dynamic edge reflection
+        drawPath(
+            path = rightReflectionPath,
+            brush = rightGradient,
+            style = Stroke(width = outerSoftAuraWidth * 1.5f, cap = StrokeCap.Round),
+            alpha = outerSoftAuraAlpha * 1.2f,
+        )
         // 1. Broad soft diffuse aura
         drawPath(
             path = rightPath,

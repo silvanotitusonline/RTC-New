@@ -7,19 +7,24 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -41,13 +46,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -68,64 +77,228 @@ import za.org.rtc.community.ui.theme.RtcSize
 import za.org.rtc.community.ui.theme.RtcSpacing
 
 @Composable
-internal fun CommunityMediaPreview(
-    media: List<MediaItem>,
-    onOpen: () -> Unit,
-    onRefreshMediaUrl: suspend (String) -> String? = { null },
+private fun ThumbnailItem(
+    item: MediaItem,
+    onClick: () -> Unit,
+    onRefreshMediaUrl: suspend (String) -> String?,
+    modifier: Modifier = Modifier,
+    overlayText: String? = null,
 ) {
-    val first = media.minByOrNull { it.position } ?: return
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(RtcMath.Phi)
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
             .clickable(
-                role = Role.Button,
-                onClickLabel = "Open Community media",
-                onClick = onOpen,
-            )
+                role = Role.Image,
+                onClickLabel = "View image full screen",
+                onClick = onClick,
+            ),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when {
-                first.signedUrl == null -> {
-                    Icon(Icons.Filled.ErrorOutline, contentDescription = "Community media unavailable", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                item.signedUrl == null -> {
+                    Icon(
+                        Icons.Filled.ErrorOutline,
+                        contentDescription = "Media unavailable",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-                first.kind == MediaKind.IMAGE -> {
+                item.kind == MediaKind.IMAGE -> {
                     RecoverableSignedImage(
-                        mediaId = first.id,
-                        initialUrl = first.signedUrl,
-                        contentDescription = first.caption ?: "Community image attachment",
+                        mediaId = item.id,
+                        initialUrl = item.signedUrl,
+                        contentDescription = item.caption ?: "Image attachment",
                         contentScale = ContentScale.Crop,
                         onRefreshUrl = onRefreshMediaUrl,
                     )
                 }
                 else -> {
                     CommunityVideoPoster(
-                        url = first.signedUrl,
-                        contentDescription = first.caption ?: "Community video attachment",
+                        url = item.signedUrl,
+                        contentDescription = item.caption ?: "Video attachment",
                     )
                     Surface(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.80f),
-                        shape = MaterialTheme.shapes.extraLarge,
+                        color = Color.Black.copy(alpha = 0.55f),
+                        shape = CircleShape,
                     ) {
                         Icon(
                             Icons.Filled.PlayArrow,
-                            contentDescription = "Open Community video",
-                            modifier = Modifier.padding(RtcSpacing.compact).size(RtcSize.mediaAction),
-                            tint = MaterialTheme.colorScheme.primary,
+                            contentDescription = "Play video",
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .size(24.dp),
+                            tint = Color.White,
                         )
                     }
                 }
             }
-            if (media.size > 1) {
+            if (overlayText != null) {
                 Surface(
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(RtcSpacing.compact),
+                    color = Color.Black.copy(alpha = 0.65f),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    Text(
-                        "${media.size} items",
-                        modifier = Modifier.padding(horizontal = RtcSpacing.compact, vertical = RtcSpacing.relatedText),
-                        style = MaterialTheme.typography.labelMedium,
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = overlayText,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun CommunityMediaPreview(
+    media: List<MediaItem>,
+    onOpen: () -> Unit = {},
+    onMediaClick: ((Int) -> Unit)? = null,
+    onRefreshMediaUrl: suspend (String) -> String? = { null },
+) {
+    if (media.isEmpty()) return
+    val ordered = remember(media) { media.sortedBy { it.position } }
+
+    val handleClick: (Int) -> Unit = { index ->
+        if (onMediaClick != null) {
+            onMediaClick(index)
+        } else {
+            onOpen()
+        }
+    }
+
+    when (ordered.size) {
+        1 -> {
+            ThumbnailItem(
+                item = ordered[0],
+                onClick = { handleClick(0) },
+                onRefreshMediaUrl = onRefreshMediaUrl,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.6f),
+            )
+        }
+        2 -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ThumbnailItem(
+                    item = ordered[0],
+                    onClick = { handleClick(0) },
+                    onRefreshMediaUrl = onRefreshMediaUrl,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                )
+                ThumbnailItem(
+                    item = ordered[1],
+                    onClick = { handleClick(1) },
+                    onRefreshMediaUrl = onRefreshMediaUrl,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                )
+            }
+        }
+        3 -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ThumbnailItem(
+                    item = ordered[0],
+                    onClick = { handleClick(0) },
+                    onRefreshMediaUrl = onRefreshMediaUrl,
+                    modifier = Modifier
+                        .weight(1.2f)
+                        .fillMaxHeight(),
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ThumbnailItem(
+                        item = ordered[1],
+                        onClick = { handleClick(1) },
+                        onRefreshMediaUrl = onRefreshMediaUrl,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    )
+                    ThumbnailItem(
+                        item = ordered[2],
+                        onClick = { handleClick(2) },
+                        onRefreshMediaUrl = onRefreshMediaUrl,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    )
+                }
+            }
+        }
+        else -> {
+            val extraCount = ordered.size - 4
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ThumbnailItem(
+                        item = ordered[0],
+                        onClick = { handleClick(0) },
+                        onRefreshMediaUrl = onRefreshMediaUrl,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    )
+                    ThumbnailItem(
+                        item = ordered[1],
+                        onClick = { handleClick(1) },
+                        onRefreshMediaUrl = onRefreshMediaUrl,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ThumbnailItem(
+                        item = ordered[2],
+                        onClick = { handleClick(2) },
+                        onRefreshMediaUrl = onRefreshMediaUrl,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    )
+                    ThumbnailItem(
+                        item = ordered[3],
+                        onClick = { handleClick(3) },
+                        onRefreshMediaUrl = onRefreshMediaUrl,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        overlayText = if (extraCount > 0) "+$extraCount" else null,
                     )
                 }
             }
@@ -227,44 +400,51 @@ private fun RecoverableSignedImage(
 @Composable
 internal fun FullScreenMediaGallery(
     media: List<MediaItem>,
+    initialIndex: Int = 0,
     onRefreshMediaUrl: suspend (String) -> String?,
     onDismiss: () -> Unit,
 ) {
     if (media.isEmpty()) return
     val ordered = remember(media) { media.sortedBy { it.position } }
-    val pagerState = rememberPagerState(pageCount = { ordered.size })
+    val safeInitialIndex = initialIndex.coerceIn(0, (ordered.size - 1).coerceAtLeast(0))
+    val pagerState = rememberPagerState(initialPage = safeInitialIndex, pageCount = { ordered.size })
     val selected = ordered.getOrElse(pagerState.currentPage) { ordered.first() }
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            Column(modifier = Modifier.fillMaxSize().padding(RtcSpacing.small), verticalArrangement = Arrangement.spacedBy(RtcSpacing.small)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Media ${pagerState.currentPage + 1} of ${ordered.size}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                    )
-                    TextButton(onClick = onDismiss) { Text("Close") }
-                }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+        ),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.Black,
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 HorizontalPager(
                     state = pagerState,
                     key = { ordered[it].id },
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    modifier = Modifier.fillMaxSize(),
                 ) { page ->
                     val item = ordered[page]
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = 56.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         when {
                             item.signedUrl == null -> Text(
                                 "This media item is no longer available.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = Color.White.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                             item.kind == MediaKind.IMAGE -> RecoverableSignedImage(
                                 mediaId = item.id,
                                 initialUrl = item.signedUrl,
-                                contentDescription = item.caption ?: "Community image attachment",
+                                contentDescription = item.caption ?: "Full-screen image attachment",
                                 contentScale = ContentScale.Fit,
                                 onRefreshUrl = onRefreshMediaUrl,
                             )
@@ -276,8 +456,57 @@ internal fun FullScreenMediaGallery(
                         }
                     }
                 }
-                selected.caption?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                Surface(
+                    color = Color.Black.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.semantics { contentDescription = "Close full-screen image viewer" },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = "Close",
+                                    tint = Color.White,
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "${pagerState.currentPage + 1} of ${ordered.size}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
+
+                selected.caption?.takeIf { it.isNotBlank() }?.let { caption ->
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.75f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp),
+                    ) {
+                        Text(
+                            text = caption,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        )
+                    }
                 }
             }
         }

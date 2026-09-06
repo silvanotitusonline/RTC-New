@@ -379,11 +379,11 @@ class RtcRepository @Inject constructor(
 
     suspend fun signInWithGoogleIdToken(idToken: String, nonce: String): Result<Unit> = runCatching {
         require(idToken.isNotBlank()) { "Google did not return an identity token." }
-        require(nonce.isNotBlank()) { "Google sign-in nonce is missing." }
+        
         supabase.auth.signInWith(IDToken) {
             this.idToken = idToken
             provider = Google
-            this.nonce = nonce
+            if (nonce.isNotBlank()) { this.nonce = nonce }
         }
         supabase.auth.startAutoRefreshForCurrentSession()
         hydrateSupabaseSession()

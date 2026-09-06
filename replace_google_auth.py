@@ -1,124 +1,23 @@
-package za.org.rtc.community.ui.auth
+import re
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.SettingsSuggest
-import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+with open("app/src/main/java/za/org/rtc/community/ui/auth/RtcGoogleSignInButton.kt", "r") as f:
+    content = f.read()
+
+# Replace imports
+import_replacement = """import androidx.compose.ui.window.Dialog
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+"""
+content = re.sub(r'import androidx.compose.ui.window.Dialog.*', import_replacement, content, flags=re.MULTILINE)
 
-import androidx.credentials.CredentialManager
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialException
-import kotlinx.coroutines.launch
-import java.security.MessageDigest
-import java.util.UUID
+# Replace the Composable body
+body_start = content.find("fun RtcGoogleSignInButton(")
+body_end = len(content)
 
-/**
- * Custom 4-color Google 'G' brand mark for authentic identity recognition.
- */
-@Composable
-fun GoogleBrandIcon(modifier: Modifier = Modifier.size(20.dp)) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val strokeWidth = w * 0.22f
-        val center = Offset(w / 2f, size.height / 2f)
-        val radius = (w - strokeWidth) / 2f
-
-        // Blue arc (right/top-right)
-        drawArc(
-            color = Color(0xFF4285F4),
-            startAngle = -45f,
-            sweepAngle = 90f,
-            useCenter = false,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Butt)
-        )
-        // Green arc (bottom)
-        drawArc(
-            color = Color(0xFF34A853),
-            startAngle = 45f,
-            sweepAngle = 90f,
-            useCenter = false,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Butt)
-        )
-        // Yellow arc (bottom-left)
-        drawArc(
-            color = Color(0xFFFBBC05),
-            startAngle = 135f,
-            sweepAngle = 90f,
-            useCenter = false,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Butt)
-        )
-        // Red arc (top-left)
-        drawArc(
-            color = Color(0xFFEA4335),
-            startAngle = 225f,
-            sweepAngle = 90f,
-            useCenter = false,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Butt)
-        )
-        // Blue horizontal bar
-        drawLine(
-            color = Color(0xFF4285F4),
-            start = Offset(center.x, center.y),
-            end = Offset(center.x + radius + strokeWidth / 2f, center.y),
-            strokeWidth = strokeWidth,
-            cap = StrokeCap.Square
-        )
-    }
-}
-
-/**
- * Public OAuth client identifier for RTC Community's native Google sign-in flow.
- */
-internal const val RTC_GOOGLE_WEB_CLIENT_ID =
-    "281489677261-j6isgtjd4mqv4os6fakt2qeloogpav8p.apps.googleusercontent.com"
-
-private fun sha256Hex(value: String): String =
-    MessageDigest.getInstance("SHA-256")
-        .digest(value.toByteArray(Charsets.UTF_8))
-        .joinToString(separator = "") { byte ->
-            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
-        }
-
-@Composable
-fun RtcGoogleSignInButton(
+new_body = """fun RtcGoogleSignInButton(
     enabled: Boolean,
     onCredential: (idToken: String, rawNonce: String) -> Unit,
     onFailure: (message: String) -> Unit,
@@ -250,3 +149,8 @@ fun RtcGoogleSignInButton(
         )
     }
 }
+"""
+
+content = content[:body_start] + new_body
+with open("app/src/main/java/za/org/rtc/community/ui/auth/RtcGoogleSignInButton.kt", "w") as f:
+    f.write(content)
