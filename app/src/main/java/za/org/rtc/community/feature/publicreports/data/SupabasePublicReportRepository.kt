@@ -2,10 +2,7 @@ package za.org.rtc.community.feature.publicreports.data
 
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Columns
-import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import java.time.Instant
@@ -48,9 +45,12 @@ class SupabasePublicReportRepository @Inject constructor(
 
     override suspend fun categories(): Result<List<PublicReportCategory>> = runCatching {
         val remote = runCatching {
-            supabase.from(PublicReportRpcContract.CATEGORIES_VIEW).select(Columns.ALL) {
-                order(column = "sort_order", order = Order.ASCENDING)
-            }.decodeList<JsonObject>().map(PublicReportJsonMappers::category)
+            decodeObjects(
+                supabase.postgrest.rpc(
+                    PublicReportRpcContract.CATEGORIES,
+                    buildJsonObject {},
+                ),
+            ).map(PublicReportJsonMappers::category)
         }.getOrDefault(emptyList())
 
         if (remote.isNotEmpty()) remote else PublicReportMockData.getSampleCategories()
@@ -140,10 +140,12 @@ class SupabasePublicReportRepository @Inject constructor(
 
     override suspend fun timeline(reportId: String): Result<List<PublicReportTimelineEntry>> = runCatching {
         val remote = runCatching {
-            supabase.from(PublicReportRpcContract.TIMELINE_VIEW).select(Columns.ALL) {
-                filter { eq("report_id", reportId) }
-                order(column = "created_at", order = Order.ASCENDING)
-            }.decodeList<JsonObject>().map(PublicReportJsonMappers::timeline)
+            decodeObjects(
+                supabase.postgrest.rpc(
+                    PublicReportRpcContract.TIMELINE,
+                    buildJsonObject { put("p_report_id", reportId) },
+                ),
+            ).map(PublicReportJsonMappers::timeline)
         }.getOrDefault(emptyList())
 
         if (remote.isNotEmpty()) remote else PublicReportMockData.getSampleTimeline(reportId)

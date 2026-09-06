@@ -67,22 +67,40 @@ select is(
   'Anonymous users cannot bypass sanitized projections with direct table reads'
 );
 
-select ok(
-  exists(select 1 from information_schema.role_table_grants where grantee='anon' and table_schema='public' and table_name='civic_report_categories_public' and privilege_type='SELECT')
-  and exists(select 1 from information_schema.role_table_grants where grantee='authenticated' and table_schema='public' and table_name='civic_report_categories_public' and privilege_type='SELECT'),
-  'Category projection is readable by anon and authenticated'
+select is(
+  (select count(*)::integer
+   from information_schema.role_table_grants
+   where grantee in ('PUBLIC','anon','authenticated')
+     and table_schema='public'
+     and table_name in (
+       'civic_report_categories_public','civic_reports_public',
+       'civic_report_status_history_public','civic_report_comments_public'
+     )
+     and privilege_type='SELECT'),
+  0,
+  'Public report views are not directly readable by client roles'
+);
+
+select is(
+  (select count(*)::integer
+   from pg_class c
+   join pg_namespace n on n.oid=c.relnamespace
+   where n.nspname='public'
+     and c.relname in (
+       'civic_report_categories_public','civic_reports_public',
+       'civic_report_status_history_public','civic_report_comments_public'
+     )
+     and 'security_invoker=true'=any(coalesce(c.reloptions,'{}'::text[]))),
+  4,
+  'All retained public report projection views are security invoker'
 );
 
 select ok(
-  exists(select 1 from information_schema.role_table_grants where grantee='anon' and table_schema='public' and table_name='civic_reports_public' and privilege_type='SELECT')
-  and exists(select 1 from information_schema.role_table_grants where grantee='authenticated' and table_schema='public' and table_name='civic_reports_public' and privilege_type='SELECT'),
-  'Sanitized report projection is readable by anon and authenticated'
-);
-
-select ok(
-  exists(select 1 from information_schema.role_table_grants where grantee='anon' and table_schema='public' and table_name='civic_report_status_history_public' and privilege_type='SELECT')
-  and exists(select 1 from information_schema.role_table_grants where grantee='authenticated' and table_schema='public' and table_name='civic_report_status_history_public' and privilege_type='SELECT'),
-  'Sanitized status projection is readable by anon and authenticated'
+  has_function_privilege('anon','public.civic_report_categories_v1()','EXECUTE')
+  and has_function_privilege('authenticated','public.civic_report_categories_v1()','EXECUTE')
+  and has_function_privilege('anon','public.civic_report_timeline_v1(uuid)','EXECUTE')
+  and has_function_privilege('authenticated','public.civic_report_timeline_v1(uuid)','EXECUTE'),
+  'Sanitized category and timeline reads are RPC-only for client roles'
 );
 
 select ok(
@@ -163,13 +181,13 @@ select ok(
 );
 
 select is(
-  (select count(*)::integer from public.civic_report_categories_public where is_active),
+  (select count(*)::integer from public.civic_report_categories_v1() where is_active),
   11,
   'Eleven active Public Report categories are seeded'
 );
 
 select ok(
-  not exists(select 1 from public.civic_report_categories_public where slug is null or label is null),
+  not exists(select 1 from public.civic_report_categories_v1() where slug is null or label is null),
   'Category catalogue exposes stable slugs and labels'
 );
 

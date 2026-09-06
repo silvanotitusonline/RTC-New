@@ -1,11 +1,13 @@
 begin;
 set local search_path = extensions, public, pg_catalog;
 
-select plan(30);
+select plan(34);
 
 select ok(to_regprocedure('public.civic_report_create_v1(uuid,text,text,timestamptz,uuid,text,text,text,text,double precision,double precision,text,text,boolean,text)') is not null, 'Resident idempotent create RPC exists');
 select ok(to_regprocedure('public.civic_report_page_v1(text,text,text,boolean,text,timestamptz,uuid,integer,timestamptz)') is not null, 'Sanitized keyset report page RPC exists');
 select ok(to_regprocedure('public.civic_report_get_v1(uuid)') is not null, 'Sanitized report detail RPC exists');
+select ok(to_regprocedure('public.civic_report_categories_v1()') is not null, 'Sanitized category catalogue RPC exists');
+select ok(to_regprocedure('public.civic_report_timeline_v1(uuid)') is not null, 'Sanitized report timeline RPC exists');
 select ok(to_regprocedure('public.civic_report_set_vote_v1(uuid,smallint)') is not null, 'Authoritative vote set/clear RPC exists');
 select ok(to_regprocedure('public.civic_report_comment_page_v1(uuid,timestamptz,uuid,integer)') is not null, 'Keyset comment page RPC exists');
 select ok(to_regprocedure('public.civic_report_add_comment_v1(uuid,text,uuid)') is not null, 'Idempotent comment RPC exists');
@@ -33,6 +35,18 @@ select ok(
   has_function_privilege('anon','public.civic_report_get_v1(uuid)','EXECUTE')
   and has_function_privilege('authenticated','public.civic_report_get_v1(uuid)','EXECUTE'),
   'Public report detail is available to anon and authenticated'
+);
+
+select ok(
+  has_function_privilege('anon','public.civic_report_categories_v1()','EXECUTE')
+  and has_function_privilege('authenticated','public.civic_report_categories_v1()','EXECUTE'),
+  'Public category catalogue is RPC-only for anon and authenticated'
+);
+
+select ok(
+  has_function_privilege('anon','public.civic_report_timeline_v1(uuid)','EXECUTE')
+  and has_function_privilege('authenticated','public.civic_report_timeline_v1(uuid)','EXECUTE'),
+  'Public status timeline is RPC-only for anon and authenticated'
 );
 
 select ok(
