@@ -1,0 +1,41 @@
+# Android / Gradle local state
+.gradle/
+.kotlin/
+**/build/
+local.properties
+runtime.local.properties
+release.runtime.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+
+# Isolated agent worktrees
+.worktrees/
+
+# Signing material
+signing.properties
+*.jks
+*.keystore
+*.p12
+*.pem
+
+# Firebase Android runtime configuration is supplied securely in CI/developer setup
+app/google-services.json
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# Python test cache
+__pycache__/
+*.pyc
+
+# Local device-cloud automation dependencies and reports
+qa/appetize/node_modules/
+qa/appetize/playwright-report/
+qa/appetize/test-results/

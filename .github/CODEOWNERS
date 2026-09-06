@@ -1,0 +1,17 @@
+# RTC Community production integration ownership
+# GitHub plan enforcement may be limited; this file still documents required review ownership.
+
+* @silvanotitusonline
+
+# Central integration surfaces
+/app/src/main/java/za/org/rtc/community/ui/navigation/ @silvanotitusonline
+/app/src/main/java/za/org/rtc/community/navigation/RouteAccessPolicy.kt @silvanotitusonline
+/app/src/main/java/za/org/rtc/community/feature/community/CommunityFeedScreen.kt @silvanotitusonline
+/app/src/main/java/za/org/rtc/community/feature/administration/AdminWorkspace.kt @silvanotitusonline
+/app/src/main/java/za/org/rtc/community/app/RtcFirebaseMessagingService.kt @silvanotitusonline
+/.github/workflows/android-ci.yml @silvanotitusonline
+
+# Backend trust boundaries
+/supabase/migrations/ @silvanotitusonline
+/supabase/tests/ @silvanotitusonline
+/supabase/functions/ @silvanotitusonline

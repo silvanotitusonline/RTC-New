@@ -1,0 +1,184 @@
+name: Android Production Verification
+
+on:
+  push:
+    branches: [ main, production, develop ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: '21'
+  GRADLE_VERSION: '8.13'
+
+jobs:
+  verify-android:
+    name: Compile, test and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install required Android SDK packages
+        shell: bash
+        run: |
+          # `yes` receives SIGPIPE after sdkmanager consumes the final license response.
+          # Disable pipefail only for that expected acceptance pipeline.
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;35.0.0"
+
+      - name: Restore isolated debug runtime for verification
+        env:
+          RTC_NONPROD_SUPABASE_URL: ${{ secrets.RTC_NONPROD_SUPABASE_URL }}
+          RTC_NONPROD_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.RTC_NONPROD_SUPABASE_PUBLISHABLE_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$RTC_NONPROD_SUPABASE_URL" ] || [ -z "$RTC_NONPROD_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::warning::Non-production Supabase secrets are not configured. Using non-routable compile-only placeholders for source verification."
+            RTC_NONPROD_SUPABASE_URL="https://rtc-ci.invalid"
+            RTC_NONPROD_SUPABASE_PUBLISHABLE_KEY="sb_publishable_ci_placeholder"
+          fi
+          umask 077
+          {
+            printf 'supabase.nonproduction.url=%s\n' "$RTC_NONPROD_SUPABASE_URL"
+            printf 'supabase.nonproduction.publishableKey=%s\n' "$RTC_NONPROD_SUPABASE_PUBLISHABLE_KEY"
+          } > runtime.local.properties
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.13'
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Install source-contract Python dependencies
+        run: python3 -m pip install --disable-pip-version-check --no-input Pillow==11.3.0
+
+      - name: Restore Firebase Android configuration when supplied
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        shell: bash
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            umask 077
+            printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > app/google-services.json
+            echo "Firebase Android configuration restored for this CI run."
+          else
+            echo "GOOGLE_SERVICES_JSON_BASE64 is not configured."
+            echo "Debug compile will continue with Google Services intentionally not applied."
+          fi
+
+      - name: Run source regression contracts
+        run: python3 tools/tests/run_contract_tests.py
+
+      - name: Run shared Edge authorization tests
+        run: deno test supabase/functions/_shared/auth_test.ts
+
+      - name: Run JVM unit tests
+        run: gradle --no-daemon --stacktrace testDebugUnitTest
+
+      - name: Run Android lint
+        run: gradle --no-daemon --stacktrace lintDebug
+
+      - name: Assemble debug APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Compile Compose smoke tests
+        run: gradle --no-daemon --stacktrace assembleDebugAndroidTest
+
+      - name: Upload debug verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtc-community-debug-verification
+          if-no-files-found: warn
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+            app/build/reports/lint-results-debug.html
+            app/build/reports/tests/testDebugUnitTest/**
+
+      - name: Assemble release candidate when complete configuration exists
+        env:
+          RTC_PROD_SUPABASE_URL: ${{ secrets.RTC_PROD_SUPABASE_URL }}
+          RTC_PROD_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.RTC_PROD_SUPABASE_PUBLISHABLE_KEY }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+          RTC_ANDROID_KEYSTORE_BASE64: ${{ secrets.RTC_ANDROID_KEYSTORE_BASE64 }}
+          RTC_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.RTC_ANDROID_KEYSTORE_PASSWORD }}
+          RTC_ANDROID_KEY_ALIAS: ${{ secrets.RTC_ANDROID_KEY_ALIAS }}
+          RTC_ANDROID_KEY_PASSWORD: ${{ secrets.RTC_ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          required=(
+            RTC_PROD_SUPABASE_URL
+            RTC_PROD_SUPABASE_PUBLISHABLE_KEY
+            GOOGLE_SERVICES_JSON_BASE64
+            RTC_ANDROID_KEYSTORE_BASE64
+            RTC_ANDROID_KEYSTORE_PASSWORD
+            RTC_ANDROID_KEY_ALIAS
+            RTC_ANDROID_KEY_PASSWORD
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::notice::Release-candidate build skipped because the complete release secret bundle is not configured: ${missing[*]}"
+            exit 0
+          fi
+
+          umask 077
+          {
+            printf 'supabase.production.url=%s\n' "$RTC_PROD_SUPABASE_URL"
+            printf 'supabase.production.publishableKey=%s\n' "$RTC_PROD_SUPABASE_PUBLISHABLE_KEY"
+          } > release.runtime.properties
+
+          printf '%s' "$RTC_ANDROID_KEYSTORE_BASE64" | base64 --decode > rtc-ci-release.keystore
+          export RTC_ANDROID_KEYSTORE_PATH="$GITHUB_WORKSPACE/rtc-ci-release.keystore"
+
+          gradle --no-daemon --stacktrace assembleRelease bundleRelease
+
+      - name: Upload release candidate artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtc-community-release-candidate
+          if-no-files-found: ignore
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+
+      - name: Cleanup reconstructed CI credentials
+        if: always()
+        shell: bash
+        run: |
+          rm -f \
+            runtime.local.properties \
+            release.runtime.properties \
+            signing.properties \
+            rtc-ci-release.keystore \
+            app/google-services.json
