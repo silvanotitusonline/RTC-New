@@ -48,6 +48,7 @@ sealed interface AuthStatus {
 data class AuthStateUiState(
     val authStatus: AuthStatus = AuthStatus.Loading,
     val isLoading: Boolean = false,
+    val isAuthenticating: Boolean = false,
     val errorMessage: String? = null,
 ) {
     val isAuthenticated: Boolean
@@ -159,18 +160,31 @@ class AuthStateViewModel @Inject constructor(
      */
     fun signInWithGoogle(idToken: String, nonce: String) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            AuthenticationLogger.logState(
+                AuthenticationLogger.TransitionState.AUTHENTICATING,
+                "Starting backend token exchange with Supabase."
+            )
+            _uiState.update { it.copy(isLoading = true, isAuthenticating = true, errorMessage = null) }
             val result = repository.signInWithGoogleIdToken(idToken, nonce)
             result.fold(
                 onSuccess = {
                     Log.i(TAG, "Successfully authenticated with Google ID token")
-                    _uiState.update { it.copy(isLoading = false, errorMessage = null) }
+                    AuthenticationLogger.logState(
+                        AuthenticationLogger.TransitionState.SUCCESS,
+                        "Successfully authenticated with Google account."
+                    )
+                    _uiState.update { it.copy(isLoading = false, isAuthenticating = false, errorMessage = null) }
                 },
                 onFailure = { error ->
                     Log.e(TAG, "Failed Google authentication: ${error.message}", error)
+                    AuthenticationLogger.logState(
+                        AuthenticationLogger.TransitionState.FAILURE,
+                        "Backend token exchange failed: ${error.message}"
+                    )
                     _uiState.update {
                         it.copy(
                             isLoading = false,
+                            isAuthenticating = false,
                             errorMessage = error.localizedMessage ?: "Google sign-in failed. Please try again."
                         )
                     }

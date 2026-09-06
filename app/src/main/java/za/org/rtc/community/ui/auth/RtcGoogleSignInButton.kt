@@ -188,7 +188,8 @@ fun RtcGoogleSignInButton(
             .build()
             
         val googleSignInClient = GoogleSignIn.getClient(context, gso)
-        googleSignInClient.signOut().addOnCompleteListener {
+        val mainExecutor = androidx.core.content.ContextCompat.getMainExecutor(context)
+        googleSignInClient.signOut().addOnCompleteListener(mainExecutor) {
             launcher.launch(googleSignInClient.signInIntent)
         }
     }

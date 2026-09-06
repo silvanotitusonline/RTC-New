@@ -2,6 +2,7 @@ package za.org.rtc.community.ui.auth
 
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +66,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.scale
 
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -118,17 +122,29 @@ fun SignInScreen(
             val idToken = account?.idToken
             if (idToken != null) {
                 Log.i("SignInScreen", "Google Sign-In account selection successful. Exchanging token...")
+                AuthenticationLogger.logState(
+                    AuthenticationLogger.TransitionState.STARTED,
+                    "Google account selected successfully. Starting verification."
+                )
                 AuthDiagnosticLogger.logSuccess()
                 isSigningInLocally = false // Hand over loading state to ViewModel
                 viewModel.signInWithGoogle(idToken, "")
             } else {
                 isSigningInLocally = false
                 Log.e("SignInScreen", "Google Sign-In failed: idToken is null")
+                AuthenticationLogger.logState(
+                    AuthenticationLogger.TransitionState.FAILURE,
+                    "idToken was null in the Google sign-in response."
+                )
                 coroutineScope.launch { snackbarHostState.showSnackbar("No ID token found in Google Sign-In response.") }
             }
         } catch (e: ApiException) {
             isSigningInLocally = false
             Log.e("SignInScreen", "Google Sign-In API Exception. Status Code: ${e.statusCode}", e)
+            AuthenticationLogger.logState(
+                AuthenticationLogger.TransitionState.FAILURE,
+                "Google Sign-In API Exception: Code ${e.statusCode} | Msg: ${e.message}"
+            )
             if (e.statusCode != 12501 && e.statusCode != 0) { // 12501 is cancelled
                 val errorMsg = if (e.statusCode == 10) {
                     "Code 10: App SHA-1 fingerprint not registered in Google Cloud Console"
@@ -143,6 +159,10 @@ fun SignInScreen(
         } catch (e: Exception) {
             isSigningInLocally = false
             Log.e("SignInScreen", "Unexpected error parsing Google Sign-In intent", e)
+            AuthenticationLogger.logState(
+                AuthenticationLogger.TransitionState.FAILURE,
+                "Unexpected error: ${e.message}"
+            )
             coroutineScope.launch { snackbarHostState.showSnackbar("Unexpected authentication error.") }
         }
     }
@@ -180,7 +200,8 @@ fun SignInScreen(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
     ) { innerPadding ->
-        Column(
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
@@ -419,6 +440,10 @@ fun SignInScreen(
                         isLoading = isSigningInLocally,
                         enabled = !isAnyLoading,
                         onClick = {
+                            AuthenticationLogger.logState(
+                                AuthenticationLogger.TransitionState.STARTED,
+                                "Google Sign-In flow initiated by button click."
+                            )
                             isSigningInLocally = true
                             if (!GooglePlayServicesHelper.isPlayServicesAvailable(context)) {
                                 isSigningInLocally = false
@@ -440,7 +465,8 @@ fun SignInScreen(
                                 .build()
                                 
                             val googleSignInClient = GoogleSignIn.getClient(context, gso)
-                            googleSignInClient.signOut().addOnCompleteListener {
+                            val mainExecutor = androidx.core.content.ContextCompat.getMainExecutor(context)
+                            googleSignInClient.signOut().addOnCompleteListener(mainExecutor) {
                                 googleSignInLauncher.launch(googleSignInClient.signInIntent)
                             }
                         },
@@ -484,8 +510,12 @@ fun SignInScreen(
                     color = MaterialTheme.colorScheme.outline
                 )
             }
+            if (uiState.isAuthenticating) {
+                BreathingLoaderOverlay()
+            }
         }
     }
+}
 }
 
 /**
@@ -543,6 +573,89 @@ private fun GoogleCredentialSignInButton(
                 Spacer(modifier = Modifier.width(12.dp))
                 Text("Sign in with Google", fontWeight = FontWeight.SemiBold)
             }
+        }
+    }
+}
+
+/**
+ * A full-screen semi-transparent overlay with a 'breathing' animation circle
+ * that displays during Google token validation.
+ */
+@Composable
+private fun BreathingLoaderOverlay(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "breathing")
+    
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+    
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f))
+            .clickable(enabled = false) {}, // Scrim/interactable blocker
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                // Outer breathing glow circle
+                Box(
+                    modifier = Modifier
+                        .size(110.dp)
+                        .scale(scale)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
+                            shape = CircleShape
+                        )
+                )
+                // Middle solid ring
+                Box(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(36.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 3.dp
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Authenticating with Google...",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Exchanging security tokens safely",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.7f)
+            )
         }
     }
 }
