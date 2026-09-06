@@ -199,23 +199,26 @@ select is(
   'Public Reports authenticated SECURITY DEFINER mutation/private RPCs are explicitly guarded on reviewed local surfaces'
 );
 
+-- Use regprocedure OIDs rather than rendered argument-name text so this remains exact
+-- across PostgreSQL's formatting of identity arguments while still pinning overloads.
+with reviewed_rpc_oids(function_oid) as (
+  values
+    ('public.civic_report_page_v1(text,text,text,boolean,text,timestamptz,uuid,integer,timestamptz)'::regprocedure::oid),
+    ('public.civic_report_page_v2(text,text,text,text,timestamptz,uuid,integer,timestamptz)'::regprocedure::oid),
+    ('public.civic_report_get_v1(uuid)'::regprocedure::oid),
+    ('public.civic_report_comment_page_v1(uuid,timestamptz,uuid,integer)'::regprocedure::oid),
+    ('public.civic_report_dashboard_v1()'::regprocedure::oid),
+    ('public.civic_report_dashboard_v2()'::regprocedure::oid),
+    ('public.civic_report_categories_v1()'::regprocedure::oid),
+    ('public.civic_report_timeline_v1(uuid)'::regprocedure::oid)
+)
 select is(
   (select count(*)::bigint
-   from resident_security_definer_registry
-   where schema_name = 'public'
-     and signature in (
-       'public.civic_report_page_v1(p_scope text, p_urgency text, p_category_slug text, p_verified_only boolean, p_sort text, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_limit integer, p_now timestamp with time zone)',
-       'public.civic_report_page_v2(p_scope text, p_urgency text, p_category_slug text, p_sort text, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_limit integer, p_now timestamp with time zone)',
-       'public.civic_report_get_v1(p_report_id uuid)',
-       'public.civic_report_comment_page_v1(p_report_id uuid, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_limit integer)',
-       'public.civic_report_dashboard_v1()',
-       'public.civic_report_dashboard_v2()',
-       'public.civic_report_categories_v1()',
-       'public.civic_report_timeline_v1(p_report_id uuid)'
-     )
-     and fixed_search_path),
+   from resident_security_definer_registry r
+   join reviewed_rpc_oids o using (function_oid)
+   where r.fixed_search_path),
   8::bigint,
-  'Public Reports public-read SECURITY DEFINER RPC boundary contains the eight deliberately reviewed signatures'
+  'Public Reports public-read SECURITY DEFINER RPC boundary contains the eight deliberately reviewed overloads'
 );
 
 select is(
