@@ -148,7 +148,7 @@ select set_config('civic_test.comment_id',public.civic_report_add_comment_v1(
   current_setting('civic_test.named_report')::uuid,'The leak is still active this afternoon.','40000000-0000-4000-8000-000000000001')::text,true);
 select ok(current_setting('civic_test.comment_id')::uuid is not null,'authenticated resident can add report comment');
 select is(public.civic_report_add_comment_v1(current_setting('civic_test.named_report')::uuid,'The leak is still active this afternoon.','40000000-0000-4000-8000-000000000001'),current_setting('civic_test.comment_id')::uuid,'duplicate comment request UUID returns original comment ID');
-select is((select count(*)::integer from public.civic_report_comment_page_v1(current_setting('civic_test.evidence_report')::uuid,null,null,50) where id=current_setting('civic_test.comment_id')::uuid),1,'published comment is exposed through sanitized projection');
+select is((select count(*)::integer from public.civic_report_comment_page_v1(current_setting('civic_test.named_report')::uuid,null,null,50) where id=current_setting('civic_test.comment_id')::uuid),1,'published comment is exposed through sanitized projection');
 
 reset role;
 select set_config('request.jwt.claims',jsonb_build_object(
