@@ -82,7 +82,7 @@ select is(
     '12 Clinic Road','It is not safe to photograph the leak from the roadway.',false,'1'),
   current_setting('civic_test.named_report')::uuid,
   'duplicate create request UUID returns the original report ID');
-select is((select author_display_name from public.civic_reports_public where id=current_setting('civic_test.named_report')::uuid),'Alice Resident','named report exposes safe profile display name');
+select is((select author_display_name from public.civic_report_get_v1(current_setting('civic_test.named_report')::uuid)),'Alice Resident','named report exposes safe profile display name');
 select is((select exact_address from public.civic_report_owner_private_details_v1(current_setting('civic_test.named_report')::uuid)),'12 Clinic Road','owner can retrieve exact private location through narrow RPC');
 
 select set_config('civic_test.anonymous_report', public.civic_report_create_v1(
@@ -90,14 +90,14 @@ select set_config('civic_test.anonymous_report', public.civic_report_create_v1(
   'The streetlight at the pedestrian crossing has been off for several nights.',null,
   current_setting('civic_test.category_id')::uuid,'NORMAL','ANONYMOUS','MANUAL','Pedestrian crossing',null,null,
   'Corner of Main and First','I cannot safely take a photo at this location after dark.',false,'1')::text,true);
-select is((select author_display_name from public.civic_reports_public where id=current_setting('civic_test.anonymous_report')::uuid),'Anonymous community member','anonymous report never exposes reporter display name publicly');
+select is((select author_display_name from public.civic_report_get_v1(current_setting('civic_test.anonymous_report')::uuid)),'Anonymous community member','anonymous report never exposes reporter display name publicly');
 
 select set_config('civic_test.evidence_report', public.civic_report_create_v1(
   '10000000-0000-4000-8000-000000000003','Road surface collapsing',
   'A section of the road surface is collapsing and vehicles are swerving around it.',null,
   current_setting('civic_test.category_id')::uuid,'CRITICAL','ANONYMOUS','MAP','Main Road near school',-28.3001,23.1001,
   null,null,false,'1')::text,true);
-select is((select count(*)::integer from public.civic_reports_public where id=current_setting('civic_test.evidence_report')::uuid),0,'report without finalized evidence or valid exception is not publicly discoverable');
+select is((select count(*)::integer from public.civic_report_get_v1(current_setting('civic_test.evidence_report')::uuid)),0,'report without finalized evidence or valid exception is not publicly discoverable');
 
 reset role;
 
@@ -137,8 +137,8 @@ select ok(public.civic_report_finalize_evidence_v1(
     ((select user_id::text from civic_test_identities where key='owner') || '/10000000-0000-4000-8000-000000000003/20000000-0000-4000-8000-000000000002')::text,
     'IMAGE'::text,'image/jpeg'::text,100000::bigint,1200::integer,800::integer,null::integer,1::smallint,'30000000-0000-4000-8000-000000000002'::uuid) is not null,
   'owner can finalize valid evidence bound to report draft path');
-select is((select count(*)::integer from public.civic_reports_public where id=current_setting('civic_test.evidence_report')::uuid),1,'finalized evidence makes report publicly discoverable');
-select is((select evidence_count from public.civic_reports_public where id=current_setting('civic_test.evidence_report')::uuid),1,'public projection reports finalized evidence count');
+select is((select count(*)::integer from public.civic_report_get_v1(current_setting('civic_test.evidence_report')::uuid)),1,'finalized evidence makes report publicly discoverable');
+select is((select evidence_count from public.civic_report_get_v1(current_setting('civic_test.evidence_report')::uuid)),1,'public projection reports finalized evidence count');
 
 select is((public.civic_report_set_vote_v1(current_setting('civic_test.named_report')::uuid,1::smallint)->>'current_user_vote')::integer,1,'vote +1 is authoritative');
 select is((public.civic_report_set_vote_v1(current_setting('civic_test.named_report')::uuid,(-1)::smallint)->>'current_user_vote')::integer,-1,'vote switches from +1 to -1');
@@ -148,7 +148,7 @@ select set_config('civic_test.comment_id',public.civic_report_add_comment_v1(
   current_setting('civic_test.named_report')::uuid,'The leak is still active this afternoon.','40000000-0000-4000-8000-000000000001')::text,true);
 select ok(current_setting('civic_test.comment_id')::uuid is not null,'authenticated resident can add report comment');
 select is(public.civic_report_add_comment_v1(current_setting('civic_test.named_report')::uuid,'The leak is still active this afternoon.','40000000-0000-4000-8000-000000000001'),current_setting('civic_test.comment_id')::uuid,'duplicate comment request UUID returns original comment ID');
-select is((select count(*)::integer from public.civic_report_comments_public where id=current_setting('civic_test.comment_id')::uuid),1,'published comment is exposed through sanitized projection');
+select is((select count(*)::integer from public.civic_report_comment_page_v1(current_setting('civic_test.named_report')::uuid,null,null,50) where id=current_setting('civic_test.comment_id')::uuid),1,'published comment is exposed through sanitized projection');
 
 reset role;
 select set_config('request.jwt.claims',jsonb_build_object(
@@ -241,7 +241,7 @@ set created_at=now()-interval '25 months',
     public_until=(now()-interval '25 months')+interval '24 months'
 where id=current_setting('civic_test.named_report')::uuid;
 set local role anon;
-select is((select count(*)::integer from public.civic_reports_public where id=current_setting('civic_test.named_report')::uuid),0,'report older than 24 months disappears from public discovery');
+select is((select count(*)::integer from public.civic_report_get_v1(current_setting('civic_test.named_report')::uuid)),0,'report older than 24 months disappears from public discovery');
 reset role;
 select set_config('request.jwt.claims',jsonb_build_object('sub',(select user_id from civic_test_identities where key='owner'),'session_id',(select session_id from civic_test_identities where key='owner'),'aal','aal1','role','authenticated')::text,true);
 set local role authenticated;
