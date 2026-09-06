@@ -175,3 +175,14 @@ def test_android_ci_runs_shared_auth_deno_tests():
     text = _text(CI)
     assert "denoland/setup-deno" in text
     assert "deno test supabase/functions/_shared/auth_test.ts" in text
+
+
+def test_migrations_never_trust_user_metadata_or_create_shadow_moderation_domains():
+    migration_text = "\n".join(
+        _text(path).lower()
+        for path in sorted((ROOT / "supabase" / "migrations").glob("*.sql"))
+    )
+    assert "user_metadata" not in migration_text
+    for shadow_table in ("reports", "business_submissions", "support_requests"):
+        assert f"create table public.{shadow_table}" not in migration_text
+        assert f"create table if not exists public.{shadow_table}" not in migration_text
