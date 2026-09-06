@@ -5,7 +5,7 @@
 -- and fails closed until the full set is reviewed and this baseline is deliberately updated.
 -- Extension-owned functions are excluded because their lifecycle belongs to the extension.
 --
--- Six deterministic reviewed surfaces are accepted:
+-- Seven deterministic reviewed surfaces are accepted:
 --   * DEPLOYED_CANONICAL: the current Non-Production/deployed canonical catalogue.
 --   * ISOLATED_LOCAL_REPLAY: the source-reproducible foundation subset reconstructed by local CI.
 --   * ISOLATED_LOCAL_EVENTS_INBOX: local replay plus the reviewed Events/Inbox RPC surface.
@@ -13,6 +13,8 @@
 --   * ISOLATED_LOCAL_COMBINED: Public Reports and Events/Inbox together after A -> B integration.
 --   * PRODUCTION_BETA_COMBINED: the combined surface after verified-only reads and
 --     idempotent Community guideline/moderation controls.
+--   * PUBLIC_REPORTS_RPC_READ_BOUNDARY: the reviewed production-beta surface after moving
+--     sanitized Public Reports reads behind explicit SECURITY DEFINER RPC boundaries.
 -- All are pinned by count AND signature fingerprint. Arbitrary local/deployed drift remains
 -- UNREVIEWED and fails this gate.
 --
@@ -26,14 +28,16 @@
 begin;
 set local search_path = extensions, public, pg_catalog;
 
-select plan(7);
+select plan(12);
 
 create temporary table resident_security_definer_registry on commit drop as
 with exposed_definers as (
   select
+    p.oid as function_oid,
     n.nspname as schema_name,
     p.proname as function_name,
     pg_get_function_identity_arguments(p.oid) as identity_arguments,
+    pg_get_function_result(p.oid) as function_result,
     coalesce(array_to_string(p.proconfig, ','), '') as function_config,
     pg_get_functiondef(p.oid) as definition
   from pg_proc p
@@ -51,9 +55,11 @@ with exposed_definers as (
     )
 ), normalized as (
   select
+    function_oid,
     schema_name,
     function_name,
     identity_arguments,
+    function_result,
     function_config,
     definition,
     schema_name || '.' || function_name || '(' || identity_arguments || ')' as signature,
@@ -74,12 +80,15 @@ with exposed_definers as (
     (149::bigint, '89b13d92160e4f33af98f41a715a0e27'::text),
     (152::bigint, 'e6de756df6b23c7a27bea99bc0d62672'::text),
     (159::bigint, '96c90025230ec19ee868ca38219e3632'::text),
-    (162::bigint, '9e419d099be445182a8514f5e045b144'::text)
+    (162::bigint, '9e419d099be445182a8514f5e045b144'::text),
+    (170::bigint, 'bbf47cab25e2ff0e4c20a5917c8358dc'::text)
 )
 select
+  n.function_oid,
   n.schema_name,
   n.function_name,
   n.identity_arguments,
+  n.function_result,
   n.signature,
   n.function_config,
   n.fixed_search_path,
@@ -121,7 +130,7 @@ with registry_stats as (
   from resident_security_definer_registry
 )
 select ok(
-  exposed_count in (182::bigint, 142::bigint, 149::bigint, 152::bigint, 159::bigint, 162::bigint),
+  exposed_count in (182::bigint, 142::bigint, 149::bigint, 152::bigint, 159::bigint, 162::bigint, 170::bigint),
   'authenticated SECURITY DEFINER count matches a reviewed surface'
 )
 from registry_stats;
@@ -143,7 +152,9 @@ select ok(
   or
   (exposed_count = 159::bigint and exposed_fingerprint = '96c90025230ec19ee868ca38219e3632'::text)
   or
-  (exposed_count = 162::bigint and exposed_fingerprint = '9e419d099be445182a8514f5e045b144'::text),
+  (exposed_count = 162::bigint and exposed_fingerprint = '9e419d099be445182a8514f5e045b144'::text)
+  or
+  (exposed_count = 170::bigint and exposed_fingerprint = 'bbf47cab25e2ff0e4c20a5917c8358dc'::text),
   'authenticated SECURITY DEFINER fingerprint matches its reviewed surface'
 )
 from registry_stats;
@@ -185,7 +196,103 @@ select is(
      and fixed_search_path
      and contains_caller_or_authority_guard),
   10::bigint,
-  'Public Reports authenticated SECURITY DEFINER RPCs are explicitly guarded on reviewed local surfaces'
+  'Public Reports authenticated SECURITY DEFINER mutation/private RPCs are explicitly guarded on reviewed local surfaces'
+);
+
+select is(
+  (select count(*)::bigint
+   from resident_security_definer_registry
+   where schema_name = 'public'
+     and signature in (
+       'public.civic_report_page_v1(p_scope text, p_urgency text, p_category_slug text, p_verified_only boolean, p_sort text, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_limit integer, p_now timestamp with time zone)',
+       'public.civic_report_page_v2(p_scope text, p_urgency text, p_category_slug text, p_sort text, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_limit integer, p_now timestamp with time zone)',
+       'public.civic_report_get_v1(p_report_id uuid)',
+       'public.civic_report_comment_page_v1(p_report_id uuid, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_limit integer)',
+       'public.civic_report_dashboard_v1()',
+       'public.civic_report_dashboard_v2()',
+       'public.civic_report_categories_v1()',
+       'public.civic_report_timeline_v1(p_report_id uuid)'
+     )
+     and fixed_search_path),
+  8::bigint,
+  'Public Reports public-read SECURITY DEFINER RPC boundary contains the eight deliberately reviewed signatures'
+);
+
+select is(
+  (select count(*)::bigint
+   from resident_security_definer_registry r
+   where r.schema_name = 'public'
+     and r.function_name in (
+       'civic_report_page_v1',
+       'civic_report_page_v2',
+       'civic_report_get_v1',
+       'civic_report_comment_page_v1',
+       'civic_report_dashboard_v1',
+       'civic_report_dashboard_v2',
+       'civic_report_categories_v1',
+       'civic_report_timeline_v1'
+     )
+     and exists (
+       select 1
+       from aclexplode(coalesce((select p.proacl from pg_proc p where p.oid = r.function_oid), acldefault('f', (select p.proowner from pg_proc p where p.oid = r.function_oid)))) acl
+       where acl.grantee = 0
+         and acl.privilege_type = 'EXECUTE'
+     )),
+  0::bigint,
+  'Public Reports public-read RPCs revoke implicit PUBLIC execute'
+);
+
+select is(
+  (select count(*)::bigint
+   from resident_security_definer_registry r
+   where r.schema_name = 'public'
+     and r.function_name in (
+       'civic_report_page_v1',
+       'civic_report_page_v2',
+       'civic_report_get_v1',
+       'civic_report_comment_page_v1',
+       'civic_report_dashboard_v1',
+       'civic_report_dashboard_v2',
+       'civic_report_categories_v1',
+       'civic_report_timeline_v1'
+     )
+     and has_function_privilege('anon', r.function_oid, 'EXECUTE')
+     and has_function_privilege('authenticated', r.function_oid, 'EXECUTE')),
+  8::bigint,
+  'Public Reports public-read RPCs grant execute only to intended client roles after PUBLIC revocation'
+);
+
+select is(
+  (select count(*)::bigint
+   from resident_security_definer_registry
+   where schema_name = 'public'
+     and function_name in (
+       'civic_report_page_v1',
+       'civic_report_page_v2',
+       'civic_report_get_v1',
+       'civic_report_comment_page_v1',
+       'civic_report_dashboard_v1',
+       'civic_report_dashboard_v2',
+       'civic_report_categories_v1',
+       'civic_report_timeline_v1'
+     )
+     and function_result ~* '(reporter_id|exact_address|storage_path|private_note|actor_id|moderation_note|staff_note|internal_actor)'),
+  0::bigint,
+  'Public Reports public-read RPC return contracts exclude private reporter, location, evidence-path, moderation, actor, and staff-only fields'
+);
+
+select is(
+  (select count(*)::bigint
+   from (values
+     ('civic_report_categories_public'::text),
+     ('civic_reports_public'::text),
+     ('civic_report_status_history_public'::text),
+     ('civic_report_comments_public'::text)
+   ) v(view_name)
+   where has_table_privilege('anon', format('public.%I', v.view_name), 'SELECT')
+      or has_table_privilege('authenticated', format('public.%I', v.view_name), 'SELECT')),
+  0::bigint,
+  'Public Reports projection views expose zero direct client SELECT grants'
 );
 
 select is(
