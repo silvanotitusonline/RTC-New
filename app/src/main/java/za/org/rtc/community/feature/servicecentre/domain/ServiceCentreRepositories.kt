@@ -32,7 +32,6 @@ interface ServiceCentreBookingRepository {
     suspend fun completeBooking(bookingId: String, idempotencyKey: String): Result<ServiceCentreBooking>
     suspend fun messages(bookingId: String, limit: Int = 100): Result<List<ServiceCentreMessage>>
     suspend fun sendMessage(bookingId: String, body: String, idempotencyKey: String): Result<ServiceCentreMessage>
-    suspend fun createCommitmentCheckout(bookingId: String, idempotencyKey: String): Result<ServiceCentrePaymentCheckout>
     suspend fun notifyBookingEvent(
         bookingId: String,
         event: ServiceCentreNotificationEvent,

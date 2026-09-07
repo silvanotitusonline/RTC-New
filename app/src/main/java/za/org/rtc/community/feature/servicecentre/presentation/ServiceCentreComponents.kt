@@ -119,7 +119,7 @@ fun ServiceCentreBookingCard(
                 onCancel?.let { OutlinedButton(onClick = it, modifier = Modifier.height(RtcSize.minimumTouchTarget)) { Text("Cancel") } }
                 onComplete?.let { Button(onClick = it, modifier = Modifier.height(RtcSize.minimumTouchTarget)) { Text("Complete") } }
             }
-            if (booking.status == ServiceCentreBookingStatus.CONFIRMED || booking.status == ServiceCentreBookingStatus.ACCEPTED_AWAITING_PAYMENT) {
+            if (booking.status == ServiceCentreBookingStatus.CONFIRMED) {
                 Text("Booking Accepted", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
             }
             OutlinedButton(onClick = onChat, modifier = Modifier.fillMaxWidth().height(RtcSize.minimumTouchTarget)) {
@@ -152,7 +152,7 @@ fun ServiceCentreBooking.primaryActions(): Set<String> = buildSet {
             add("ACCEPT"); add("DECLINE")
         }
         actorRole == ServiceCentreActorRole.CUSTOMER && status == ServiceCentreBookingStatus.PENDING_PROVIDER -> add("CANCEL")
-        actorRole == ServiceCentreActorRole.PROVIDER && (status == ServiceCentreBookingStatus.CONFIRMED || status == ServiceCentreBookingStatus.ACCEPTED_AWAITING_PAYMENT) && !requestedStartAt.isAfter(java.time.Instant.now()) -> add("COMPLETE")
+        actorRole == ServiceCentreActorRole.PROVIDER && status == ServiceCentreBookingStatus.CONFIRMED && !requestedStartAt.isAfter(java.time.Instant.now()) -> add("COMPLETE")
     }
 }
 
@@ -169,7 +169,6 @@ fun serviceCentreDistanceLabel(distanceMetres: Int): String = when {
 
 fun serviceCentreStatusLabel(status: ServiceCentreBookingStatus): String = when (status) {
     ServiceCentreBookingStatus.PENDING_PROVIDER -> "Pending provider"
-    ServiceCentreBookingStatus.ACCEPTED_AWAITING_PAYMENT -> "Accepted · Request Confirmed"
     ServiceCentreBookingStatus.CONFIRMED -> "Confirmed"
     ServiceCentreBookingStatus.COMPLETED -> "Completed"
     ServiceCentreBookingStatus.DECLINED -> "Declined"

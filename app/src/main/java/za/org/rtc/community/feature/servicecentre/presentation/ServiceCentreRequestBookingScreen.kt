@@ -107,7 +107,7 @@ fun ServiceCentreRequestBookingRoute(
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.contentGroup)) {
-                Text("No payment is required until the provider accepts.", style = MaterialTheme.typography.bodySmall)
+                Text("The provider confirms the request directly in RTC.", style = MaterialTheme.typography.bodySmall)
                 Button(
                     onClick = { viewModel.createBooking(whenText, location, offer, marketplaceBusinessId, marketplaceOfferingId) },
                     enabled = !state.working && state.provider != null,

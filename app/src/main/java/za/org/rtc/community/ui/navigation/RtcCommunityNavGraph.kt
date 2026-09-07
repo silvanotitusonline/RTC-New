@@ -271,10 +271,6 @@ internal fun RtcCommunityNavGraph(
             route = RtcRoute.SERVICE_CENTRE_CHAT,
             arguments = listOf(navArgument("bookingId") { type = NavType.StringType }),
         ) { entry -> ServiceCentreChatRoute(entry.arguments?.getString("bookingId").orEmpty()) }
-        composable(
-            route = RtcRoute.SERVICE_CENTRE_PAYMENT,
-            arguments = listOf(navArgument("bookingId") { type = NavType.StringType }),
-        ) { entry -> ServiceCentrePaymentRoute(entry.arguments?.getString("bookingId").orEmpty()) }
         composable(route = RtcRoute.MARKETPLACE_REVIEWS, arguments = listOf(navArgument("businessId") { type = NavType.StringType })) { entry ->
             MarketplaceReviewsRoute(businessId = entry.arguments?.getString("businessId").orEmpty(), onBack = { navController.popBackStack() })
         }

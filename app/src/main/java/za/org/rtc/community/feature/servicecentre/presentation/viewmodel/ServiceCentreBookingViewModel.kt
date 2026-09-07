@@ -21,7 +21,6 @@ import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBookingRep
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBookingStatus
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreDiscoveryRepository
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreMessage
-import za.org.rtc.community.feature.servicecentre.domain.ServiceCentrePaymentCheckout
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreProvider
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreValidation
 
@@ -30,7 +29,6 @@ data class ServiceCentreBookingUiState(
     val bookings: List<ServiceCentreBooking> = emptyList(),
     val detail: ServiceCentreBooking? = null,
     val messages: List<ServiceCentreMessage> = emptyList(),
-    val checkout: ServiceCentrePaymentCheckout? = null,
     val createdBookingId: String? = null,
     val loading: Boolean = false,
     val working: Boolean = false,
@@ -46,7 +44,6 @@ class ServiceCentreBookingViewModel @Inject constructor(
     val state = _state.asStateFlow()
     private var createIdempotencyKey = UUID.randomUUID().toString()
     private val transitionKeys = mutableMapOf<String, String>()
-    private val checkoutKeys = mutableMapOf<String, String>()
     private var messageKey = UUID.randomUUID().toString()
 
     fun loadProvider(reference: String) {
@@ -190,28 +187,8 @@ class ServiceCentreBookingViewModel @Inject constructor(
         }
     }
 
-    fun createCheckout(bookingId: String) {
-        val key = checkoutKeys.getOrPut(bookingId) { UUID.randomUUID().toString() }
-        viewModelScope.launch {
-            _state.value = _state.value.copy(working = true, message = null)
-            bookingRepository.createCommitmentCheckout(bookingId, key).onSuccess { checkout ->
-                checkoutKeys.remove(bookingId)
-                _state.value = _state.value.copy(working = false, checkout = checkout)
-            }.onFailure { failure ->
-                _state.value = _state.value.copy(
-                    working = false,
-                    message = SafeUiError.serviceCentre(failure, "Secure checkout could not be created."),
-                )
-            }
-        }
-    }
-
     fun consumeCreatedBooking() {
         _state.value = _state.value.copy(createdBookingId = null)
-    }
-
-    fun consumeCheckout() {
-        _state.value = _state.value.copy(checkout = null)
     }
 
     fun dismissMessage() {

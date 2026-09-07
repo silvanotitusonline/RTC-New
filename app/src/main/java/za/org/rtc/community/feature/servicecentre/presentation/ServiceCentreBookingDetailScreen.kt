@@ -305,7 +305,7 @@ private fun BookingTimelineTabContent(
 
                     val activeStepIndex = when (booking.status) {
                         ServiceCentreBookingStatus.PENDING_PROVIDER -> 0
-                        ServiceCentreBookingStatus.ACCEPTED_AWAITING_PAYMENT, ServiceCentreBookingStatus.CONFIRMED -> 2
+                        ServiceCentreBookingStatus.CONFIRMED -> 2
                         ServiceCentreBookingStatus.COMPLETED -> 3
                         else -> 0
                     }

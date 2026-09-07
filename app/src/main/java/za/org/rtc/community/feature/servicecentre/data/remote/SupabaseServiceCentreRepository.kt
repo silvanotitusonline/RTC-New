@@ -4,7 +4,6 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
-import io.ktor.client.statement.bodyAsText
 import java.math.BigDecimal
 import java.time.Instant
 import javax.inject.Inject
@@ -27,7 +26,6 @@ import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreCategory
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreDiscoveryRepository
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreMessage
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreNotificationEvent
-import za.org.rtc.community.feature.servicecentre.domain.ServiceCentrePaymentCheckout
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreProvider
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreProviderDraft
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreProviderProfile
@@ -159,23 +157,6 @@ class SupabaseServiceCentreRepository @Inject constructor(
         message
     }
 
-    override suspend fun createCommitmentCheckout(bookingId: String, idempotencyKey: String): Result<ServiceCentrePaymentCheckout> = runCatching {
-        require(bookingId.isNotBlank()) { "Choose a booking to secure." }
-        val response = supabase.functions.invoke("service-centre-payment-create", buildJsonObject {
-            put("bookingId", bookingId)
-            put("idempotencyKey", idempotencyKey)
-        })
-        check(response.status.value in 200..299) { "The secure checkout could not be created." }
-        val root = json.parseToJsonElement(response.bodyAsText()).jsonObject
-        ServiceCentrePaymentCheckout(
-            paymentId = root.requiredString("paymentId"),
-            bookingId = root.requiredString("bookingId"),
-            redirectUrl = root.requiredString("redirectUrl"),
-            amount = root.requiredString("amount").toBigDecimal(),
-            currencyCode = root.requiredString("currencyCode"),
-        )
-    }
-
     override suspend fun notifyBookingEvent(
         bookingId: String,
         event: ServiceCentreNotificationEvent,
@@ -203,6 +184,4 @@ class SupabaseServiceCentreRepository @Inject constructor(
         booking
     }
 
-    private fun JsonObject.requiredString(key: String): String = get(key)?.jsonPrimitive?.contentOrNull
-        ?: error("Missing Service Centre response field: $key")
 }

@@ -7,33 +7,28 @@ import org.junit.Test
 
 class ServiceCentreBookingStateTest {
     @Test
-    fun pendingMapsToPendingTabAndOnlyAllowsProviderDecisionOrCancellation() {
+    fun pendingMapsToPendingTabAndAllowsDirectConfirmationOrClosure() {
         val pending = ServiceCentreBookingStatus.PENDING_PROVIDER
 
         assertEquals(ServiceCentreBookingTab.PENDING, pending.tab)
-        assertTrue(pending.canTransitionTo(ServiceCentreBookingStatus.ACCEPTED_AWAITING_PAYMENT))
+        assertTrue(pending.canTransitionTo(ServiceCentreBookingStatus.CONFIRMED))
         assertTrue(pending.canTransitionTo(ServiceCentreBookingStatus.DECLINED))
         assertTrue(pending.canTransitionTo(ServiceCentreBookingStatus.CANCELLED))
-        assertFalse(pending.canTransitionTo(ServiceCentreBookingStatus.CONFIRMED))
         assertFalse(pending.canTransitionTo(ServiceCentreBookingStatus.COMPLETED))
     }
 
     @Test
-    fun acceptedAwaitingPaymentMapsToAcceptedAndOnlyAllowsConfirmationOrCancellation() {
-        val accepted = ServiceCentreBookingStatus.ACCEPTED_AWAITING_PAYMENT
+    fun confirmedMapsToAcceptedAndAllowsCompletionOrCancellation() {
+        val confirmed = ServiceCentreBookingStatus.CONFIRMED
 
-        assertEquals(ServiceCentreBookingTab.ACCEPTED, accepted.tab)
-        assertTrue(accepted.canTransitionTo(ServiceCentreBookingStatus.CONFIRMED))
-        assertTrue(accepted.canTransitionTo(ServiceCentreBookingStatus.CANCELLED))
-        assertFalse(accepted.canTransitionTo(ServiceCentreBookingStatus.DECLINED))
-        assertFalse(accepted.canTransitionTo(ServiceCentreBookingStatus.COMPLETED))
+        assertEquals(ServiceCentreBookingTab.ACCEPTED, confirmed.tab)
+        assertTrue(confirmed.canTransitionTo(ServiceCentreBookingStatus.COMPLETED))
+        assertTrue(confirmed.canTransitionTo(ServiceCentreBookingStatus.CANCELLED))
+        assertFalse(confirmed.canTransitionTo(ServiceCentreBookingStatus.DECLINED))
     }
 
     @Test
-    fun confirmedCanOnlyCompleteAndTerminalStatesCannotTransition() {
-        assertEquals(ServiceCentreBookingTab.ACCEPTED, ServiceCentreBookingStatus.CONFIRMED.tab)
-        assertTrue(ServiceCentreBookingStatus.CONFIRMED.canTransitionTo(ServiceCentreBookingStatus.COMPLETED))
-
+    fun terminalStatesCannotTransition() {
         listOf(
             ServiceCentreBookingStatus.COMPLETED,
             ServiceCentreBookingStatus.DECLINED,

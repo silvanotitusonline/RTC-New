@@ -5,7 +5,7 @@
 -- and fails closed until the full set is reviewed and this baseline is deliberately updated.
 -- Extension-owned functions are excluded because their lifecycle belongs to the extension.
 --
--- Seven deterministic reviewed surfaces are accepted:
+-- Eight deterministic reviewed surfaces are accepted:
 --   * DEPLOYED_CANONICAL: the current Non-Production/deployed canonical catalogue.
 --   * ISOLATED_LOCAL_REPLAY: the source-reproducible foundation subset reconstructed by local CI.
 --   * ISOLATED_LOCAL_EVENTS_INBOX: local replay plus the reviewed Events/Inbox RPC surface.
@@ -15,6 +15,8 @@
 --     idempotent Community guideline/moderation controls.
 --   * PUBLIC_REPORTS_RPC_READ_BOUNDARY: the reviewed production-beta surface after moving
 --     sanitized Public Reports reads behind explicit SECURITY DEFINER RPC boundaries.
+--   * NO_PAYMENTS_SERVICE_CENTRE: the reviewed surface after removing all Service Centre
+--     payment RPCs while preserving direct-confirmation booking authority.
 -- All are pinned by count AND signature fingerprint. Arbitrary local/deployed drift remains
 -- UNREVIEWED and fails this gate.
 --
@@ -81,7 +83,8 @@ with exposed_definers as (
     (152::bigint, 'e6de756df6b23c7a27bea99bc0d62672'::text),
     (159::bigint, '96c90025230ec19ee868ca38219e3632'::text),
     (162::bigint, '9e419d099be445182a8514f5e045b144'::text),
-    (170::bigint, 'bbf47cab25e2ff0e4c20a5917c8358dc'::text)
+    (170::bigint, 'bbf47cab25e2ff0e4c20a5917c8358dc'::text),
+    (169::bigint, '42f7bc4ca9978dfe129a65cd0e6ded86'::text)
 )
 select
   n.function_oid,
@@ -130,7 +133,7 @@ with registry_stats as (
   from resident_security_definer_registry
 )
 select ok(
-  exposed_count in (182::bigint, 142::bigint, 149::bigint, 152::bigint, 159::bigint, 162::bigint, 170::bigint),
+  exposed_count in (182::bigint, 142::bigint, 149::bigint, 152::bigint, 159::bigint, 162::bigint, 170::bigint, 169::bigint),
   'authenticated SECURITY DEFINER count matches a reviewed surface'
 )
 from registry_stats;
@@ -154,7 +157,9 @@ select ok(
   or
   (exposed_count = 162::bigint and exposed_fingerprint = '9e419d099be445182a8514f5e045b144'::text)
   or
-  (exposed_count = 170::bigint and exposed_fingerprint = 'bbf47cab25e2ff0e4c20a5917c8358dc'::text),
+  (exposed_count = 170::bigint and exposed_fingerprint = 'bbf47cab25e2ff0e4c20a5917c8358dc'::text)
+  or
+  (exposed_count = 169::bigint and exposed_fingerprint = '42f7bc4ca9978dfe129a65cd0e6ded86'::text),
   'authenticated SECURITY DEFINER fingerprint matches its reviewed surface'
 )
 from registry_stats;

@@ -8,7 +8,6 @@ enum class ServiceCentreBookingTab {
 
 enum class ServiceCentreBookingStatus {
     PENDING_PROVIDER,
-    ACCEPTED_AWAITING_PAYMENT,
     CONFIRMED,
     COMPLETED,
     DECLINED,
@@ -18,14 +17,13 @@ enum class ServiceCentreBookingStatus {
     val tab: ServiceCentreBookingTab
         get() = when (this) {
             PENDING_PROVIDER -> ServiceCentreBookingTab.PENDING
-            ACCEPTED_AWAITING_PAYMENT, CONFIRMED -> ServiceCentreBookingTab.ACCEPTED
+            CONFIRMED -> ServiceCentreBookingTab.ACCEPTED
             COMPLETED, DECLINED, CANCELLED -> ServiceCentreBookingTab.HISTORY
         }
 
     fun canTransitionTo(target: ServiceCentreBookingStatus): Boolean = when (this) {
-        PENDING_PROVIDER -> target in setOf(ACCEPTED_AWAITING_PAYMENT, DECLINED, CANCELLED)
-        ACCEPTED_AWAITING_PAYMENT -> target in setOf(CONFIRMED, CANCELLED)
-        CONFIRMED -> target == COMPLETED
+        PENDING_PROVIDER -> target in setOf(CONFIRMED, DECLINED, CANCELLED)
+        CONFIRMED -> target in setOf(COMPLETED, CANCELLED)
         COMPLETED, DECLINED, CANCELLED -> false
     }
 

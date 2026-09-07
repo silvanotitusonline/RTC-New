@@ -70,7 +70,6 @@ data class ServiceCentreBooking(
     val offerAmount: BigDecimal,
     val currencyCode: String = "ZAR",
     val status: ServiceCentreBookingStatus,
-    val commitmentFeeAmount: BigDecimal? = null,
     val acceptedAt: Instant? = null,
     val declinedAt: Instant? = null,
     val confirmedAt: Instant? = null,
@@ -101,19 +100,10 @@ data class ServiceCentreMessage(
     val createdAt: Instant,
 )
 
-data class ServiceCentrePaymentCheckout(
-    val paymentId: String,
-    val bookingId: String,
-    val redirectUrl: String,
-    val amount: BigDecimal,
-    val currencyCode: String,
-)
-
 enum class ServiceCentreNotificationEvent {
     SERVICE_BOOKING_NEW,
     SERVICE_BOOKING_ACCEPTED,
     SERVICE_BOOKING_DECLINED,
-    SERVICE_BOOKING_CONFIRMED,
     SERVICE_BOOKING_MESSAGE,
     SERVICE_BOOKING_COMPLETED,
     SERVICE_BOOKING_CANCELLED,

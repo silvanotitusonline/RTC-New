@@ -70,7 +70,6 @@ object RtcRoute {
     const val SERVICE_CENTRE_BOOKINGS = "account/service-centre/bookings"
     const val SERVICE_CENTRE_BOOKING = "account/service-centre/booking/{bookingId}"
     const val SERVICE_CENTRE_CHAT = "account/service-centre/chat/{bookingId}"
-    const val SERVICE_CENTRE_PAYMENT = "account/service-centre/payment/{bookingId}"
 
     fun marketplaceBusiness(idOrSlug: String) = "community/marketplace/business/$idOrSlug"
     fun marketplaceReviews(businessId: String) = "community/marketplace/business/$businessId/reviews"
@@ -86,7 +85,6 @@ object RtcRoute {
     }
     fun serviceCentreBooking(bookingId: String) = "account/service-centre/booking/$bookingId"
     fun serviceCentreChat(bookingId: String) = "account/service-centre/chat/$bookingId"
-    fun serviceCentrePayment(bookingId: String) = "account/service-centre/payment/$bookingId"
     fun alertDetail(alertId: String) = "community_alert/$alertId"
     fun supportCaseDetail(caseId: String) = "support_case/$caseId"
     fun publicReportDetail(reportId: String) = "public-report/$reportId"

@@ -18,14 +18,9 @@ verify_jwt = true
 [functions.rtc-admin-ai]
 verify_jwt = true
 
-[functions.service-centre-payment-create]
-verify_jwt = true
-
-[functions.service-centre-payment-webhook]
-verify_jwt = false
 
 [functions.service-centre-notify]
-verify_jwt = false
+verify_jwt = true
 
 [functions.civic-report-media-url]
 verify_jwt = true

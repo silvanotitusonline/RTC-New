@@ -71,7 +71,6 @@ internal fun JsonObject.toServiceCentreBooking(): ServiceCentreBooking = Service
     offerAmount = decimal("offerAmount", "offer_amount"),
     currencyCode = stringOrNull("currencyCode", "currency_code") ?: "ZAR",
     status = ServiceCentreBookingStatus.valueOf(string("status")),
-    commitmentFeeAmount = decimalOrNull("commitmentFeeAmount", "commitment_fee_amount"),
     acceptedAt = instantOrNull("acceptedAt", "accepted_at"),
     declinedAt = instantOrNull("declinedAt", "declined_at"),
     confirmedAt = instantOrNull("confirmedAt", "confirmed_at"),
