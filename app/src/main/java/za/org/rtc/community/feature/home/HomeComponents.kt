@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -81,6 +82,45 @@ fun HomeSnapshotMetric(
     ) {
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
         Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun QuickAccessSection(
+    onNavigate: (MainDestination) -> Unit,
+    onOpenDirectory: (String) -> Unit,
+    onHelp: () -> Unit,
+) {
+    RtcCard(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
+            Text("Quick access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
+                verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
+            ) {
+                AssistChip(
+                    onClick = { onOpenDirectory("projects") },
+                    label = { Text("Projects") },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null) }
+                )
+                AssistChip(
+                    onClick = { onOpenDirectory("centres") },
+                    label = { Text("Centres") },
+                    leadingIcon = { Icon(Icons.Filled.LocationOn, contentDescription = null) }
+                )
+                AssistChip(
+                    onClick = { onNavigate(MainDestination.SUPPORT) },
+                    label = { Text("Support") },
+                    leadingIcon = { Icon(Icons.Filled.SupportAgent, contentDescription = null) }
+                )
+                AssistChip(
+                    onClick = onHelp,
+                    label = { Text("Help") },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null) }
+                )
+            }
+        }
     }
 }
 

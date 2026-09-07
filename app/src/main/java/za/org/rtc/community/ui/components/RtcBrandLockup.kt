@@ -24,9 +24,10 @@ fun RtcLogoMark(
     modifier: Modifier = Modifier,
     size: Dp = RtcSize.heroIcon * 2,
     contentDescription: String? = "RTC Community logo",
+    logoRes: Int = R.drawable.rtc_logo_mark_transparent,
 ) {
     Image(
-        painter = painterResource(id = R.drawable.rtc_logo_mark_transparent),
+        painter = painterResource(id = logoRes),
         contentDescription = contentDescription,
         modifier = modifier.size(size),
     )
@@ -54,6 +55,7 @@ fun RtcBrandLockup(
     compact: Boolean = false,
     large: Boolean = false,
     logoSize: Dp? = null,
+    logoRes: Int = R.drawable.rtc_logo_mark_transparent,
 ) {
     val markSize = logoSize ?: when {
         large -> 135.dp
@@ -70,7 +72,7 @@ fun RtcBrandLockup(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(if (large) RtcSpacing.standard else RtcSpacing.compact),
     ) {
-        RtcLogoMark(size = markSize)
+        RtcLogoMark(size = markSize, logoRes = logoRes)
         RtcBrandLabel(textStyle = textStyle)
     }
 }

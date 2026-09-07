@@ -135,7 +135,7 @@ def test_community_feed_projection_is_source_controlled():
 
 def test_client_media_recovery_contract():
     main = '\n'.join([text('app/src/main/java/za/org/rtc/community/MainActivity.kt'), text('app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt'), text('app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityNavGraph.kt')])
-    media = text('app/src/main/java/za/org/rtc/community/feature/community/CommunityMedia.kt')
+    media = text('app/src/main/java/za/org/rtc/community/feature/community/CommunityMedia.kt') + text('app/src/main/java/za/org/rtc/community/ui/media/RtcMedia3VideoPlayer.kt')
     prod = text('app/src/main/java/za/org/rtc/community/supabase/ProductionUxRepository.kt')
     assert 'HorizontalPager' in media and 'rememberPagerState' in media
     assert 'Player.Listener' in media and 'STATE_BUFFERING' in media and 'onPlayerError' in media

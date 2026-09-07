@@ -269,7 +269,12 @@ class MarketplaceDiscoveryViewModel @Inject constructor(
     fun toggleSaved(businessId: String, saved: Boolean) = viewModelScope.launch {
         _actionMessage.value = null
         repository.save(businessId, saved)
-            .onSuccess { loadDetail(businessId) }
+            .onSuccess { confirmedSaved ->
+                val current = (_detail.value as? MarketplaceLoadState.Data)?.value
+                if (current?.card?.id == businessId) {
+                    _detail.value = MarketplaceLoadState.Data(current.copy(saved = confirmedSaved))
+                }
+            }
             .onFailure { error -> _actionMessage.value = error.userMessage() }
     }
 }

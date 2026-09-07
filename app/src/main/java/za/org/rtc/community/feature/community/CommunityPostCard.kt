@@ -76,9 +76,9 @@ internal fun CommunityPostCard(
     post: CommunityPost,
     readingMode: Boolean,
     onOpenPost: (CommunityPost) -> Unit,
-    onToggleLike: ((String) -> Unit)? = null,
+    onToggleLike: (String) -> Unit = {},
     onToggleReaction: ((String, String) -> Unit)? = null,
-    onSharePost: ((CommunityPost) -> Unit)? = null,
+    onSharePost: (CommunityPost) -> Unit = {},
     onDeletePost: ((String) -> Unit)? = null,
     canDelete: Boolean = false,
     onRefreshMediaUrl: suspend (String) -> String? = { null },
@@ -230,7 +230,7 @@ internal fun CommunityPostCard(
                                     if (onToggleReaction != null) {
                                         onToggleReaction.invoke(post.id, emoji)
                                     } else {
-                                        onToggleLike?.invoke(post.id)
+                                        onToggleLike(post.id)
                                     }
                                 }
                                 .padding(6.dp),
@@ -251,8 +251,8 @@ internal fun CommunityPostCard(
         ) {
             val likeLabel = if (post.viewerHasLiked) "Unlike post" else "Like post"
             TextButton(
-                onClick = { onToggleLike?.invoke(post.id) },
-                enabled = onToggleLike != null && !isLikePending,
+                onClick = { onToggleLike(post.id) },
+                enabled = !isLikePending,
                 modifier = Modifier
                     .weight(1f)
                     .sizeIn(minHeight = RtcSize.minimumTouchTarget)
@@ -293,8 +293,7 @@ internal fun CommunityPostCard(
                 )
             }
             TextButton(
-                onClick = { onSharePost?.invoke(post) },
-                enabled = onSharePost != null,
+                onClick = { onSharePost(post) },
                 modifier = Modifier
                     .weight(1f)
                     .sizeIn(minHeight = RtcSize.minimumTouchTarget)

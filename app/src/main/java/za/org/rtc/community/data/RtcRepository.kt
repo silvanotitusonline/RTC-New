@@ -379,11 +379,12 @@ class RtcRepository @Inject constructor(
 
     suspend fun signInWithGoogleIdToken(idToken: String, nonce: String): Result<Unit> = runCatching {
         require(idToken.isNotBlank()) { "Google did not return an identity token." }
+        require(nonce.isNotBlank()) { "Google Sign-In verification nonce is missing." }
         
         supabase.auth.signInWith(IDToken) {
             this.idToken = idToken
             provider = Google
-            if (nonce.isNotBlank()) { this.nonce = nonce }
+            this.nonce = nonce
         }
         supabase.auth.startAutoRefreshForCurrentSession()
         hydrateSupabaseSession()
@@ -659,12 +660,17 @@ class RtcRepository @Inject constructor(
         val communityNotifications = productionUxRepository.ownOrdinaryAlertPreference().getOrNull() ?: true
         val declaredLocality = productionUxRepository.ownDeclaredLocality().getOrNull()
         if (role != UserRole.CASE_STAFF) _assignedSupportCases.value = emptyList()
+        val resolvedAvatarUrl = productionUxRepository.resolveProfileAvatarUrl(user.id).getOrNull()
+        val finalDisplayName = persistedProfile?.displayName ?: displayName
+        val finalBio = persistedProfile?.bio.orEmpty()
+        val finalInterests = persistedProfile?.interests.orEmpty()
+
         _session.value = RtcSession(
             id = user.id,
-            displayName = persistedProfile?.displayName ?: displayName,
+            displayName = finalDisplayName,
             handle = if (isAdminEmail) "@silvano_admin" else "@${email.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
-            bio = persistedProfile?.bio.orEmpty(),
-            interests = persistedProfile?.interests.orEmpty(),
+            bio = finalBio,
+            interests = finalInterests,
             role = role,
             onboardingComplete = true,
             darkMode = persistedExperience?.themePreference ?: _session.value.darkMode,
@@ -675,7 +681,28 @@ class RtcRepository @Inject constructor(
             authority = SessionAuthority.SUPABASE_AUTH,
             authenticatedEmail = user.email,
             administratorMfaStatus = administratorMfaStatus(role),
-            avatarUrl = productionUxRepository.resolveProfileAvatarUrl(user.id).getOrNull(),
+            avatarUrl = resolvedAvatarUrl,
+        )
+        database.cachedUserProfileDao().insertProfile(
+            CachedUserProfileEntity(
+                userId = user.id,
+                email = user.email ?: email,
+                displayName = finalDisplayName,
+                bio = finalBio,
+                interestsJson = finalInterests.joinToString(","),
+                avatarUrl = resolvedAvatarUrl,
+                role = role.name,
+                updatedAtEpochMillis = System.currentTimeMillis(),
+            )
+        )
+        database.cachedSessionDao().upsertSession(
+            CachedSessionEntity(
+                userId = user.id,
+                email = user.email ?: email,
+                isLoggedIn = true,
+                sessionJson = "",
+                updatedAtEpochMillis = System.currentTimeMillis(),
+            )
         )
         runCatching { preferencesStore.cacheUserRoles(user.id, role, isAdmin) }
     }
@@ -1383,7 +1410,8 @@ class RtcRepository @Inject constructor(
         )
 
         if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
-            runCatching { productionUxRepository.saveOwnProfile(cleanName, cleanBio, cleanInterests) }
+            productionUxRepository.saveOwnProfile(cleanName, cleanBio, cleanInterests).getOrThrow()
+            hydrateSupabaseSession()
             _session.value = _session.value.copy(
                 displayName = cleanName,
                 bio = cleanBio,

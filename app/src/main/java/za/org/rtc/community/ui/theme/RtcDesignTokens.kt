@@ -134,12 +134,12 @@ object RtcMotion {
     const val standardDecelerateDuration = durationMedium1     // 250ms
     const val standardAccelerateDuration = durationShort4      // 200ms
 
-    // Legacy / Micro timing aliases
-    const val microFeedback = durationShort2
-    const val stateChange = durationShort3
-    const val standardTransition = durationMedium1
-    const val contextualTransition = durationMedium3
-    const val deliberateEmphasis = durationLong4
+    // Harmonic Fibonacci timing tokens (docs/MATHEMATICAL_DESIGN_SYSTEM.md)
+    const val microFeedback = 89
+    const val stateChange = 144
+    const val standardTransition = 233
+    const val contextualTransition = 377
+    const val deliberateEmphasis = 610
 }
 
 enum class RtcContentDensity {

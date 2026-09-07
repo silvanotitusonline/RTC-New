@@ -70,10 +70,10 @@ internal fun HomeScreen(contract: HomeRouteContract) {
                 contentPadding = PaddingValues(RtcHomeDashboard.pagePadding),
                 verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
             ) {
-                renderItems.forEachIndexed { index, renderItem ->
+                renderItems.forEach { renderItem ->
                     when (renderItem) {
                         is HomeRenderItem.Image -> item(key = "home_image_${renderItem.widget.assetId}") {
-                            androidx.compose.foundation.layout.Box(modifier = Modifier.parallaxScrollItem(index = index, rate = 0.05f)) {
+                            androidx.compose.foundation.layout.Box(modifier = Modifier.parallaxScrollItem(index = 0, rate = 0.05f)) {
                                 HomeImageWidgetCard(renderItem.widget)
                             }
                         }
@@ -86,7 +86,7 @@ internal fun HomeScreen(contract: HomeRouteContract) {
                             }
                             HomeSection.COMMUNITY_SNAPSHOT -> item(key = "home_community_snapshot") {
                                 Column(
-                                    modifier = Modifier.parallaxScrollItem(index = index, rate = 0.05f),
+                                    modifier = Modifier.parallaxScrollItem(index = 1, rate = 0.05f),
                                     verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)
                                 ) {
                                     HomeCommunityStatusCard(
@@ -101,12 +101,19 @@ internal fun HomeScreen(contract: HomeRouteContract) {
                                 }
                             }
                             HomeSection.QUICK_ACCESS -> item(key = "home_quick_access") {
-                                androidx.compose.foundation.layout.Box(modifier = Modifier.parallaxScrollItem(index = index, rate = 0.05f)) {
-                                    CommunityEventsWeeklySummarySection(
-                                        events = state.events,
-                                        onNavigateToCalendar = { onNavigate(MainDestination.EXPLORE) },
-                                        onToggleRsvp = { eventId -> actions.onToggleEventRsvp?.invoke(eventId) }
-                                    )
+                                androidx.compose.foundation.layout.Box(modifier = Modifier.parallaxScrollItem(index = 2, rate = 0.05f)) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
+                                        QuickAccessSection(
+                                            onNavigate = onNavigate,
+                                            onOpenDirectory = onOpenDirectory,
+                                            onHelp = onHelp,
+                                        )
+                                        CommunityEventsWeeklySummarySection(
+                                            events = state.events,
+                                            onNavigateToCalendar = { onNavigate(MainDestination.EXPLORE) },
+                                            onToggleRsvp = { eventId -> actions.onToggleEventRsvp?.invoke(eventId) }
+                                        )
+                                    }
                                 }
                             }
                         HomeSection.CONTINUE_DRAFT -> draft?.let { savedDraft ->

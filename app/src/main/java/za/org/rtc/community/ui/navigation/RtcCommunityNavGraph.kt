@@ -228,7 +228,12 @@ internal fun RtcCommunityNavGraph(
                 )
             }
         }
-        composable(RtcRoute.MARKETPLACE_HOME) { MarketplaceHomeRoute(onNavigate = { navController.navigateOverlay(it) }) }
+        composable(RtcRoute.MARKETPLACE_HOME) {
+            MarketplaceHomeRoute(
+                onNavigate = { navController.navigateOverlay(it) },
+                onSwitchToServices = { navController.navigateOverlay(RtcRoute.SERVICE_CENTRE_HOME) },
+            )
+        }
         publicReportRoutes(navController, session)
         residentModernisationBindings(navController, session)
         composable(RtcRoute.MARKETPLACE_SEARCH) { MarketplaceSearchRoute(onNavigate = { navController.navigateOverlay(it) }) }
@@ -238,18 +243,10 @@ internal fun RtcCommunityNavGraph(
                 onNavigate = { route -> navController.navigateOverlay(route) },
             )
         }
-        composable(
-            route = RtcRoute.MARKETPLACE_BUSINESS,
-            arguments = listOf(navArgument("businessIdOrSlug") { type = NavType.StringType }),
-        ) { entry ->
-            MarketplaceDetailRoute(
-                id = entry.arguments?.getString("businessIdOrSlug").orEmpty(),
-                onNavigate = { navController.navigateOverlay(it) },
-            )
+        composable(route = RtcRoute.MARKETPLACE_BUSINESS, arguments = listOf(navArgument("businessIdOrSlug") { type = NavType.StringType })) { entry ->
+            MarketplaceDetailRoute(id = entry.arguments?.getString("businessIdOrSlug").orEmpty(), onNavigate = { navController.navigateOverlay(it) })
         }
-        composable(RtcRoute.SERVICE_CENTRE_HOME) {
-            ServiceCentreHomeRoute(onNavigate = { navController.navigateOverlay(it) })
-        }
+        composable(RtcRoute.SERVICE_CENTRE_HOME) { ServiceCentreHomeRoute(onNavigate = { navController.navigateOverlay(it) }) }
         composable(
             route = RtcRoute.SERVICE_CENTRE_REQUEST_PATTERN,
             arguments = listOf(
@@ -267,14 +264,8 @@ internal fun RtcCommunityNavGraph(
         }
         composable(RtcRoute.SERVICE_CENTRE_PROVIDER) { ServiceCentreProviderProfileRoute() }
         composable(RtcRoute.SERVICE_CENTRE_BOOKINGS) { ServiceCentreBookingHubRoute(onNavigate = { navController.navigateOverlay(it) }) }
-        composable(
-            route = RtcRoute.SERVICE_CENTRE_BOOKING,
-            arguments = listOf(navArgument("bookingId") { type = NavType.StringType }),
-        ) { entry ->
-            ServiceCentreBookingDetailRoute(
-                bookingId = entry.arguments?.getString("bookingId").orEmpty(),
-                onNavigate = { navController.navigateOverlay(it) },
-            )
+        composable(route = RtcRoute.SERVICE_CENTRE_BOOKING, arguments = listOf(navArgument("bookingId") { type = NavType.StringType })) { entry ->
+            ServiceCentreBookingDetailRoute(bookingId = entry.arguments?.getString("bookingId").orEmpty(), onNavigate = { navController.navigateOverlay(it) })
         }
         composable(
             route = RtcRoute.SERVICE_CENTRE_CHAT,
@@ -284,26 +275,11 @@ internal fun RtcCommunityNavGraph(
             route = RtcRoute.SERVICE_CENTRE_PAYMENT,
             arguments = listOf(navArgument("bookingId") { type = NavType.StringType }),
         ) { entry -> ServiceCentrePaymentRoute(entry.arguments?.getString("bookingId").orEmpty()) }
-        composable(
-            route = RtcRoute.MARKETPLACE_REVIEWS,
-            arguments = listOf(navArgument("businessId") { type = NavType.StringType }),
-        ) { entry ->
-            MarketplaceReviewsRoute(
-                businessId = entry.arguments?.getString("businessId").orEmpty(),
-                onBack = { navController.popBackStack() },
-            )
+        composable(route = RtcRoute.MARKETPLACE_REVIEWS, arguments = listOf(navArgument("businessId") { type = NavType.StringType })) { entry ->
+            MarketplaceReviewsRoute(businessId = entry.arguments?.getString("businessId").orEmpty(), onBack = { navController.popBackStack() })
         }
-        composable(
-            route = RtcRoute.MARKETPLACE_DIRECTIONS,
-            arguments = listOf(
-                navArgument("businessId") { type = NavType.StringType },
-                navArgument("locationId") { type = NavType.StringType },
-            ),
-        ) { MarketplaceMapRoute(onBack = { navController.popBackStack() }) }
-        composable(
-            route = RtcRoute.MARKETPLACE_NAVIGATION,
-            arguments = listOf(navArgument("locationId") { type = NavType.StringType }),
-        ) { MarketplaceMapRoute(onBack = { navController.popBackStack() }) }
+        composable(route = RtcRoute.MARKETPLACE_DIRECTIONS, arguments = listOf(navArgument("businessId") { type = NavType.StringType }, navArgument("locationId") { type = NavType.StringType })) { MarketplaceMapRoute(onBack = { navController.popBackStack() }) }
+        composable(route = RtcRoute.MARKETPLACE_NAVIGATION, arguments = listOf(navArgument("locationId") { type = NavType.StringType })) { MarketplaceMapRoute(onBack = { navController.popBackStack() }) }
         composable(RtcRoute.MARKETPLACE_MY_BUSINESSES) { MarketplaceOwnerRoute(onNavigate = { navController.navigateOverlay(it) }) }
         composable(RtcRoute.MARKETPLACE_SAVED) { MarketplaceSavedRoute(onNavigate = { route -> navController.navigateOverlay(route) }) }
         composable(RtcRoute.MARKETPLACE_INVITATIONS) { MarketplaceInvitationsRoute() }
@@ -315,24 +291,11 @@ internal fun RtcCommunityNavGraph(
                 onBack = { navController.popBackStack() },
             )
         }
-        composable(
-            route = RtcRoute.MARKETPLACE_BUSINESS_EDIT,
-            arguments = listOf(navArgument("businessId") { type = NavType.StringType }),
-        ) { entry ->
-            MarketplaceOwnerWizardRoute(
-                businessId = entry.arguments?.getString("businessId"),
-                onNavigate = { navController.navigateOverlay(it) },
-                onBack = { navController.popBackStack() },
-            )
+        composable(route = RtcRoute.MARKETPLACE_BUSINESS_EDIT, arguments = listOf(navArgument("businessId") { type = NavType.StringType })) { entry ->
+            MarketplaceOwnerWizardRoute(businessId = entry.arguments?.getString("businessId"), onNavigate = { navController.navigateOverlay(it) }, onBack = { navController.popBackStack() })
         }
-        composable(
-            route = RtcRoute.MARKETPLACE_BUSINESS_PREVIEW,
-            arguments = listOf(navArgument("businessId") { type = NavType.StringType }),
-        ) { entry -> MarketplaceOwnerPreviewRoute(entry.arguments?.getString("businessId").orEmpty()) }
-        composable(
-            route = RtcRoute.MARKETPLACE_BUSINESS_STATUS,
-            arguments = listOf(navArgument("businessId") { type = NavType.StringType }),
-        ) { entry -> MarketplaceStatusRoute(entry.arguments?.getString("businessId").orEmpty()) }
+        composable(route = RtcRoute.MARKETPLACE_BUSINESS_PREVIEW, arguments = listOf(navArgument("businessId") { type = NavType.StringType })) { entry -> MarketplaceOwnerPreviewRoute(entry.arguments?.getString("businessId").orEmpty()) }
+        composable(route = RtcRoute.MARKETPLACE_BUSINESS_STATUS, arguments = listOf(navArgument("businessId") { type = NavType.StringType })) { entry -> MarketplaceStatusRoute(entry.arguments?.getString("businessId").orEmpty()) }
         composable(RtcRoute.ADMIN_MARKETPLACE) {
             ProtectedRoute(RtcRoute.ADMIN_MARKETPLACE, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
                 MarketplaceAdminRoute(onNavigate = { navController.navigateOverlay(it) })
@@ -564,9 +527,7 @@ internal fun RtcCommunityNavGraph(
             ProtectedRoute(RtcRoute.AI, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { AiAssistantScreen(viewModel) }
         }
         composable(RtcRoute.STAFF_ALERTS) {
-            ProtectedRoute(RtcRoute.STAFF_ALERTS, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
-                StaffCommunityAlertsScreen(viewModel = viewModel, alerts = communityAlertDashboard)
-            }
+            ProtectedRoute(RtcRoute.STAFF_ALERTS, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { StaffCommunityAlertsScreen(viewModel = viewModel, alerts = communityAlertDashboard) }
         }
         composable(RtcRoute.CONTENT) {
             ProtectedRoute(RtcRoute.CONTENT, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
@@ -590,24 +551,16 @@ internal fun RtcCommunityNavGraph(
             }
         }
         composable(RtcRoute.ADMIN_MFA) {
-            ProtectedRoute(RtcRoute.ADMIN_MFA, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
-                AdministratorMfaVerificationScreen(viewModel = viewModel, onReturnToWorkQueue = { navController.popBackStack() })
-            }
+            ProtectedRoute(RtcRoute.ADMIN_MFA, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { AdministratorMfaVerificationScreen(viewModel = viewModel, onReturnToWorkQueue = { navController.popBackStack() }) }
         }
         composable(RtcRoute.ACCESS_MANAGEMENT) {
-            ProtectedRoute(RtcRoute.ACCESS_MANAGEMENT, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
-                AccessManagementScreen(viewModel = viewModel)
-            }
+            ProtectedRoute(RtcRoute.ACCESS_MANAGEMENT, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { AccessManagementScreen(viewModel = viewModel) }
         }
         composable(RtcRoute.ANALYTICS_DASHBOARD) {
-            ProtectedRoute(RtcRoute.ANALYTICS_DASHBOARD, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
-                AdministratorPrivacyAnalyticsScreen(viewModel = viewModel)
-            }
+            ProtectedRoute(RtcRoute.ANALYTICS_DASHBOARD, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { AdministratorPrivacyAnalyticsScreen(viewModel = viewModel) }
         }
         composable(RtcRoute.OPERATIONAL_CONTROLS) {
-            ProtectedRoute(RtcRoute.OPERATIONAL_CONTROLS, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
-                OperationalControlsScreen(viewModel = viewModel, onExit = { navController.popBackStack() })
-            }
+            ProtectedRoute(RtcRoute.OPERATIONAL_CONTROLS, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { OperationalControlsScreen(viewModel = viewModel, onExit = { navController.popBackStack() }) }
         }
         composable(RtcRoute.SYSTEM_HEALTH) {
             ProtectedRoute(RtcRoute.SYSTEM_HEALTH, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { SystemHealthScreen(viewModel) }
@@ -616,14 +569,10 @@ internal fun RtcCommunityNavGraph(
             ProtectedRoute(RtcRoute.ADMIN_ACTIVITY, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { AdminActivityScreen(viewModel) }
         }
         composable(RtcRoute.ADMIN_BRANDING) {
-            ProtectedRoute(RtcRoute.ADMIN_BRANDING, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
-                BrandExperienceScreen(onBack = { navController.popBackStack() })
-            }
+            ProtectedRoute(RtcRoute.ADMIN_BRANDING, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { BrandExperienceScreen(onBack = { navController.popBackStack() }) }
         }
         composable(RtcRoute.MY_WORK) {
-            ProtectedRoute(RtcRoute.MY_WORK, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
-                MyWorkProfileScreen(viewModel = viewModel, onOpenAccount = { navController.navigateOverlay(RtcRoute.ACCOUNT) })
-            }
+            ProtectedRoute(RtcRoute.MY_WORK, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { MyWorkProfileScreen(viewModel = viewModel, onOpenAccount = { navController.navigateOverlay(RtcRoute.ACCOUNT) }) }
         }
     }
     }

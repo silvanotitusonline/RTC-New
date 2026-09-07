@@ -39,6 +39,15 @@ fun HomeCommunityStatusCard(
     onRetry: () -> Unit,
 ) {
     val dashboard = state.dashboard
+    val metrics = if (dashboard != null) {
+        listOf(
+            HomeCommunityMetric("Verified", dashboard.verifiedReports, PublicReportScope.VERIFIED),
+            HomeCommunityMetric("Active", dashboard.activeReports, PublicReportScope.ACTIVE),
+            HomeCommunityMetric("Resolved", dashboard.resolvedReports, PublicReportScope.RESOLVED),
+            HomeCommunityMetric("Unresolved", dashboard.unresolvedReports, PublicReportScope.UNRESOLVED),
+        )
+    } else emptyList()
+
     if (dashboard == null && state.loading) {
         RtcCard {
             Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
@@ -50,16 +59,28 @@ fun HomeCommunityStatusCard(
         RtcCard {
             Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
                 Text(state.message ?: "The public reports snapshot is unavailable.")
-                TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
+                TextButton(onClick = onRetry, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Text("Try again")
                 }
             }
         }
     } else {
-        za.org.rtc.community.feature.publicreports.presentation.CommunitySnapshotDonutSummary(
-            dashboard = dashboard,
-            onScopeSelected = onOpenScope,
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
+            Text("Community snapshot", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "Verified Public Reports.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            za.org.rtc.community.feature.publicreports.presentation.CommunitySnapshotDonutSummary(
+                dashboard = dashboard,
+                onScopeSelected = { scope ->
+                    metrics.firstOrNull { it.scope == scope }?.let { metric ->
+                        onOpenScope(metric.scope)
+                    } ?: onOpenScope(scope)
+                },
+            )
+        }
     }
 }
 

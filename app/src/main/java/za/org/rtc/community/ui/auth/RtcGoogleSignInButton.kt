@@ -37,15 +37,12 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
 import java.security.MessageDigest
 import java.util.UUID
@@ -135,40 +132,8 @@ fun RtcGoogleSignInButton(
     var errorMessageText by remember { mutableStateOf("") }
     var rawExceptionMessage by remember { mutableStateOf("") }
 
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                val idToken = account?.idToken
-                if (idToken != null) {
-                    AuthDiagnosticLogger.logSuccess()
-                    onCredential(idToken, "")
-                } else {
-                    errorType = "UNKNOWN"
-                    errorMessageText = "No ID token found in Google Sign-In response."
-                    showErrorDialog = true
-                }
-            } catch (e: ApiException) {
-                rawExceptionMessage = e.message ?: e.toString()
-                
-                // If cancelled (12501)
-                if (e.statusCode == 12501) {
-                    onFailure("Google Sign-In was cancelled.")
-                    return@rememberLauncherForActivityResult
-                }
-                
-                errorType = "UNKNOWN"
-                errorMessageText = "Google Sign-In failed. Error Code: ${e.statusCode}"
-                showErrorDialog = true
-                AuthDiagnosticLogger.logError(errorType, rawExceptionMessage)
-            }
-        } else {
-            onFailure("Google Sign-In was cancelled.")
-        }
-    }
+    val coroutineScope = rememberCoroutineScope()
+    val credentialManager = remember { CredentialManager.create(context) }
 
     fun triggerGoogleSignIn() {
         if (!GooglePlayServicesHelper.isPlayServicesAvailable(context)) {
@@ -180,17 +145,50 @@ fun RtcGoogleSignInButton(
                 return
             }
         }
-        
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(RTC_GOOGLE_WEB_CLIENT_ID)
-            .requestEmail()
-            .requestProfile()
+
+        val rawNonce = UUID.randomUUID().toString()
+        val hashedNonce = sha256Hex(rawNonce)
+
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(RTC_GOOGLE_WEB_CLIENT_ID)
+            .setAutoSelectEnabled(false)
+            .setNonce(hashedNonce)
             .build()
-            
-        val googleSignInClient = GoogleSignIn.getClient(context, gso)
-        val mainExecutor = androidx.core.content.ContextCompat.getMainExecutor(context)
-        googleSignInClient.signOut().addOnCompleteListener(mainExecutor) {
-            launcher.launch(googleSignInClient.signInIntent)
+
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+
+        coroutineScope.launch {
+            try {
+                val result = credentialManager.getCredential(
+                    request = request,
+                    context = context,
+                )
+                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(result.credential.data)
+                AuthDiagnosticLogger.logSuccess()
+                onCredential(googleIdTokenCredential.idToken, rawNonce)
+            } catch (e: GetCredentialException) {
+                if (e.message?.contains("cancel", ignoreCase = true) == true ||
+                    e is androidx.credentials.exceptions.GetCredentialCancellationException
+                ) {
+                    onFailure("Google Sign-In was cancelled.")
+                    return@launch
+                }
+                rawExceptionMessage = e.message ?: e.toString()
+                errorType = "CREDENTIAL_MANAGER"
+                errorMessageText = "Google Sign-In could not be completed. Check Google Play services and try again."
+                showErrorDialog = true
+                AuthDiagnosticLogger.logError(errorType, rawExceptionMessage)
+                onFailure(errorMessageText)
+            } catch (e: Exception) {
+                rawExceptionMessage = e.message ?: e.toString()
+                errorType = "UNKNOWN"
+                errorMessageText = e.localizedMessage ?: "Google Sign-In failed."
+                showErrorDialog = true
+                AuthDiagnosticLogger.logError(errorType, rawExceptionMessage)
+            }
         }
     }
 

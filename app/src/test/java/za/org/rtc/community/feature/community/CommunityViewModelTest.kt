@@ -200,16 +200,19 @@ class CommunityViewModelTest {
     private class FakeCommunityRepository(
         private val pages: ArrayDeque<Result<CommunityFeedPage>>,
         private val reactions: ArrayDeque<Result<CommunityLikeOutcome>> = ArrayDeque(),
+        private val emojiReactions: ArrayDeque<Result<CommunityLikeOutcome>> = ArrayDeque(),
         private val posts: ArrayDeque<Result<CommunityPost?>> = ArrayDeque(),
         private val comments: ArrayDeque<Result<List<CommunityComment>>> = ArrayDeque(),
         private val creates: ArrayDeque<Result<Unit>> = ArrayDeque(),
         private val updates: ArrayDeque<Result<Unit>> = ArrayDeque(),
         private val deletes: ArrayDeque<Result<Unit>> = ArrayDeque(),
+        private val postDeletes: ArrayDeque<Result<Unit>> = ArrayDeque(),
         private val moderations: ArrayDeque<Result<Unit>> = ArrayDeque(),
     ) : CommunityRepository {
         val requests = mutableListOf<PageRequest>()
         val toggleRequests = mutableListOf<String>()
-        val createRequests = mutableListOf<Pair<String, String>>()
+        val reactionRequests = mutableListOf<Pair<String, String>>()
+        val createRequests = mutableListOf<Triple<String, String, String?>>()
         val moderationRequests = mutableListOf<Pair<String, String>>()
 
         override suspend fun loadFeedPage(cursor: CommunityCursor?, limit: Int): Result<CommunityFeedPage> {
@@ -221,14 +224,16 @@ class CommunityViewModelTest {
 
         override suspend fun loadComments(postId: String): Result<List<CommunityComment>> = comments.removeFirst()
 
-        override suspend fun createComment(postId: String, body: String): Result<Unit> {
-            createRequests += postId to body
+        override suspend fun createComment(postId: String, body: String, parentId: String?): Result<Unit> {
+            createRequests += Triple(postId, body, parentId)
             return creates.removeFirst()
         }
 
         override suspend fun updateComment(commentId: String, body: String): Result<Unit> = updates.removeFirst()
 
         override suspend fun deleteComment(commentId: String): Result<Unit> = deletes.removeFirst()
+
+        override suspend fun deletePost(postId: String): Result<Unit> = postDeletes.removeFirst()
 
         override suspend fun moderateComment(commentId: String, reason: String): Result<Unit> {
             moderationRequests += commentId to reason
@@ -238,6 +243,11 @@ class CommunityViewModelTest {
         override suspend fun toggleLike(postId: String): Result<CommunityLikeOutcome> {
             toggleRequests += postId
             return reactions.removeFirst()
+        }
+
+        override suspend fun toggleReaction(postId: String, emoji: String): Result<CommunityLikeOutcome> {
+            reactionRequests += postId to emoji
+            return emojiReactions.removeFirst()
         }
 
         override suspend fun refreshMediaUrl(mediaId: String): Result<String?> = Result.success(null)

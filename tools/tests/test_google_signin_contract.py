@@ -34,6 +34,9 @@ def test_google_signin_is_wired_through_existing_auth_layers():
     assert 'supabase.auth.signInWith(IDToken)' in repository
     assert 'provider = Google' in repository
     assert 'this.nonce = nonce' in repository
+    assert 'require(nonce.isNotBlank())' in repository
+    assert 'GoogleSignInOptions.Builder' not in ui
+    assert 'onCredential(idToken, "")' not in ui
 
 
 def test_google_signin_does_not_embed_confidential_oauth_material():

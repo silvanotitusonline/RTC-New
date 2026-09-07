@@ -932,7 +932,7 @@ class ProductionUxRepository @Inject constructor(
                         path,
                         UploadData(file.inputStream().toByteReadChannel(), file.length()),
                     ) {
-                        upsert = true
+                        upsert = false
                         contentType = ContentType.parse(row.mimeType)
                     }
                 }

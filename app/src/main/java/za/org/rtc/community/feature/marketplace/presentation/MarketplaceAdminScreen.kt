@@ -9,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceAdminQueue
@@ -74,32 +73,32 @@ private fun MarketplaceAdminDashboard(
                     onClick = { onNavigate("admin/marketplace/reviews") },
                     modifier = Modifier.height(RtcSize.minimumTouchTarget),
                 ) {
-                    Icon(Icons.Filled.Flag, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Filled.Flag, contentDescription = null, modifier = Modifier.size(RtcSize.inlineIcon))
+                    Spacer(Modifier.width(RtcSpacing.iconLabel))
                     Text("Review Triage (${queue.metrics.flaggedReviews})")
                 }
                 OutlinedButton(
                     onClick = { onNavigate("admin/marketplace/categories") },
                     modifier = Modifier.height(RtcSize.minimumTouchTarget),
                 ) {
-                    Icon(Icons.Filled.Category, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Filled.Category, contentDescription = null, modifier = Modifier.size(RtcSize.inlineIcon))
+                    Spacer(Modifier.width(RtcSpacing.iconLabel))
                     Text("Categories Taxonomy")
                 }
                 OutlinedButton(
                     onClick = { onNavigate("admin/marketplace/featured") },
                     modifier = Modifier.height(RtcSize.minimumTouchTarget),
                 ) {
-                    Icon(Icons.Filled.Star, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Filled.Star, contentDescription = null, modifier = Modifier.size(RtcSize.inlineIcon))
+                    Spacer(Modifier.width(RtcSpacing.iconLabel))
                     Text("Featured Spots")
                 }
                 OutlinedButton(
                     onClick = { onNavigate("admin/marketplace/analytics") },
                     modifier = Modifier.height(RtcSize.minimumTouchTarget),
                 ) {
-                    Icon(Icons.Filled.BarChart, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Filled.BarChart, contentDescription = null, modifier = Modifier.size(RtcSize.inlineIcon))
+                    Spacer(Modifier.width(RtcSpacing.iconLabel))
                     Text("Analytics & Growth")
                 }
             }

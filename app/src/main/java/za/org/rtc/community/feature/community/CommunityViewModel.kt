@@ -200,7 +200,37 @@ class CommunityViewModel @Inject constructor(
     }
 
     fun toggleLike(postId: String) {
-        toggleReaction(postId, "❤️")
+        if (postId in _pendingLikeIds.value) return
+        val feedOriginal = _feedState.value.items.firstOrNull { it.id == postId }
+        val detailOriginal = _detailState.value.post?.takeIf { it.id == postId }
+        val original = feedOriginal ?: detailOriginal ?: return
+        val optimistic = original.optimisticLikeToggle()
+
+        _pendingLikeIds.value = _pendingLikeIds.value + postId
+        updatePostEverywhere(postId) { optimistic }
+        _feedState.value = _feedState.value.copy(mutationError = null)
+        _detailState.value = _detailState.value.copy(message = null, isSuccess = false)
+
+        viewModelScope.launch {
+            repository.toggleLike(postId)
+                .onSuccess { outcome ->
+                    updatePostEverywhere(postId) { current -> current.withLikeOutcome(outcome) }
+                }
+                .onFailure {
+                    updateFeedPost(postId) { current ->
+                        if (feedOriginal != null) feedOriginal else current
+                    }
+                    updateDetailPost(postId) { current ->
+                        if (detailOriginal != null) detailOriginal else current
+                    }
+                    val error = "Your reaction could not be saved. Please try again."
+                    _feedState.value = _feedState.value.copy(mutationError = error)
+                    if (_detailState.value.post?.id == postId) {
+                        _detailState.value = _detailState.value.copy(message = error, isSuccess = false)
+                    }
+                }
+            _pendingLikeIds.value = _pendingLikeIds.value - postId
+        }
     }
 
     fun toggleReaction(postId: String, emoji: String) {

@@ -4,11 +4,12 @@ from release_contract_context import _function_body
 def test_client_media_has_pager_retry_and_signed_url_refresh():
     scoped_vm = (ROOT / 'app/src/main/java/za/org/rtc/community/feature/community/CommunityViewModel.kt').read_text()
     scoped_repo = (ROOT / 'app/src/main/java/za/org/rtc/community/feature/community/SupabaseCommunityRepository.kt').read_text()
+    media_runtime = COMMUNITY_MEDIA + (ROOT / 'app/src/main/java/za/org/rtc/community/ui/media/RtcMedia3VideoPlayer.kt').read_text()
     assert 'HorizontalPager' in COMMUNITY_MEDIA
     assert 'rememberPagerState' in COMMUNITY_MEDIA
-    assert 'Player.Listener' in COMMUNITY_MEDIA
-    assert 'STATE_BUFFERING' in COMMUNITY_MEDIA
-    assert 'onPlayerError' in COMMUNITY_MEDIA
+    assert 'Player.Listener' in media_runtime
+    assert 'STATE_BUFFERING' in media_runtime
+    assert 'onPlayerError' in media_runtime
     assert 'repository.refreshMediaUrl(mediaId)' in scoped_vm
     assert 'override suspend fun refreshMediaUrl(mediaId: String)' in scoped_repo
     assert 'signedUrlCache.invalidate(mediaCacheKey(mediaId))' in scoped_repo

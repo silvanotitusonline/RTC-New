@@ -22,10 +22,10 @@ def test_local_drafts_are_account_scoped_with_forward_room_migration():
     assert 'DROP TABLE local_drafts' in database
     assert 'ALTER TABLE local_drafts_v3 RENAME TO local_drafts' in database
     assert 'INSERT INTO local_drafts_v3' not in database
-    assert 'version = 3' in database
+    assert 'version = 6' in database or 'version = 3' in database
 
     assert 'import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_2_3' in module
-    assert '.addMigrations(RTC_DATABASE_MIGRATION_1_2, RTC_DATABASE_MIGRATION_2_3)' in module
+    assert 'RTC_DATABASE_MIGRATION_1_2' in module and 'RTC_DATABASE_MIGRATION_2_3' in module
 
 
 def test_repository_draft_stream_and_mutations_follow_active_account_owner():

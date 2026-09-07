@@ -109,9 +109,11 @@ class ResidentSurfaceSmokeTest {
                     projects = emptyList(),
                     opportunities = emptyList(),
                     notices = emptyList(),
+                    events = emptyList(),
                     isRefreshing = false,
                     onRefresh = {},
                     onOpenDirectory = {},
+                    onToggleRsvp = {},
                 )
             }
         }
@@ -164,15 +166,20 @@ class ResidentSurfaceSmokeTest {
 
         override suspend fun loadComments(postId: String): Result<List<CommunityComment>> = Result.success(emptyList())
 
-        override suspend fun createComment(postId: String, body: String): Result<Unit> = Result.success(Unit)
+        override suspend fun createComment(postId: String, body: String, parentId: String?): Result<Unit> = Result.success(Unit)
 
         override suspend fun updateComment(commentId: String, body: String): Result<Unit> = Result.success(Unit)
 
         override suspend fun deleteComment(commentId: String): Result<Unit> = Result.success(Unit)
 
+        override suspend fun deletePost(postId: String): Result<Unit> = Result.success(Unit)
+
         override suspend fun moderateComment(commentId: String, reason: String): Result<Unit> = Result.success(Unit)
 
         override suspend fun toggleLike(postId: String): Result<CommunityLikeOutcome> =
+            Result.success(CommunityLikeOutcome(liked = true, reactionCount = 1))
+
+        override suspend fun toggleReaction(postId: String, emoji: String): Result<CommunityLikeOutcome> =
             Result.success(CommunityLikeOutcome(liked = true, reactionCount = 1))
 
         override suspend fun refreshMediaUrl(mediaId: String): Result<String?> = Result.success(null)

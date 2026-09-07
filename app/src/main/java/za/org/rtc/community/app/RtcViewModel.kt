@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import za.org.rtc.community.BuildConfig
 import za.org.rtc.community.core.AdminAccountLookupPurpose
 import za.org.rtc.community.core.AdminAnalyticsPeriod
 import za.org.rtc.community.core.CommunityAlertCategory
@@ -133,6 +134,10 @@ class RtcViewModel @Inject constructor(
     fun signUpWithEmail(email: String, password: String, displayName: String) =
         authenticationCoordinator.signUpWithEmail(email, password, displayName)
     fun dismissAuthenticationMessage() = authenticationCoordinator.dismissAuthenticationMessage()
+    fun beginDevelopmentResidentSession() {
+        if (!BuildConfig.DEBUG) return
+        switchRole(UserRole.RESIDENT_A)
+    }
     fun requestPasswordRecovery(email: String) = authenticationCoordinator.requestPasswordRecovery(email)
     fun beginPasswordRecovery() = authenticationCoordinator.beginPasswordRecovery()
     fun updatePassword(newPassword: String, currentPassword: String? = null) =

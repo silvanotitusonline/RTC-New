@@ -577,71 +577,17 @@ internal fun CommunityPostDetailScreen(
     }
     moderatingCommentId?.let { commentId ->
         val moderationPending = commentId in detailState.pendingCommentIds
-        AlertDialog(
-            onDismissRequest = {
-                if (!moderationPending) {
-                    moderatingCommentId = null
-                    moderationReason = ""
-                }
+        ModerateCommentDialog(
+            moderationPending = moderationPending,
+            moderationReason = moderationReason,
+            onReasonChange = { moderationReason = it.take(1_000) },
+            onDismiss = {
+                moderatingCommentId = null
+                moderationReason = ""
             },
-            title = { Text("Remove comment") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
-                    Text("The comment will be hidden from residents and recorded in the moderation audit log.")
-                    OutlinedTextField(
-                        value = moderationReason,
-                        onValueChange = { moderationReason = it.take(1_000) },
-                        label = { Text("Moderation reason") },
-                        supportingText = { Text("Required · ${moderationReason.trim().length}/1,000") },
-                        enabled = !moderationPending,
-                        minLines = 3,
-                    )
-                }
+            onConfirm = { reason ->
+                communityViewModel.moderateComment(activePost.id, commentId, reason)
             },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        moderatingCommentId = null
-                        moderationReason = ""
-                    },
-                    enabled = !moderationPending,
-                ) { Text("Cancel") }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        communityViewModel.moderateComment(activePost.id, commentId, moderationReason)
-                    },
-                    enabled = !moderationPending && moderationReason.trim().length in 3..1_000,
-                ) { Text(if (moderationPending) "Removing…" else "Remove") }
-            }
         )
     }
-}
-
-private data class ThreadedComment(
-    val comment: CommunityComment,
-    val depth: Int,
-)
-
-private fun buildThreadedComments(comments: List<CommunityComment>): List<ThreadedComment> {
-    val byParent = comments.groupBy { it.parentId }
-    val result = mutableListOf<ThreadedComment>()
-
-    fun addChildren(parentId: String?, depth: Int) {
-        val children = byParent[parentId] ?: return
-        for (child in children) {
-            result.add(ThreadedComment(child, depth))
-            addChildren(child.id, (depth + 1).coerceAtMost(3))
-        }
-    }
-
-    addChildren(null, 0)
-    val addedIds = result.map { it.comment.id }.toSet()
-    for (comment in comments) {
-        if (comment.id !in addedIds) {
-            result.add(ThreadedComment(comment, 0))
-        }
-    }
-    return result
 }

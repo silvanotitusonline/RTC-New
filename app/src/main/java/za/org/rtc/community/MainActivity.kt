@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
         handleCommunityPostIntent(intent)
         handlePublicReportIntent(intent)
         handleServiceCentreIntent(intent)
+        applyDebugSessionIntent(intent)
         setTheme(R.style.Theme_RtcCommunity)
         enableEdgeToEdge()
         setContent {
@@ -57,6 +58,15 @@ class MainActivity : ComponentActivity() {
         handleCommunityPostIntent(intent)
         handlePublicReportIntent(intent)
         handleServiceCentreIntent(intent)
+        applyDebugSessionIntent(intent)
+    }
+
+    private fun applyDebugSessionIntent(intent: Intent?) {
+        if (!BuildConfig.DEBUG) return
+        val debugRole = intent?.getStringExtra(EXTRA_DEBUG_SESSION_ROLE)
+        if (debugRole == DEBUG_RESIDENT_A) {
+            rtcViewModel.beginDevelopmentResidentSession()
+        }
     }
 
     private fun handleCommunityAlertIntent(intent: Intent?) {

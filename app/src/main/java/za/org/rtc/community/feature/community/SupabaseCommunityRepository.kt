@@ -252,7 +252,32 @@ class SupabaseCommunityRepository @Inject constructor(
         Unit
     }
 
-    override suspend fun toggleLike(postId: String): Result<CommunityLikeOutcome> = toggleReaction(postId, "❤️")
+    override suspend fun toggleLike(postId: String): Result<CommunityLikeOutcome> = runCatching {
+        var localLiked = false
+        var localReactions = 0
+
+        val existingPost = cachedPostDao.getPostById(postId)
+        if (existingPost != null) {
+            val domainPost = existingPost.toCommunityPost().optimisticLikeToggle()
+            localLiked = domainPost.viewerHasLiked
+            localReactions = domainPost.reactions
+            cachedPostDao.insertPost(domainPost.toCachedEntity())
+        }
+
+        val remoteOutcome = runCatching {
+            val outcome = supabase.postgrest.rpc(
+                function = "toggle_community_post_like",
+                parameters = buildJsonObject {
+                    put("p_post_id", postId)
+                },
+            ).decodeList<CommunityPostLikeOutcomeRow>().singleOrNull()
+            outcome?.let {
+                CommunityLikeOutcome(liked = it.liked, reactionCount = it.likeCount.coerceAtLeast(0))
+            }
+        }.getOrNull()
+
+        remoteOutcome ?: CommunityLikeOutcome(liked = localLiked, reactionCount = localReactions)
+    }
 
     override suspend fun toggleReaction(postId: String, emoji: String): Result<CommunityLikeOutcome> = runCatching {
         var localLiked = false

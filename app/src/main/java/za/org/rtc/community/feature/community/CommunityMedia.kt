@@ -178,7 +178,7 @@ internal fun CommunityMediaPreview(
                 onRefreshMediaUrl = onRefreshMediaUrl,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1.6f),
+                    .aspectRatio(RtcMath.Phi),
             )
         }
         2 -> {
@@ -519,6 +519,22 @@ private fun SignedVideoPlayer(
     initialUrl: String,
     onRefreshUrl: suspend (String) -> String?,
 ) {
+    var isMuted by rememberSaveable(mediaId) { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val player = remember(mediaId, initialUrl) {
+        ExoPlayer.Builder(context).build().apply {
+            playWhenReady = true
+            volume = if (isMuted) 0f else 1f
+        }
+    }
+    DisposableEffect(player) {
+        onDispose {
+            player.release()
+        }
+    }
+    val muteDescription = if (isMuted) "Unmute video" else "Mute video"
+    player.volume = if (isMuted) 0f else 1f
+
     RtcMedia3VideoPlayer(
         videoUrl = initialUrl,
         modifier = Modifier.fillMaxSize(),
