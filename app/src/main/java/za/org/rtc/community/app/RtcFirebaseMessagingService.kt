@@ -2,23 +2,24 @@ package za.org.rtc.community.app
 
 import android.Manifest
 import android.app.NotificationManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
+import java.net.URL
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.URL
 import za.org.rtc.community.BuildConfig
 import za.org.rtc.community.MainActivity
 import za.org.rtc.community.R
@@ -26,7 +27,6 @@ import za.org.rtc.community.data.RtcRepository
 import za.org.rtc.community.notifications.RTC_COMMUNITY_UPDATES_CHANNEL
 import za.org.rtc.community.notifications.RTC_SAFETY_ALERTS_CHANNEL
 import za.org.rtc.community.notifications.RTC_SERVICE_BOOKINGS_CHANNEL
-import javax.inject.Inject
 
 @AndroidEntryPoint
 class RtcFirebaseMessagingService : FirebaseMessagingService() {
@@ -45,7 +45,12 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
             postServiceBookingNotification(message)
             return
         }
-        if (notificationType.startsWith("PUBLIC_REPORT") || notificationType.startsWith("REPORT_STATUS") || message.data.containsKey("report_id") || message.data.containsKey("public_report_id")) {
+        if (
+            notificationType.startsWith("PUBLIC_REPORT") ||
+            notificationType.startsWith("REPORT_STATUS") ||
+            message.data.containsKey("report_id") ||
+            message.data.containsKey("public_report_id")
+        ) {
             postPublicReportNotification(message)
             return
         }
@@ -53,7 +58,10 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun postPublicReportNotification(message: RemoteMessage) {
-        val reportId = message.data["report_id"] ?: message.data["public_report_id"] ?: message.data["reportId"] ?: return
+        val reportId = message.data["report_id"]
+            ?: message.data["public_report_id"]
+            ?: message.data["reportId"]
+            ?: return
         if (!isSafeId(reportId)) return
         val status = message.data["status"] ?: message.data["new_status"]
         val department = message.data["department"] ?: "Municipal Department"
@@ -122,7 +130,9 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
         val mediaUrl = message.data["media_url"] ?: message.data["image_url"]
         val channel = if (category.equals("SAFETY_EMERGENCY", true) || message.data["safety"] == "true") {
             RTC_SAFETY_ALERTS_CHANNEL
-        } else RTC_COMMUNITY_UPDATES_CHANNEL
+        } else {
+            RTC_COMMUNITY_UPDATES_CHANNEL
+        }
 
         val openIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -137,13 +147,11 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
         )
         val notificationId = alertId?.hashCode() ?: System.currentTimeMillis().toInt()
 
-        // No image: post immediately on the current thread.
         if (mediaUrl.isNullOrBlank() || !mediaUrl.startsWith("http")) {
             postCommunityText(title, body, channel, pendingIntent, notificationId)
             return
         }
 
-        // Image present: fetch off the main thread, then post a BigPicture notification.
         serviceScope.launch {
             val bitmap = downloadNotificationImage(mediaUrl)
             withContext(Dispatchers.Main) {
@@ -188,12 +196,7 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
             .setContentTitle(title.take(120))
             .setContentText(body.take(240))
             .setLargeIcon(bitmap)
-            .setStyle(
-                NotificationCompat.BigPictureStyle()
-                    .bigPicture(bitmap)
-                    .bigLargeIcon(null)
-                    .setSummaryText(body.take(240)),
-            )
+            .setStyle(NotificationCompat.BigPictureStyle().bigPicture(bitmap))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(if (channel == RTC_SAFETY_ALERTS_CHANNEL) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
@@ -209,11 +212,20 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
             connection.getInputStream().use { stream -> BitmapFactory.decodeStream(stream) }
         }.getOrNull()
     }
+
     private fun notifyIfPermitted(id: Int, notification: android.app.Notification) {
-        if (android.os.Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+        if (
+            android.os.Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        ) {
             getSystemService(NotificationManager::class.java).notify(id, notification)
         }
     }
 
-    private fun isSafeId(value: String): Boolean = value.length in 1..128 && value.all { it.isLetterOrDigit() || it in "-_" }
+    private fun isSafeId(value: String): Boolean =
+        value.length in 1..128 && value.all { it.isLetterOrDigit() || it in "-_" }
+
+    private companion object {
+        const val IMAGE_FETCH_TIMEOUT_MS = 5_000
+    }
 }
