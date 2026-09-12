@@ -61,8 +61,16 @@ for token in ('page(', 'comments(', 'addComment(', 'translate(', 'narration(', '
 for token in ('Conversation', 'Translate', 'Listen', 'DailyPostPreviewDialog', 'Reply'):
     assert token in resident_ui, token
 assert 'comments' in resident_ui.lower()
-for token in ('Templates', 'Preview', 'Schedule', 'Push notification', 'Publication history'):
+for token in ('Templates', 'Preview', 'Schedule', 'Push notification'):
     assert token.lower() in studio_ui.lower(), token
+# Existing publications/history are browsable and manageable across lifecycle states.
+assert 'Text("Publications"' in studio_ui
+assert 'DailyPostState.entries.forEach' in studio_ui
+assert 'items(state.publications' in studio_ui
+assert 'PublicationManagementCard(' in studio_ui
+assert 'onEdit(post)' in studio_ui
+assert 'onArchive(post)' in studio_ui
+# Quoting is verified by behavior rather than one exact copy label.
 assert 'Quote an RTC publication' in studio_ui
 assert 'DailyPostBlockType.QUOTED_PUBLICATION' in studio_ui
 assert 'quotedPostId = quoted.id' in studio_ui
