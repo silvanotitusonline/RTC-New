@@ -5,7 +5,7 @@ def read(path: str) -> str:
     return (ROOT / path).read_text()
 
 
-def test_local_drafts_are_account_scoped_with_forward_room_migration():
+def test_local_drafts_are_owner_scoped_with_forward_room_migration():
     database = read('app/src/main/java/za/org/rtc/community/data/local/RtcDatabase.kt')
     module = read('app/src/main/java/za/org/rtc/community/di/AppModule.kt')
 
@@ -22,18 +22,21 @@ def test_local_drafts_are_account_scoped_with_forward_room_migration():
     assert 'DROP TABLE local_drafts' in database
     assert 'ALTER TABLE local_drafts_v3 RENAME TO local_drafts' in database
     assert 'INSERT INTO local_drafts_v3' not in database
-    assert 'version = 6' in database or 'version = 3' in database
+    assert 'version = 7' in database
+    assert 'RTC_DATABASE_MIGRATION_6_7' in database
 
     assert 'import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_2_3' in module
     assert 'RTC_DATABASE_MIGRATION_1_2' in module and 'RTC_DATABASE_MIGRATION_2_3' in module
+    assert 'RTC_DATABASE_MIGRATION_6_7' in module
 
 
-def test_repository_draft_stream_and_mutations_follow_active_account_owner():
+def test_repository_draft_stream_and_mutations_follow_runtime_owner_namespace():
     repository = read('app/src/main/java/za/org/rtc/community/data/RtcRepository.kt')
 
     assert 'private fun draftOwnerIdOrNull(session: RtcSession): String?' in repository
-    assert 'SessionAuthority.SUPABASE_AUTH, SessionAuthority.DEVELOPMENT_ADAPTER -> session.id' in repository
-    assert 'SessionAuthority.PUBLIC -> null' in repository
+    assert 'SessionAuthority.SUPABASE_AUTH -> "staff:${session.id}"' in repository
+    assert 'SessionAuthority.DEVELOPMENT_ADAPTER -> "development:${session.id}"' in repository
+    assert 'SessionAuthority.PUBLIC -> installationIdentity.localOwnerKey' in repository
 
     assert 'val ownerUserId = draftOwnerIdOrNull(activeSession) ?: return@collectLatest' in repository
     assert 'localDraftDao.observeForOwner(ownerUserId).collectLatest' in repository
