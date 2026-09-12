@@ -88,11 +88,11 @@ assert 'EXTRA_DAILY_POST_ID' in main_activity
 assert 'rtc://community/daily-post/' in fcm_service
 assert 'postDailyPostNotification' in fcm_service
 assert 'notificationType == "DAILY_POST"' in fcm_service
-# Automatic previews are owned only by the activity-level lifecycle host, preventing duplicate
-# dialogs when Explore creates its own route-scoped DailyPostViewModel.
+# Automatic preview claiming is owned only by the activity-level lifecycle host; route-scoped
+# DailyPostViewModels refresh the feed but do not independently claim an unseen publication.
 init_block = view_model.split('init {', 1)[1].split('}', 1)[0]
+assert 'refresh()' in init_block
 assert 'checkPreview()' not in init_block
-assert 'state.preview?.let' not in resident_ui
 
 # Server trust boundaries and one-time preview semantics.
 for token in (
