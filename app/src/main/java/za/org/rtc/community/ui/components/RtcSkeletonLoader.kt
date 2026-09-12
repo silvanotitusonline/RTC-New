@@ -103,6 +103,41 @@ fun PostCardSkeleton(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Placeholder for a Service Centre booking card. It preserves the booking-row geometry while
+ * the authoritative server state is loading, avoiding a blank screen without inventing content.
+ */
+@Composable
+fun BookingCardSkeleton(modifier: Modifier = Modifier) {
+    val alpha = skeletonPulse()
+    val block = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha * 0.35f)
+    val lineShape = RoundedCornerShape(6.dp)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Box(Modifier.width(132.dp).height(14.dp).clip(lineShape).background(block))
+            Box(Modifier.width(72.dp).height(22.dp).clip(RoundedCornerShape(11.dp)).background(block))
+        }
+        Box(Modifier.fillMaxWidth(0.78f).height(12.dp).clip(lineShape).background(block))
+        Box(Modifier.fillMaxWidth(0.58f).height(12.dp).clip(lineShape).background(block))
+        Spacer(Modifier.height(2.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.width(96.dp).height(34.dp).clip(RoundedCornerShape(10.dp)).background(block))
+            Box(Modifier.width(96.dp).height(34.dp).clip(RoundedCornerShape(10.dp)).background(block))
+        }
+    }
+}
+
 /** Generic inline loader retained for older call sites. */
 @Composable
 fun RtcSkeletonLoader() {
