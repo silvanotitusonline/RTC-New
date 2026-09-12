@@ -35,6 +35,7 @@ import za.org.rtc.community.ui.theme.RtcSpacing
 @Composable
 fun AdminOverviewScreen(
     viewModel: AdminDashboardViewModel = hiltViewModel(),
+    composerViewModel: NotificationComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -100,6 +101,8 @@ fun AdminOverviewScreen(
         ) {
             Text("Refresh counts")
         }
+
+        NotificationComposerCard(viewModel = composerViewModel)
     }
 }
 
