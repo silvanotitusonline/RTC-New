@@ -17,6 +17,7 @@ object RtcRoute {
     const val NOTIFICATIONS = "notifications"
     const val SEARCH = "search"
     const val HELP = "help"
+    const val STAFF_ACCESS = "staff/access"
     const val OPERATIONS_HUB = "operations_hub"
     const val MODERATOR_CENTRE = "moderator_centre"
     const val EDITORIAL_CONTENT = "editorial_content"
