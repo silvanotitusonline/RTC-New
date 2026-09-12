@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import io.github.jan.supabase.SupabaseClient
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -32,6 +33,7 @@ import javax.inject.Inject
 @HiltViewModel
 class RtcViewModel @Inject constructor(
     private val repository: RtcRepository,
+    private val supabase: SupabaseClient,
     @ApplicationContext applicationContext: Context,
 ) : ViewModel() {
     val session = repository.session
@@ -87,6 +89,7 @@ class RtcViewModel @Inject constructor(
 
     private val authenticationCoordinator = RtcAuthenticationCoordinator(
         repository = repository,
+        supabase = supabase,
         applicationContext = applicationContext,
         scope = viewModelScope,
         onStaffAuthenticated = { administrationCoordinator.refreshOperationsHub() },
