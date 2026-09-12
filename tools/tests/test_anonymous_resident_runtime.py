@@ -31,7 +31,9 @@ def test_installation_identity_cannot_grant_security_authority():
 
 
 def test_privileged_authentication_remains_server_authorized():
-    guard = read("app/src/main/java/za/org/rtc/community/feature/administration/AdminGuard.kt")
+    guard = read(
+        "app/src/main/java/za/org/rtc/community/feature/administration/security/AdminGuard.kt"
+    )
     assert "admin_access_guard" in guard
     assert "currentUserOrNull" in guard or "currentSessionOrNull" in guard
 
@@ -46,8 +48,12 @@ def test_privileged_sign_out_preserves_anonymous_continuity_contract():
 
 
 def test_resident_mutations_still_cross_server_truth_boundary():
-    community = read("app/src/main/java/za/org/rtc/community/data/AuthoritativeCommunityRepository.kt")
-    reports = read("app/src/main/java/za/org/rtc/community/publicreports/AuthoritativePublicReportRepository.kt")
+    community = read(
+        "app/src/main/java/za/org/rtc/community/feature/community/AuthoritativeCommunityRepository.kt"
+    )
+    reports = read(
+        "app/src/main/java/za/org/rtc/community/feature/publicreports/data/AuthoritativePublicReportRepository.kt"
+    )
     assert "rpc" in community.lower() or "delegate" in community.lower()
     assert "rpc" in reports.lower() or "supabase" in reports.lower()
 
