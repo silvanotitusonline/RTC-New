@@ -60,8 +60,12 @@ for token in ('page(', 'comments(', 'addComment(', 'translate(', 'narration(', '
 for token in ('Conversation', 'Translate', 'Listen', 'DailyPostPreviewDialog', 'Reply'):
     assert token in resident_ui, token
 assert 'comments' in resident_ui.lower()
-for token in ('Templates', 'Preview', 'Schedule', 'Push notification', 'Quote publication', 'Publication history'):
+for token in ('Templates', 'Preview', 'Schedule', 'Push notification', 'Publication history'):
     assert token.lower() in studio_ui.lower(), token
+assert 'Quote an RTC publication' in studio_ui
+assert 'DailyPostBlockType.QUOTED_PUBLICATION' in studio_ui
+assert 'quotedPostId = quoted.id' in studio_ui
+assert 'draft.copy(quotedPostId = quoted.id' in studio_ui
 assert 'daily_post_studio' in admin_catalog
 
 # One-time foreground preview and push/deep-link open path.
