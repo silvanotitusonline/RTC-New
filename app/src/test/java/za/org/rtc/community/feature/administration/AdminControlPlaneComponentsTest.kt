@@ -9,23 +9,41 @@ import za.org.rtc.community.feature.administration.security.AdminSecurityExcepti
 class AdminControlPlaneComponentsTest {
 
     @Test
-    fun testAdminDashboardUiStateCalculation() {
+    fun `dashboard attention state reflects protected operations summary`() {
         val state = AdminDashboardUiState(
-            reportsCount = 5,
-            businessSubmissionsCount = 3,
-            supportRequestsCount = 8,
-            totalPendingTasks = 16,
+            summary = AdminOperationsSummary(
+                assignedToMe = 3,
+                highPriority = 2,
+                unassigned = 4,
+                readyForReview = 1,
+                overdue = 1,
+                totalVisible = 9,
+            ),
             isLoading = false,
             errorMessage = null,
-            isAuthorized = true
+            lastRefreshedMillis = 123L,
         )
 
-        assertEquals(16L, state.totalPendingTasks)
-        assertEquals(5L, state.reportsCount)
-        assertEquals(3L, state.businessSubmissionsCount)
-        assertEquals(8L, state.supportRequestsCount)
-        assertTrue(state.isAuthorized)
+        assertEquals(3L, state.summary.assignedToMe)
+        assertEquals(2L, state.summary.highPriority)
+        assertEquals(4L, state.summary.unassigned)
+        assertEquals(1L, state.summary.readyForReview)
+        assertEquals(1L, state.summary.overdue)
+        assertEquals(9L, state.summary.totalVisible)
+        assertTrue(state.hasAttentionItems)
         assertFalse(state.isLoading)
+    }
+
+    @Test
+    fun `attention state is false when no urgent review or overdue work exists`() {
+        val state = AdminDashboardUiState(
+            summary = AdminOperationsSummary(
+                assignedToMe = 2,
+                totalVisible = 2,
+            ),
+        )
+
+        assertFalse(state.hasAttentionItems)
     }
 
     @Test
