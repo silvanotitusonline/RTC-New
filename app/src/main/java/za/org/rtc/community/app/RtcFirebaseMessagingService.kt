@@ -2,6 +2,8 @@ package za.org.rtc.community.app
 
 import android.Manifest
 import android.app.NotificationManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -15,6 +17,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.URL
 import za.org.rtc.community.BuildConfig
 import za.org.rtc.community.MainActivity
 import za.org.rtc.community.R
@@ -115,6 +119,7 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
         val title = message.notification?.title ?: message.data["title"] ?: "RTC Community"
         val body = message.notification?.body ?: message.data["body"] ?: message.data["summary"] ?: return
         val category = message.data["category"].orEmpty()
+        val mediaUrl = message.data["media_url"] ?: message.data["image_url"]
         val channel = if (category.equals("SAFETY_EMERGENCY", true) || message.data["safety"] == "true") {
             RTC_SAFETY_ALERTS_CHANNEL
         } else RTC_COMMUNITY_UPDATES_CHANNEL
@@ -130,6 +135,34 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
             openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val notificationId = alertId?.hashCode() ?: System.currentTimeMillis().toInt()
+
+        // No image: post immediately on the current thread.
+        if (mediaUrl.isNullOrBlank() || !mediaUrl.startsWith("http")) {
+            postCommunityText(title, body, channel, pendingIntent, notificationId)
+            return
+        }
+
+        // Image present: fetch off the main thread, then post a BigPicture notification.
+        serviceScope.launch {
+            val bitmap = downloadNotificationImage(mediaUrl)
+            withContext(Dispatchers.Main) {
+                if (bitmap == null) {
+                    postCommunityText(title, body, channel, pendingIntent, notificationId)
+                } else {
+                    postCommunityRich(title, body, channel, pendingIntent, notificationId, bitmap)
+                }
+            }
+        }
+    }
+
+    private fun postCommunityText(
+        title: String,
+        body: String,
+        channel: String,
+        pendingIntent: PendingIntent,
+        notificationId: Int,
+    ) {
         val notification = NotificationCompat.Builder(this, channel)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title.take(120))
@@ -139,9 +172,43 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
             .setContentIntent(pendingIntent)
             .setPriority(if (channel == RTC_SAFETY_ALERTS_CHANNEL) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
             .build()
-        notifyIfPermitted(alertId?.hashCode() ?: System.currentTimeMillis().toInt(), notification)
+        notifyIfPermitted(notificationId, notification)
     }
 
+    private fun postCommunityRich(
+        title: String,
+        body: String,
+        channel: String,
+        pendingIntent: PendingIntent,
+        notificationId: Int,
+        bitmap: Bitmap,
+    ) {
+        val notification = NotificationCompat.Builder(this, channel)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title.take(120))
+            .setContentText(body.take(240))
+            .setLargeIcon(bitmap)
+            .setStyle(
+                NotificationCompat.BigPictureStyle()
+                    .bigPicture(bitmap)
+                    .bigLargeIcon(null)
+                    .setSummaryText(body.take(240)),
+            )
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(if (channel == RTC_SAFETY_ALERTS_CHANNEL) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        notifyIfPermitted(notificationId, notification)
+    }
+
+    private suspend fun downloadNotificationImage(url: String): Bitmap? = withContext(Dispatchers.IO) {
+        runCatching {
+            val connection = URL(url).openConnection()
+            connection.connectTimeout = IMAGE_FETCH_TIMEOUT_MS
+            connection.readTimeout = IMAGE_FETCH_TIMEOUT_MS
+            connection.getInputStream().use { stream -> BitmapFactory.decodeStream(stream) }
+        }.getOrNull()
+    }
     private fun notifyIfPermitted(id: Int, notification: android.app.Notification) {
         if (android.os.Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
             getSystemService(NotificationManager::class.java).notify(id, notification)

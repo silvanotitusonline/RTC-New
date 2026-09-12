@@ -1,5 +1,7 @@
 package za.org.rtc.community.feature.community
 
+import za.org.rtc.community.core.BaseViewModel
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,7 +16,7 @@ import za.org.rtc.community.core.CommunityPost
 @HiltViewModel
 class CommunityViewModel @Inject constructor(
     private val repository: CommunityRepository,
-) : ViewModel() {
+) : BaseViewModel() {
     private val _feedState = MutableStateFlow(CommunityFeedState(initialLoading = true))
     val feedState = _feedState.asStateFlow()
 
