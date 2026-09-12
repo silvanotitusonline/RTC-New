@@ -30,6 +30,13 @@ data class DailyPostMedia(
     val signedUrl: String? = null,
 )
 
+data class DailyPostMediaUpload(
+    val bytes: ByteArray,
+    val mimeType: String,
+    val fileExtension: String,
+    val altText: String = "",
+)
+
 data class DailyPost(
     val id: String,
     val authorId: String,
