@@ -1,9 +1,7 @@
 package za.org.rtc.community.feature.community
 
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
-import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.SerialName
@@ -42,7 +40,7 @@ class AuthoritativeCommunityRepository @Inject constructor(
             parameters = buildJsonObject {
                 put("p_post_id", postId)
                 put("p_body", cleanBody)
-                parentId?.let { put("p_parent_id", it) }
+                parentId?.let { put("p_parent_comment_id", it) }
             },
         ).decodeSingle<String>()
 
@@ -56,37 +54,30 @@ class AuthoritativeCommunityRepository @Inject constructor(
     override suspend fun updateComment(commentId: String, body: String): Result<Unit> = runCatching {
         val cleanBody = body.trim()
         require(cleanBody.length in 1..280) { "A comment must contain 1 to 280 characters." }
-
-        supabase.from("community_comments").update(
-            buildJsonObject { put("body", cleanBody) },
-        ) {
-            filter { eq("id", commentId) }
-        }
+        supabase.postgrest.rpc(
+            function = "edit_community_comment",
+            parameters = buildJsonObject {
+                put("p_comment_id", commentId)
+                put("p_body", cleanBody)
+            },
+        )
         Unit
     }
 
     override suspend fun deleteComment(commentId: String): Result<Unit> = runCatching {
-        supabase.from("community_comments").update(
-            buildJsonObject {
-                put("state", "DELETED_BY_AUTHOR")
-                put("deleted_at", Instant.now().toString())
-            },
-        ) {
-            filter { eq("id", commentId) }
-        }
+        supabase.postgrest.rpc(
+            function = "delete_community_comment",
+            parameters = buildJsonObject { put("p_comment_id", commentId) },
+        )
         cachedCommentDao.deleteComment(commentId)
         Unit
     }
 
     override suspend fun deletePost(postId: String): Result<Unit> = runCatching {
-        supabase.from("community_posts").update(
-            buildJsonObject {
-                put("state", "DELETED_BY_AUTHOR")
-                put("deleted_at", Instant.now().toString())
-            },
-        ) {
-            filter { eq("id", postId) }
-        }
+        supabase.postgrest.rpc(
+            function = "delete_community_post",
+            parameters = buildJsonObject { put("p_post_id", postId) },
+        )
         cachedPostDao.deletePost(postId)
         cachedCommentDao.deleteCommentsForPost(postId)
         Unit
