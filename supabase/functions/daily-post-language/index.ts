@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { GoogleAuth } from "npm:google-auth-library";
-import { APP_ROLES, enforceRateLimit, isUuid, readJsonObject, verifyCaller, writeAudit } from "../_shared/auth.ts";
+import { APP_ROLES, enforceRateLimit, isUuid, readJsonObject, verifyCaller, writeAudit, type EdgeAdminClient } from "../_shared/auth.ts";
 
 const URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
@@ -64,7 +64,7 @@ async function geminiTranslation(post: any, targetLanguage: string) {
   return parsed as { headline: string; excerpt: string; blocks: unknown[] };
 }
 
-async function ensureTranslation(admin: ReturnType<typeof createClient>, post: any, targetLanguage: string) {
+async function ensureTranslation(admin: EdgeAdminClient, post: any, targetLanguage: string) {
   const cached = await admin.from("daily_post_translations")
     .select("post_id,revision,target_language,translated_headline,translated_excerpt,translated_blocks,audio_storage_path")
     .eq("post_id", post.id).eq("revision", post.revision).eq("target_language", targetLanguage).maybeSingle();
@@ -116,7 +116,7 @@ async function synthesize(languageCode: string, text: string): Promise<Uint8Arra
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json(405, { error: "POST is required." });
   if (!URL || !ANON || !SERVICE) return json(503, { error: "Server configuration is incomplete." });
-  const admin = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
+  const admin = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } }) as unknown as EdgeAdminClient;
   let actorId: string | null = null;
   try {
     const caller = await verifyCaller(req, { supabaseUrl: URL, publishableKey: ANON, admin }, APP_ROLES);
