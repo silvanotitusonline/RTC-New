@@ -55,11 +55,15 @@ data class PublicReportComposerState(
     val guidelinesAccepted: Boolean = false,
     val guidelinesVersion: String = "",
     val submitting: Boolean = false,
+    /** Set only after the authoritative create RPC has returned a server report id. */
+    val serverConfirmedReportId: String? = null,
+    /** Set only when the complete create + evidence workflow has finished successfully. */
     val submittedReportId: String? = null,
     val message: String? = null,
     val mapUnavailableNotice: String = "A map picker is not configured. Enter a landmark or address manually.",
 ) {
     val showCriticalNotice: Boolean get() = urgency == PublicReportUrgency.CRITICAL
+    val hasPartialSubmission: Boolean get() = serverConfirmedReportId != null && submittedReportId == null
 }
 
 @HiltViewModel
@@ -90,6 +94,10 @@ class PublicReportComposerViewModel @Inject constructor(
         viewModelScope.launch {
             repository.categories().onSuccess { categories ->
                 _state.update { it.copy(categories = categories.filter { category -> category.isActive }) }
+            }.onFailure { error ->
+                _state.update {
+                    it.copy(message = SafeUiError.generic(error, "Public Report categories could not be loaded."))
+                }
             }
         }
     }
@@ -118,10 +126,14 @@ class PublicReportComposerViewModel @Inject constructor(
                 .onSuccess { prepared ->
                     val kind = if (prepared.kind.name == "VIDEO") PublicReportMediaKind.VIDEO else PublicReportMediaKind.IMAGE
                     PublicReportValidation.evidenceMime(prepared.mimeType, kind)?.let { message ->
-                        prepared.file.delete(); _state.update { it.copy(message = message) }; return@onSuccess
+                        prepared.file.delete()
+                        _state.update { it.copy(message = message) }
+                        return@onSuccess
                     }
                     PublicReportValidation.evidenceSize(kind, prepared.byteSize, prepared.durationSeconds)?.let { message ->
-                        prepared.file.delete(); _state.update { it.copy(message = message) }; return@onSuccess
+                        prepared.file.delete()
+                        _state.update { it.copy(message = message) }
+                        return@onSuccess
                     }
                     _state.update { state ->
                         state.copy(
@@ -171,48 +183,66 @@ class PublicReportComposerViewModel @Inject constructor(
             contactPermission = false,
             guidelinesVersion = current.guidelinesVersion,
         )
-        val error = PublicReportValidation.draft(
+        val validationError = PublicReportValidation.draft(
             draft = draft,
             evidenceCount = current.evidence.size,
             cannotProvideEvidence = current.cannotProvideEvidence,
             guidelinesAccepted = current.guidelinesAccepted,
         )
-        if (error != null) {
-            _state.update { it.copy(message = error) }
+        if (validationError != null) {
+            _state.update { it.copy(message = validationError) }
             return
         }
+
         _state.update { it.copy(submitting = true, message = null) }
         viewModelScope.launch {
-            repository.create(draft)
-                .onSuccess { reportId ->
-                    val uploadError = uploadEvidence(reportId, current)
-                    cleanupStaged(current)
-                    _state.update {
-                        it.copy(
-                            submitting = false,
-                            submittedReportId = reportId,
-                            message = uploadError,
-                        )
-                    }
+            val reportId = current.serverConfirmedReportId ?: repository.create(draft).getOrElse { failure ->
+                _state.update {
+                    it.copy(
+                        submitting = false,
+                        message = SafeUiError.generic(failure, failure.message ?: "The Public Report could not be submitted."),
+                    )
                 }
-                .onFailure { failure ->
-                    _state.update {
-                        it.copy(
-                            submitting = false,
-                            message = SafeUiError.generic(failure, failure.message ?: "The Public Report could not be submitted."),
-                        )
-                    }
+                return@launch
+            }
+
+            // Crossing this assignment means the server, not local optimistic state, owns the report.
+            _state.update { it.copy(serverConfirmedReportId = reportId) }
+
+            val uploadError = uploadEvidence(reportId, current)
+            if (uploadError == null) {
+                cleanupStaged(current)
+                _state.update {
+                    it.copy(
+                        submitting = false,
+                        serverConfirmedReportId = reportId,
+                        submittedReportId = reportId,
+                        message = null,
+                    )
                 }
+            } else {
+                // Preserve staged evidence and the stable request id so the resident can safely retry.
+                _state.update {
+                    it.copy(
+                        submitting = false,
+                        serverConfirmedReportId = reportId,
+                        submittedReportId = null,
+                        message = "Report submitted and confirmed by RTC, but evidence is still pending. $uploadError Retry to finish attaching the evidence.",
+                    )
+                }
+            }
         }
     }
 
     private suspend fun uploadEvidence(reportId: String, current: PublicReportComposerState): String? {
         if (current.evidence.isEmpty()) return null
-        val ownerId = repository.currentUserId().getOrElse { return it.message }
+        val ownerId = repository.currentUserId().getOrElse { return it.message ?: "Your signed-in account could not be confirmed." }
         current.evidence.forEachIndexed { index, item ->
             val file = item.stagedPath?.let { java.io.File(it) } ?: return "Evidence could not be read."
             val storagePath = "$ownerId/${current.clientRequestId}/${item.id}"
-            repository.uploadEvidenceBytes(storagePath, file.readBytes(), item.mimeType).getOrElse { return it.message }
+            repository.uploadEvidenceBytes(storagePath, file.readBytes(), item.mimeType).getOrElse {
+                return it.message ?: "Evidence upload could not be confirmed."
+            }
             repository.finalizeEvidence(
                 PublicReportEvidenceUpload(
                     reportId = reportId,
@@ -226,7 +256,9 @@ class PublicReportComposerViewModel @Inject constructor(
                     position = index + 1,
                     finalizeRequestId = item.id,
                 ),
-            ).getOrElse { return it.message }
+            ).getOrElse {
+                return it.message ?: "Evidence registration could not be confirmed."
+            }
         }
         return null
     }
