@@ -59,9 +59,9 @@ internal fun CommunityPostDetailLoadingState(
     } else {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             PurposefulEmptyState(
-                message ?: "This Community post is no longer available.",
-                if (postId.isNotBlank()) "Retry" else "Return to Community",
-                if (postId.isNotBlank()) onRetry else {},
+                message = message ?: "This Community post is no longer available.",
+                action = "Retry",
+                onAction = onRetry,
             )
         }
     }
