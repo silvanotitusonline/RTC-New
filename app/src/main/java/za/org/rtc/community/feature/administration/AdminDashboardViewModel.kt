@@ -18,14 +18,18 @@ data class AdminDashboardUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val lastRefreshedMillis: Long = 0L,
+    val eligibleAssigneesByWorkItem: Map<String, List<AdminEligibleAssignee>> = emptyMap(),
+    val assigneeLoadingWorkItemId: String? = null,
+    val assigneeErrorByWorkItem: Map<String, String> = emptyMap(),
 ) {
     val hasAttentionItems: Boolean
         get() = summary.highPriority > 0 || summary.overdue > 0 || summary.readyForReview > 0
 }
 
 /**
- * Lightweight Operations Hub summary. Counts come from a single role-scoped server RPC;
+ * Lightweight Operations Hub state. Counts come from a single role-scoped server RPC;
  * failures preserve the last successful summary instead of silently presenting false zeroes.
+ * Eligible assignees are fetched only when a System Administrator opens reassignment.
  */
 @HiltViewModel
 class AdminDashboardViewModel @Inject constructor(
@@ -48,6 +52,64 @@ class AdminDashboardViewModel @Inject constructor(
         viewModelScope.launch { loadSummary(showLoading = true) }
     }
 
+    fun loadEligibleAssignees(workItemId: String) {
+        if (_uiState.value.eligibleAssigneesByWorkItem.containsKey(workItemId) ||
+            _uiState.value.assigneeLoadingWorkItemId == workItemId
+        ) return
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    assigneeLoadingWorkItemId = workItemId,
+                    assigneeErrorByWorkItem = it.assigneeErrorByWorkItem - workItemId,
+                )
+            }
+            repository.loadEligibleAssignees(workItemId).fold(
+                onSuccess = { assignees ->
+                    _uiState.update {
+                        it.copy(
+                            eligibleAssigneesByWorkItem = it.eligibleAssigneesByWorkItem + (workItemId to assignees),
+                            assigneeLoadingWorkItemId = null,
+                            assigneeErrorByWorkItem = it.assigneeErrorByWorkItem - workItemId,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            assigneeLoadingWorkItemId = null,
+                            assigneeErrorByWorkItem = it.assigneeErrorByWorkItem + (
+                                workItemId to (
+                                    error.message?.takeIf(String::isNotBlank)
+                                        ?: "Eligible staff could not be loaded."
+                                    )
+                                ),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun retryEligibleAssignees(workItemId: String) {
+        _uiState.update {
+            it.copy(
+                eligibleAssigneesByWorkItem = it.eligibleAssigneesByWorkItem - workItemId,
+                assigneeErrorByWorkItem = it.assigneeErrorByWorkItem - workItemId,
+            )
+        }
+        loadEligibleAssignees(workItemId)
+    }
+
+    fun invalidateEligibleAssignees(workItemId: String) {
+        _uiState.update {
+            it.copy(
+                eligibleAssigneesByWorkItem = it.eligibleAssigneesByWorkItem - workItemId,
+                assigneeErrorByWorkItem = it.assigneeErrorByWorkItem - workItemId,
+            )
+        }
+    }
+
     private fun startRefreshLoop() {
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
@@ -65,12 +127,14 @@ class AdminDashboardViewModel @Inject constructor(
 
         repository.load().fold(
             onSuccess = { summary ->
-                _uiState.value = AdminDashboardUiState(
-                    summary = summary,
-                    isLoading = false,
-                    errorMessage = null,
-                    lastRefreshedMillis = System.currentTimeMillis(),
-                )
+                _uiState.update {
+                    it.copy(
+                        summary = summary,
+                        isLoading = false,
+                        errorMessage = null,
+                        lastRefreshedMillis = System.currentTimeMillis(),
+                    )
+                }
             },
             onFailure = { error ->
                 _uiState.update {
