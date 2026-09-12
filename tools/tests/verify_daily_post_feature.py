@@ -15,8 +15,10 @@ resident_ui = read("app/src/main/java/za/org/rtc/community/feature/dailypost/pre
 studio_ui = read("app/src/main/java/za/org/rtc/community/feature/dailypost/presentation/AdminDailyPostStudioScreen.kt")
 security = read("supabase/migrations/20260912011000_daily_post_security_and_workflows.sql")
 storage_security = read("supabase/migrations/20260912011500_daily_post_storage_security.sql")
+scheduler_activation = read("supabase/migrations/20260912012000_daily_post_scheduler_activation_and_comment_delete.sql")
 language_fn = read("supabase/functions/daily-post-language/index.ts")
 scheduler_fn = read("supabase/functions/daily-post-scheduler/index.ts")
+supabase_config = read("supabase/config.toml")
 onboarding = read("app/src/main/java/za/org/rtc/community/feature/onboarding/InteractiveOnboardingTutorial.kt")
 preferences = read("app/src/main/java/za/org/rtc/community/data/local/UserPreferencesStore.kt")
 
@@ -74,9 +76,19 @@ assert "auth.uid()" in security
 assert "aal2" in security
 assert 'daily-post-media' in storage_security
 assert 'daily-post-ai-audio' in storage_security
-assert 'verifySchedulerCaller' in scheduler_fn
+assert 'verifyDailyPostSchedulerCaller' in scheduler_fn
+assert 'assert_daily_post_scheduler_secret' in scheduler_fn
+assert 'x-rtc-daily-post-scheduler-secret' in scheduler_fn
 assert 'idempotency_key' in scheduler_fn
+assert 'notification_type: "DAILY_POST"' in scheduler_fn
 assert 'DAILY_POST' in scheduler_fn
+assert 'rtc_daily_post_scheduler_secret' in scheduler_activation
+assert "'rtc-daily-post-scheduler'" in scheduler_activation
+assert 'x-rtc-daily-post-scheduler-secret' in scheduler_activation
+assert "state = 'DELETED' AND body = ''" in scheduler_activation
+assert '[functions.daily-post-language]' in supabase_config
+assert '[functions.daily-post-scheduler]' in supabase_config
+assert 'verify_jwt = false' in supabase_config.split('[functions.daily-post-scheduler]', 1)[1]
 assert 'enforceRateLimit' in language_fn
 assert 'geminiTranslation' in language_fn
 assert 'texttospeech.googleapis.com' in language_fn
