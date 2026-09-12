@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 
 /** Shared pulse alpha so every placeholder breathes in lockstep. */
 @Composable
-internal fun skeletonPulse(): Float {
+internal fun rememberSkeletonPulseAlpha(): Float {
     val transition = rememberInfiniteTransition(label = "rtc-skeleton")
     val alpha by transition.animateFloat(
         initialValue = 0.30f,
@@ -46,7 +46,7 @@ internal fun skeletonPulse(): Float {
 /** Shared modifier used by compact skeleton shapes such as avatars and badges. */
 @Composable
 fun Modifier.skeletonPulse(shape: Shape = RoundedCornerShape(6.dp)): Modifier {
-    val alpha = skeletonPulse()
+    val alpha = rememberSkeletonPulseAlpha()
     return this
         .clip(shape)
         .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha * 0.35f))
@@ -59,7 +59,7 @@ fun SkeletonBox(
     modifier: Modifier = Modifier,
     width: Dp? = null,
 ) {
-    val alpha = skeletonPulse()
+    val alpha = rememberSkeletonPulseAlpha()
     Box(
         modifier = modifier
             .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
@@ -75,7 +75,7 @@ fun SkeletonBox(
  */
 @Composable
 fun PostCardSkeleton(modifier: Modifier = Modifier) {
-    val alpha = skeletonPulse()
+    val alpha = rememberSkeletonPulseAlpha()
     val block = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha * 0.35f)
     val shape = RoundedCornerShape(6.dp)
 
@@ -99,6 +99,32 @@ fun PostCardSkeleton(modifier: Modifier = Modifier) {
                 Box(Modifier.width(44.dp).height(12.dp).clip(shape).background(block))
                 Box(Modifier.width(44.dp).height(12.dp).clip(shape).background(block))
             }
+        }
+    }
+}
+
+/** Placeholder shaped like a Service Centre booking card. */
+@Composable
+fun BookingCardSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            SkeletonBox(height = 18.dp, width = 150.dp)
+            SkeletonBox(height = 24.dp, width = 82.dp)
+        }
+        SkeletonBox(height = 14.dp, modifier = Modifier.fillMaxWidth(0.78f))
+        SkeletonBox(height = 14.dp, modifier = Modifier.fillMaxWidth(0.58f))
+        Spacer(Modifier.height(2.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SkeletonBox(height = 40.dp, modifier = Modifier.weight(1f))
+            SkeletonBox(height = 40.dp, modifier = Modifier.weight(1f))
         }
     }
 }
