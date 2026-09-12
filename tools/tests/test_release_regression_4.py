@@ -120,8 +120,9 @@ def test_reference_driven_makeover_uses_transparent_rtc_brand_and_shared_palette
     assert logo.exists() and logo.stat().st_size > 0
     assert 'fun RtcBrandLockup(' in BRAND_LOCKUP
     assert 'R.drawable.rtc_logo_mark_transparent' in BRAND_LOCKUP
-    assert 'import za.org.rtc.community.feature.account.PublicWelcomeScreen' in MAIN
-    assert 'PublicWelcomeScreen(' in MAIN
+    assert 'import za.org.rtc.community.feature.account.PublicWelcomeScreen' not in MAIN
+    assert 'PublicWelcomeScreen(' not in MAIN
+    assert 'RtcSplashScreen(configuration = LocalRtcUiConfiguration.current)' in MAIN
     supplied_splash_logo = ROOT / 'app/src/main/res/drawable-nodpi/rtc_community_logo_transparent.png'
     assert supplied_splash_logo.exists() and supplied_splash_logo.stat().st_size > 0
     with Image.open(supplied_splash_logo) as splash_logo:
