@@ -3,6 +3,7 @@ package za.org.rtc.community.feature.dailypost.domain
 interface DailyPostRepository {
     suspend fun page(cursor: DailyPostCursor? = null, limit: Int = 20): Result<DailyPostPage>
     suspend fun get(postId: String): Result<DailyPost?>
+    suspend fun media(postId: String): Result<List<DailyPostMedia>>
     suspend fun comments(postId: String): Result<List<DailyPostComment>>
     suspend fun addComment(postId: String, body: String, parentId: String? = null): Result<Unit>
     suspend fun updateComment(commentId: String, body: String): Result<Unit>
@@ -14,6 +15,8 @@ interface DailyPostRepository {
 
     suspend fun adminPage(state: DailyPostState? = null, limit: Int = 100): Result<List<DailyPost>>
     suspend fun saveDraft(draft: DailyPostDraft): Result<String>
+    suspend fun uploadMedia(postId: String, upload: DailyPostMediaUpload, sortOrder: Int = 0): Result<DailyPostMedia>
+    suspend fun deleteMedia(mediaId: String): Result<Unit>
     suspend fun publishNow(postId: String, pushEnabled: Boolean, previewPopupEnabled: Boolean): Result<Unit>
     suspend fun schedule(postId: String, scheduledForIso: String, pushEnabled: Boolean, previewPopupEnabled: Boolean): Result<Unit>
     suspend fun archive(postId: String): Result<Unit>
