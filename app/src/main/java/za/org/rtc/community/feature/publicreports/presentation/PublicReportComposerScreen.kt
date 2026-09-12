@@ -60,14 +60,14 @@ fun PublicReportComposerScreen(
                         value = state.title,
                         onValueChange = viewModel::setTitle,
                         label = { Text("Short title") },
-                        supportingText = { Text("Example: Water leaking near clinic") },
+                        supportingText = { Text("Example: Water leaking near clinic · ${state.title.length}/${PublicReportValidation.TITLE_MAX}") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         value = state.description,
                         onValueChange = viewModel::setDescription,
                         label = { Text("What’s happening?") },
-                        supportingText = { Text("What happened, when it started, and any immediate risk.") },
+                        supportingText = { Text("What happened, when it started, and any immediate risk. · ${state.description.length}/${PublicReportValidation.DESCRIPTION_MAX}") },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
                     )
                     Text("When did it start?")
@@ -101,13 +101,14 @@ fun PublicReportComposerScreen(
                         value = state.publicLocationLabel,
                         onValueChange = viewModel::setPublicLocation,
                         label = { Text("Public landmark or area") },
+                        supportingText = { Text("${state.publicLocationLabel.length}/${PublicReportValidation.LOCATION_MAX}") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         value = state.exactAddress,
                         onValueChange = viewModel::setExactAddress,
                         label = { Text("Manual address or landmark") },
-                        supportingText = { Text(state.mapUnavailableNotice) },
+                        supportingText = { Text("${state.mapUnavailableNotice} · ${state.exactAddress.length}/${PublicReportValidation.ADDRESS_MAX}") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text("Evidence")
@@ -133,6 +134,7 @@ fun PublicReportComposerScreen(
                             value = state.noEvidenceReason,
                             onValueChange = viewModel::setNoEvidenceReason,
                             label = { Text("Why evidence cannot be provided") },
+                            supportingText = { Text("${state.noEvidenceReason.length}/${PublicReportValidation.EXCEPTION_MAX}") },
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
