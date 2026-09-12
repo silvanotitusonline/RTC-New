@@ -24,6 +24,8 @@ def test_email_signup_never_manufactures_an_authenticated_local_session():
     assert "database.cachedSessionDao().upsertSession" not in signup
     assert "database.cachedUserProfileDao().insertProfile" not in signup
     assert "SessionAuthority.SUPABASE_AUTH" not in signup
+    assert "UUID.nameUUIDFromBytes" not in signup
+    assert "UserRole.RESIDENT_A" not in signup
     assert "recordPrivacyAnalyticsAppActivity()" not in signup
     assert "refreshLiveContent()" not in signup
     assert "enqueueUploadRecovery()" not in signup
