@@ -93,9 +93,9 @@ class NotificationComposerViewModel @Inject constructor(
 
         viewModelScope.launch {
             runCatching {
-                supabase.functions.invoke(
-                    function = "send-notification",
-                    body = buildJsonObject {
+                val response = supabase.functions.invoke(
+                    "send-notification",
+                    buildJsonObject {
                         put("title", current.title.trim())
                         put("body", current.body.trim())
                         put("target", current.target.wireValue)
@@ -104,6 +104,9 @@ class NotificationComposerViewModel @Inject constructor(
                         put(NotificationPayloads.KEY_NOTIFICATION_TYPE, NotificationPayloads.TYPE_COMMUNITY_ALERT)
                     },
                 )
+                check(response.status.value in 200..299) {
+                    "Dispatch rejected with status " + response.status.value
+                }
             }.onSuccess {
                 _state.update {
                     it.copy(
