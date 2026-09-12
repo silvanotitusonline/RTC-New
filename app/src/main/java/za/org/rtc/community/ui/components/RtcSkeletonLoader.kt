@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -40,6 +41,15 @@ internal fun skeletonPulse(): Float {
         label = "rtc-skeleton-alpha",
     )
     return alpha
+}
+
+/** Shared modifier used by compact skeleton shapes such as avatars and badges. */
+@Composable
+fun Modifier.skeletonPulse(shape: Shape = RoundedCornerShape(6.dp)): Modifier {
+    val alpha = skeletonPulse()
+    return this
+        .clip(shape)
+        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha * 0.35f))
 }
 
 /** A single shimmering placeholder block. */
