@@ -94,51 +94,24 @@ def test_reference_home_and_explore_cards_use_approved_server_values():
     assert 'LinearProgressIndicator' not in explore
 
 
-def test_reference_onboarding_uses_supplied_splash_logo_and_real_full_page_auth_paths():
-    welcome = _function_body(ACCOUNT_WELCOME, 'PublicWelcomeScreen', [])
+def test_reference_onboarding_uses_supplied_splash_logo_and_anonymous_resident_entry():
     brand = _function_body(BRAND_LOCKUP, 'RtcBrandLockup', [])
-    configuration = (ROOT / 'app/src/main/java/za/org/rtc/community/core/UiConfiguration.kt').read_text()
-    welcome_configuration = re.search(
-        r'data class WelcomeConfiguration\((.*?)\n\)',
-        configuration,
-        re.S,
-    ).group(1)
+    staff_access = (ROOT / 'app/src/main/java/za/org/rtc/community/feature/administration/StaffAccessScreen.kt').read_text()
+    account = (ROOT / 'app/src/main/java/za/org/rtc/community/feature/account/AccountScreen.kt').read_text()
     assert '@drawable/rtc_community_logo_transparent' in (ROOT / 'app/src/main/res/values/themes.xml').read_text()
     assert '@drawable/rtc_community_logo_transparent' in (ROOT / 'app/src/main/res/drawable/rtc_splash_background.xml').read_text()
     assert 'R.drawable.rtc_community_logo_transparent' not in brand
     assert 'R.drawable.rtc_logo_mark_transparent' in brand
-    assert 'import za.org.rtc.community.feature.account.PublicWelcomeScreen' in MAIN
-    assert 'PublicWelcomeScreen(' in MAIN
-    assert 'val welcome = LocalRtcUiConfiguration.current.welcome' in welcome
-    for configured_field in [
-        'welcome.headline',
-        'welcome.supportingText',
-        'welcome.primaryActionLabel',
-        'welcome.secondaryActionLabel',
-        'welcome.launchTreatment',
-    ]:
-        assert configured_field in welcome
-    assert re.findall(r'val (\w+):', welcome_configuration) == [
-        'headline',
-        'supportingText',
-        'primaryActionLabel',
-        'secondaryActionLabel',
-        'launchTreatment',
-    ]
-    assert 'mode = "CREATE"' in welcome
-    assert 'mode = "SIGN_IN"' in welcome
-    assert 'Create your RTC account' in welcome
-    assert 'Sign in to RTC Community' in welcome
-    assert 'label = { Text("Your name") }' in welcome
-    assert 'label = { Text("Confirm password") }' in welcome
-    assert 'passwordConfirmation != password' in welcome
-    assert 'onRequestPasswordRecovery(email)' in welcome
-    assert 'onSignUp(email, password, displayName)' in welcome
-    assert 'onSignIn(email, password)' in welcome
-    assert 'RtcGoogleSignInButton(' in welcome
-    assert 'onCredential = onGoogleCredential' in welcome
-    assert 'onFailure = onGoogleSignInError' in welcome
-    assert 'Text("Back")' in welcome
+    assert 'PublicWelcomeScreen(' not in MAIN
+    assert 'import za.org.rtc.community.feature.account.PublicWelcomeScreen' not in MAIN
+    assert 'No resident account required' in account
+    assert 'Staff & administrator access' in account
+    assert 'Protected-account entry point. Normal resident use never requires this screen.' in staff_access
+    assert 'RTC residents do not need an account. This sign-in is only for authorised staff workspaces.' in staff_access
+    assert 'label = { Text("Staff email") }' in staff_access
+    assert 'label = { Text("Password") }' in staff_access
+    assert 'onSignIn(email.trim(), password)' in staff_access
+    assert 'Create your RTC account' not in staff_access
 
 
 def test_reference_graphite_theme_is_the_default_for_system_preference_sessions():
