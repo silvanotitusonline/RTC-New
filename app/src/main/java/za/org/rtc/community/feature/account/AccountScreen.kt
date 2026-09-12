@@ -5,68 +5,54 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import za.org.rtc.community.app.RtcViewModel
+import za.org.rtc.community.navigation.RtcRoute
 import za.org.rtc.community.ui.components.ResidentPullToRefresh
 import za.org.rtc.community.ui.components.RtcCard
 import za.org.rtc.community.ui.components.RtcScreenScaffold
 import za.org.rtc.community.ui.components.RtcSectionHeader
-import za.org.rtc.community.ui.components.RtcStatusChip
-import za.org.rtc.community.ui.components.RtcStatusTone
 import za.org.rtc.community.ui.theme.RtcSpacing
 
 @Composable
 internal fun AccountScreen(
-    viewModel: RtcViewModel,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onHelp: () -> Unit,
     onMarketplace: (String) -> Unit,
+    onStaffAccess: () -> Unit,
 ) {
-    val session by viewModel.session.collectAsStateWithLifecycle()
-
     ResidentPullToRefresh(isRefreshing = isRefreshing, onRefresh = onRefresh) {
         RtcScreenScaffold {
             item {
                 RtcSectionHeader(
-                    "Account",
-                    "Identity, provider tools, marketplace and support.",
+                    "My RTC",
+                    "Local preferences, community resources and protected staff access.",
                 )
             }
             item {
                 RtcCard {
                     Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.small)) {
-                        ProfileAvatar(session = session)
+                        Icon(Icons.Filled.PhoneAndroid, contentDescription = null)
                         Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
                             Text(
-                                text = session.displayName.ifBlank { "Resident" },
-                                style = MaterialTheme.typography.titleLarge,
+                                "No resident account required",
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                text = session.handle.ifBlank { "Signed-in resident account" },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = session.authenticatedEmail ?: "Signed-in resident account",
+                                "RTC keeps resident drafts and local preferences on this device. A device continuity key is not an account and never grants staff or administrator access.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            RtcStatusChip(
-                                session.role.name.replace("_", " "),
-                                RtcStatusTone.NEUTRAL,
                             )
                         }
                     }
@@ -74,43 +60,35 @@ internal fun AccountScreen(
             }
             item {
                 AccountRow(
-                    title = "Marketplace & Business Hub",
-                    description = "Manage, edit, or register your local business profiles, team invitations, photos and services.",
+                    title = "Browse Marketplace",
+                    description = "Discover local businesses and services without creating a resident account.",
                     icon = { Icon(Icons.Filled.Storefront, contentDescription = null) },
-                    onClick = { onMarketplace("account/marketplace/my-businesses") },
+                    onClick = { onMarketplace(RtcRoute.MARKETPLACE_HOME) },
                 )
             }
             item {
                 AccountRow(
-                    title = "Provider profile",
-                    description = "Become a provider or manage your Service Centre provider profile.",
-                    icon = { Icon(Icons.Filled.Build, contentDescription = null) },
-                    onClick = { onMarketplace("account/marketplace/my-businesses") },
-                )
-            }
-            item {
-                AccountRow(
-                    title = "Settings",
-                    description = "Profile, privacy, security, notifications, accessibility and account controls.",
+                    title = "Settings & accessibility",
+                    description = "Reading mode, appearance, local preferences and help.",
                     icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
                     onClick = onHelp,
                 )
             }
             item {
                 AccountRow(
-                    title = "Support",
-                    description = "Contact Support and track your existing support cases.",
+                    title = "Help & support information",
+                    description = "Read support guidance and community help resources.",
                     icon = { Icon(Icons.Filled.HelpOutline, contentDescription = null) },
                     onClick = onHelp,
                 )
             }
             item {
-                RtcCard {
-                    Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
-                        Icon(Icons.Filled.Person, contentDescription = null)
-                        Text("Provider status and account identity remain attached to this same resident account.")
-                    }
-                }
+                AccountRow(
+                    title = "Staff & administrator access",
+                    description = "Protected sign-in for authorised RTC staff only. Residents do not need this.",
+                    icon = { Icon(Icons.Filled.AdminPanelSettings, contentDescription = null) },
+                    onClick = onStaffAccess,
+                )
             }
         }
     }
