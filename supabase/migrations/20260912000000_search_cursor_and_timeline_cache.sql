@@ -22,26 +22,30 @@ returns table (
     author_id uuid,
     author_name text,
     author_handle text,
-    author_avatar_path text,
-    author_avatar_revision text,
-    category_id text,
+    avatar_path text,
+    avatar_updated_at timestamptz,
+    staff_badge boolean,
+    category_slug text,
     category_label text,
     body text,
     state text,
     is_locked boolean,
     created_at timestamptz,
     updated_at timestamptz,
+    edited_at timestamptz,
+    report_count integer,
     reaction_count integer,
     comment_count integer,
     repost_count integer,
     bookmark_count integer,
     viewer_has_liked boolean,
-    viewer_has_reposted boolean,
-    viewer_has_bookmarked boolean,
+    is_reposted_by_viewer boolean,
+    is_bookmarked_by_viewer boolean,
+    is_followed_topic boolean,
     repost_of_id uuid,
     quote_post_id uuid,
-    trending_score numeric,
-    media_json jsonb,
+    trending_score integer,
+    media jsonb,
     search_rank real
 )
 language sql
@@ -55,26 +59,30 @@ as $$
             f.author_id,
             f.author_name,
             f.author_handle,
-            f.author_avatar_path,
-            f.author_avatar_revision,
-            f.category_id,
+            f.avatar_path,
+            f.avatar_updated_at,
+            f.staff_badge,
+            f.category_slug,
             f.category_label,
             f.body,
             f.state,
             f.is_locked,
             f.created_at,
             f.updated_at,
+            f.edited_at,
+            f.report_count,
             f.reaction_count,
             f.comment_count,
             f.repost_count,
             f.bookmark_count,
             f.viewer_has_liked,
-            f.viewer_has_reposted,
-            f.viewer_has_bookmarked,
+            f.is_reposted_by_viewer,
+            f.is_bookmarked_by_viewer,
+            f.is_followed_topic,
             f.repost_of_id,
             f.quote_post_id,
             f.trending_score,
-            f.media_json,
+            f.media,
             ts_rank(
                 to_tsvector('english', coalesce(f.body, '')),
                 websearch_to_tsquery('english', p_query)
@@ -120,6 +128,7 @@ create index if not exists idx_user_timeline_cache_order
 
 alter table public.user_timeline_cache enable row level security;
 
+drop policy if exists user_timeline_cache_select_own on public.user_timeline_cache;
 create policy user_timeline_cache_select_own on public.user_timeline_cache
     for select to authenticated using (user_id = auth.uid());
 
@@ -134,7 +143,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-    if NEW.state = 'published' then
+    if NEW.state = 'PUBLISHED' then
         -- Fan-out to author's own timeline
         insert into public.user_timeline_cache(user_id, post_id, author_id, published_at)
         values (NEW.author_id, NEW.id, NEW.author_id, NEW.created_at)
@@ -159,7 +168,7 @@ drop trigger if exists trg_fan_out_community_post on public.community_posts;
 create trigger trg_fan_out_community_post
     after insert or update of state on public.community_posts
     for each row
-    when (NEW.state = 'published')
+    when (NEW.state = 'PUBLISHED')
     execute function public.fan_out_community_post();
 
 -- ============================================================================
