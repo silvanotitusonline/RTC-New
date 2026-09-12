@@ -180,14 +180,7 @@ class AuthoritativePublicReportRepository @Inject constructor(
             ),
         ).singleOrNull()
             ?.let(PublicReportJsonMappers::dashboard)
-            ?: PublicReportDashboard(
-                openReports = 0,
-                inProgressReports = 0,
-                resolvedReports = 0,
-                verifiedReports = 0,
-                activeReports = 0,
-                unresolvedReports = 0,
-            )
+            ?: error("The authoritative Public Reports dashboard returned no row.")
     }
 
     private suspend fun <T> authoritative(block: suspend () -> T): Result<T> = try {
