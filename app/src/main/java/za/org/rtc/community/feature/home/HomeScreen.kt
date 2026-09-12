@@ -15,23 +15,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.lazy.rememberLazyListState
 import za.org.rtc.community.core.HomeLayout
 import za.org.rtc.community.core.HomeSection
 import za.org.rtc.community.core.MainDestination
 import za.org.rtc.community.core.NoticeStatus
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.runtime.CompositionLocalProvider
 import za.org.rtc.community.ui.components.LocalLazyListState
-import za.org.rtc.community.ui.components.parallaxHeader
-import za.org.rtc.community.ui.components.parallaxScrollItem
 import za.org.rtc.community.ui.components.NoticeCard
 import za.org.rtc.community.ui.components.PendingSyncIndicator
 import za.org.rtc.community.ui.components.ResidentPullToRefresh
 import za.org.rtc.community.ui.components.SectionHeader
 import za.org.rtc.community.ui.components.SupportCaseCard
+import za.org.rtc.community.ui.components.parallaxHeader
+import za.org.rtc.community.ui.components.parallaxScrollItem
 import za.org.rtc.community.ui.config.HomeImageWidgetCard
 import za.org.rtc.community.ui.config.HomeRenderItem
 import za.org.rtc.community.ui.config.renderItems
@@ -60,6 +60,7 @@ internal fun HomeScreen(contract: HomeRouteContract) {
     val resolvedLayout = remember(layout) { HomeLayout.validatedOrDefault(layout) }
     val renderItems = remember(resolvedLayout) { resolvedLayout.renderItems() }
     val listState = rememberLazyListState()
+
     ResidentPullToRefresh(
         isRefreshing = state.isRefreshing || state.publicReports.refreshing,
         onRefresh = onRefresh,
@@ -87,7 +88,7 @@ internal fun HomeScreen(contract: HomeRouteContract) {
                             HomeSection.COMMUNITY_SNAPSHOT -> item(key = "home_community_snapshot") {
                                 Column(
                                     modifier = Modifier.parallaxScrollItem(index = 1, rate = 0.05f),
-                                    verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)
+                                    verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
                                 ) {
                                     HomeCommunityStatusCard(
                                         state = state.publicReports,
@@ -102,49 +103,47 @@ internal fun HomeScreen(contract: HomeRouteContract) {
                             }
                             HomeSection.QUICK_ACCESS -> item(key = "home_quick_access") {
                                 androidx.compose.foundation.layout.Box(modifier = Modifier.parallaxScrollItem(index = 2, rate = 0.05f)) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
-                                        QuickAccessSection(
-                                            onNavigate = onNavigate,
-                                            onOpenDirectory = onOpenDirectory,
-                                            onHelp = onHelp,
-                                        )
-                                        CommunityEventsWeeklySummarySection(
-                                            events = state.events,
-                                            onNavigateToCalendar = { onNavigate(MainDestination.EXPLORE) },
-                                            onToggleRsvp = { eventId -> actions.onToggleEventRsvp?.invoke(eventId) }
-                                        )
-                                    }
+                                    QuickAccessSection(
+                                        onNavigate = onNavigate,
+                                        onOpenDirectory = onOpenDirectory,
+                                        onHelp = onHelp,
+                                    )
                                 }
                             }
-                        HomeSection.CONTINUE_DRAFT -> draft?.let { savedDraft ->
-                            item(key = "home_continue_draft") {
-                                ContinueDraftCard(draft = savedDraft, onResume = { onResumeDraft(savedDraft) }, onDiscard = { onDiscardDraft(savedDraft) })
+                            HomeSection.CONTINUE_DRAFT -> draft?.let { savedDraft ->
+                                item(key = "home_continue_draft") {
+                                    ContinueDraftCard(
+                                        draft = savedDraft,
+                                        onResume = { onResumeDraft(savedDraft) },
+                                        onDiscard = { onDiscardDraft(savedDraft) },
+                                    )
+                                }
                             }
-                        }
-                        HomeSection.PENDING_SYNC -> if (pendingSyncCount > 0) {
-                            item(key = "home_pending_sync") {
-                                PendingSyncIndicator(pendingSyncCount, "Local changes sync when connected.")
+                            HomeSection.PENDING_SYNC -> if (pendingSyncCount > 0) {
+                                item(key = "home_pending_sync") {
+                                    PendingSyncIndicator(pendingSyncCount, "Local changes sync when connected.")
+                                }
                             }
-                        }
-                        HomeSection.NEXT_STEPS -> {
-                            item(key = "home_next_steps_header") {
-                                SectionHeader("Next steps", "View support") { onNavigate(MainDestination.SUPPORT) }
+                            HomeSection.NEXT_STEPS -> {
+                                item(key = "home_next_steps_header") {
+                                    SectionHeader("Next steps", "View support") { onNavigate(MainDestination.SUPPORT) }
+                                }
+                                items(cases.take(2), key = { "home_case_${it.id}" }) { SupportCaseCard(it) }
                             }
-                            items(cases.take(2), key = { "home_case_${it.id}" }) { SupportCaseCard(it) }
-                        }
-                        HomeSection.LATEST_UPDATES -> {
-                            item(key = "home_latest_updates_header") {
-                                SectionHeader("Official updates", "View all") { onOpenDirectory("notices") }
+                            HomeSection.LATEST_UPDATES -> {
+                                item(key = "home_latest_updates_header") {
+                                    SectionHeader("Official updates", "View all") { onOpenDirectory("notices") }
+                                }
+                                items(notices.filter { it.status == NoticeStatus.PUBLISHED }.take(2), key = { "home_notice_${it.id}" }) {
+                                    NoticeCard(it, onClick = { onOpenNotice(it) })
+                                }
                             }
-                            items(notices.filter { it.status == NoticeStatus.PUBLISHED }.take(2), key = { "home_notice_${it.id}" }) {
-                                NoticeCard(it, onClick = { onOpenNotice(it) })
-                            }
-                        }
-                        HomeSection.HELP -> item(key = "home_help") {
-                            FilledTonalButton(onClick = onHelp, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.AutoMirrored.Filled.HelpOutline, null)
-                                Spacer(Modifier.width(RtcSpacing.compact))
-                                Text("Help & FAQs")
+                            HomeSection.HELP -> item(key = "home_help") {
+                                FilledTonalButton(onClick = onHelp, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.AutoMirrored.Filled.HelpOutline, null)
+                                    Spacer(Modifier.width(RtcSpacing.compact))
+                                    Text("Help & FAQs")
+                                }
                             }
                         }
                     }
@@ -152,5 +151,4 @@ internal fun HomeScreen(contract: HomeRouteContract) {
             }
         }
     }
-}
 }
