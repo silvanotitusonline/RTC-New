@@ -8,7 +8,7 @@ def text(path: str) -> str:
     return (ROOT / path).read_text(encoding='utf-8')
 
 
-def test_google_signin_is_wired_through_existing_auth_layers():
+def test_google_signin_adapter_remains_server_bound_but_is_not_a_resident_runtime_gate():
     google_ui = SRC / 'ui/auth/RtcGoogleSignInButton.kt'
     assert google_ui.exists(), 'Google sign-in UI adapter is missing'
 
@@ -20,8 +20,9 @@ def test_google_signin_is_wired_through_existing_auth_layers():
     assert '281489677261-j6isgtjd4mqv4os6fakt2qeloogpav8p.apps.googleusercontent.com' in ui
 
     app = text('app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt')
-    assert 'PublicWelcomeScreen' in app
-    assert 'onGoogleCredential = viewModel::signInWithGoogleIdToken' in app
+    assert 'PublicWelcomeScreen' not in app
+    assert 'onGoogleCredential = viewModel::signInWithGoogleIdToken' not in app
+    assert 'SessionAuthority.PUBLIC' in app
 
     view_model = text('app/src/main/java/za/org/rtc/community/app/RtcViewModel.kt')
     coordinator = text('app/src/main/java/za/org/rtc/community/app/RtcAuthenticationCoordinator.kt')
