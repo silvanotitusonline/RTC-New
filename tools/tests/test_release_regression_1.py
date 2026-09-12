@@ -93,17 +93,14 @@ def test_community_avatar_sync_and_like_contract_are_source_controlled():
     assert 'grant delete on public.community_reactions to authenticated;' not in text
 
 
-def test_inert_resident_activity_and_following_controls_are_not_presented_as_live():
+def test_resident_feed_does_not_present_fake_following_and_saved_is_server_backed():
     community = _function_body(COMMUNITY_FEED, 'CommunityScreen', ['ComposerCard', 'CommunityActionFeedback'])
     assert 'followingOnly' not in community
-    assert 'Follow a Community topic to see it here.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
-    assert 'Topic and people following is not available yet.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
+    assert 'tab == "Saved" -> feedState.items.filter { it.isBookmarkedByViewer }' in community
+    assert 'onBookmark = communityViewModel::toggleBookmark' in community
     assert 'Saved items will appear here when this feature is available.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
-    assert 'Your recent Community activity will appear here when this feature is available.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
-    assert 'Saved items, followed topics, and personal Community history are not available in this version.' in COMMUNITY_FEED
-    assert 'AccountAction(title: String, description: String, icon: ImageVector, onClick: (() -> Unit)? = null)' in ACCOUNT_DIALOGS
+    assert 'Topic and people following is not available yet.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
     assert 'Open the Moderation workspace to act on assigned queue items.' in ADMIN_MODERATION
-
 
 def test_reference_community_feed_actions_and_one_time_guideline_gate_are_real():
     community = _function_body(COMMUNITY_FEED, 'CommunityScreen', ['ComposerCard', 'CommunityActionFeedback'])
@@ -116,12 +113,12 @@ def test_reference_community_feed_actions_and_one_time_guideline_gate_are_real()
     assert 'onToggleLike(post.id)' in feed_card
     assert 'onOpenPost(post)' in feed_card
     assert 'onSharePost(post)' in feed_card
-    assert 'Photo' in COMMUNITY_FEED and 'Video' in COMMUNITY_FEED
-    assert 'timestampLabel = relativeTimeLabel(post.createdAt)' in feed_card
+    assert 'PostComposer(' in community and 'CommunityMediaPreview(' in feed_card
+    assert 'relativeLabel(post.createdAt)' in feed_card
     assert 'postCommentAfterGuidelines' in COMMUNITY_DETAIL
     assert 'CommunityPostCard(' in COMMUNITY_FEED
     assert 'Text("${post.reactions} reactions  •  ${post.comments} comments"' not in COMPONENTS
-    assert 'timestampLabel: String = post.createdAt' in COMPONENTS
+    assert 'text = relativeLabel(post.createdAt)' in feed_card
     resident = (ROOT / 'app/src/main/java/za/org/rtc/community/app/RtcResidentCoordinator.kt').read_text()
     safe_error = (ROOT / 'app/src/main/java/za/org/rtc/community/app/SafeUiError.kt').read_text()
     assert 'SafeUiError.community' in resident
