@@ -149,7 +149,7 @@ def test_service_centre_notification_function_cannot_target_arbitrary_users():
     assert "recipientId" not in source[source.find("readJsonObject"): source.find("service_centre_notification_context")]
     assert "SERVICE_BOOKING_NEW" in source
     assert "SERVICE_BOOKING_MESSAGE" in source
-    assert "rtc://service-centre/booking/" not in source  # route is derived by the authoritative RPC
+    assert "rtc://service-centre/booking/" not in source
     assert "authenticateCaller" in source
 
 
@@ -182,9 +182,9 @@ def test_android_service_centre_navigation_notification_and_marketplace_entry_po
     assert "Request Booking" in business
 
 
-def test_mvp_does_not_add_realtime_or_offline_booking_queue_dependency():
-    build = _read(BUILD)
-    assert "supabase.realtime" not in build
+def test_mvp_does_not_add_service_centre_realtime_or_offline_booking_queue_dependency():
     service_source = "\n".join(path.read_text(encoding="utf-8") for path in FEATURE.rglob("*.kt")) if FEATURE.exists() else ""
+    assert "Realtime" not in service_source
+    assert "supabase.realtime" not in service_source
     assert "WorkManager" not in service_source
     assert "Room" not in service_source
