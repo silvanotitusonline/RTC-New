@@ -10,45 +10,20 @@ permissions:
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           ref: fix/auth-signup-authority-boundary
           fetch-depth: 0
-      - name: Remove false local authentication from email sign-up
+      - name: Apply server-authoritative signup correction
+        run: python3 tools/apply_auth_signup_authority_patch.py
+      - name: Commit product fix and remove temporary helpers
         shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('app/src/main/java/za/org/rtc/community/data/RtcRepository.kt')
-          source = path.read_text()
-          start = source.index('    suspend fun signUpWithEmail')
-          end = source.index('\n    /** The result is intentionally generic', start)
-          replacement = '''    suspend fun signUpWithEmail(email: String, password: String, displayName: String): Result<Unit> = runCatching {
-              val cleanEmail = email.trim()
-              val cleanDisplayName = displayName.trim()
-              require(cleanDisplayName.isNotEmpty()) { "Enter your name to create an account." }
-              requireStrongPassword(password)
-
-              // Supabase remains authoritative for account creation. With email confirmation enabled,
-              // a successful sign-up is confirmation-pending and must not manufacture a local
-              // authenticated session before Supabase establishes one on a later sign-in.
-              supabase.auth.signUpWith(Email, "rtc://community") {
-                  this.email = cleanEmail
-                  this.password = password
-                  data = buildJsonObject { put("full_name", cleanDisplayName) }
-              }
-          }
-'''
-          path.write_text(source[:start] + replacement + source[end:])
-          PY
-
-          git rm .github/workflows/auth-signup-authority-patch.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/auth-signup-authority-patch.yml tools/apply_auth_signup_authority_patch.py
           git add app/src/main/java/za/org/rtc/community/data/RtcRepository.kt
           git commit -m "fix(auth): require Supabase authority before local session"
           git push origin HEAD:fix/auth-signup-authority-boundary
