@@ -12,6 +12,7 @@ admin_catalog = read("app/src/main/java/za/org/rtc/community/feature/administrat
 domain = read("app/src/main/java/za/org/rtc/community/feature/dailypost/domain/DailyPostModels.kt")
 repository = read("app/src/main/java/za/org/rtc/community/feature/dailypost/data/SupabaseDailyPostRepository.kt")
 resident_ui = read("app/src/main/java/za/org/rtc/community/feature/dailypost/presentation/DailyPostScreen.kt")
+view_model = read("app/src/main/java/za/org/rtc/community/feature/dailypost/presentation/DailyPostViewModel.kt")
 global_host = read("app/src/main/java/za/org/rtc/community/feature/dailypost/presentation/DailyPostGlobalHost.kt")
 studio_ui = read("app/src/main/java/za/org/rtc/community/feature/dailypost/presentation/AdminDailyPostStudioScreen.kt")
 main_activity = read("app/src/main/java/za/org/rtc/community/MainActivity.kt")
@@ -79,6 +80,11 @@ assert 'EXTRA_DAILY_POST_ID' in main_activity
 assert 'rtc://community/daily-post/' in fcm_service
 assert 'postDailyPostNotification' in fcm_service
 assert 'notificationType == "DAILY_POST"' in fcm_service
+# Automatic previews are owned only by the activity-level lifecycle host, preventing duplicate
+# dialogs when Explore creates its own route-scoped DailyPostViewModel.
+init_block = view_model.split('init {', 1)[1].split('}', 1)[0]
+assert 'checkPreview()' not in init_block
+assert 'state.preview?.let' not in resident_ui
 
 # Server trust boundaries and one-time preview semantics.
 for token in (
