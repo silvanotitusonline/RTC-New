@@ -46,7 +46,7 @@ data class AdminDashboardUiState(
 class AdminDashboardViewModel @Inject constructor(
     private val supabase: SupabaseClient,
     private val adminGuard: AdminGuard,
-) : BaseViewModel() {
+) : ViewModel() {
 
     companion object {
         private const val TAG = "AdminDashboardVM"
@@ -71,7 +71,7 @@ class AdminDashboardViewModel @Inject constructor(
      */
     fun startRealtimePolling() {
         pollingJob?.cancel()
-        pollingJob = launchSafe {
+        pollingJob = viewModelScope.launch {
             while (isActive) {
                 fetchPendingCountsInternal()
                 delay(REALTIME_POLL_INTERVAL_MS)
@@ -83,7 +83,7 @@ class AdminDashboardViewModel @Inject constructor(
      * Manual refresh trigger for the summary view.
      */
     fun refreshCounts() {
-        launchSafe {
+        viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             fetchPendingCountsInternal()
         }
