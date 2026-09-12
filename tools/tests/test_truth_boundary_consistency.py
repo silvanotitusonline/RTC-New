@@ -15,6 +15,7 @@ def test_public_reports_are_bound_to_server_authoritative_repository():
     assert "providePublicReportRepository" in module
     assert "AuthoritativePublicReportRepository" in module
     assert "PublicReportMockData" not in authoritative
+    assert "The authoritative Public Reports dashboard returned no row." in authoritative
     for rpc in [
         "PublicReportRpcContract.CREATE",
         "PublicReportRpcContract.ADD_COMMENT",
@@ -37,6 +38,18 @@ def test_community_mutations_cross_server_boundary_before_final_local_state():
     assert 'function = "delete_community_post"' in authoritative
     assert 'function = "moderate_community_comment_v1"' in authoritative
     assert "runAuthoritativeOptimisticMutation" in authoritative
+
+
+def test_community_mock_fixtures_cannot_cross_release_read_boundary():
+    authoritative = read(
+        "app/src/main/java/za/org/rtc/community/feature/community/AuthoritativeCommunityRepository.kt"
+    )
+    assert "BuildConfig.DEBUG" in authoritative
+    assert 'const val MOCK_POST_PREFIX = "mock_post_"' in authoritative
+    assert "rejectSyntheticPosts(page.items)" in authoritative
+    assert "post?.isSyntheticCommunityFixture()" in authoritative
+    assert "comments.any { it.postId.startsWith(MOCK_POST_PREFIX) }" in authoritative
+    assert "rejectSyntheticPosts(posts)" in authoritative
 
 
 def test_authentication_requires_real_supabase_session_and_server_admin_guard():
