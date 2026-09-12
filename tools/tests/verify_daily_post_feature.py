@@ -12,7 +12,10 @@ admin_catalog = read("app/src/main/java/za/org/rtc/community/feature/administrat
 domain = read("app/src/main/java/za/org/rtc/community/feature/dailypost/domain/DailyPostModels.kt")
 repository = read("app/src/main/java/za/org/rtc/community/feature/dailypost/data/SupabaseDailyPostRepository.kt")
 resident_ui = read("app/src/main/java/za/org/rtc/community/feature/dailypost/presentation/DailyPostScreen.kt")
+global_host = read("app/src/main/java/za/org/rtc/community/feature/dailypost/presentation/DailyPostGlobalHost.kt")
 studio_ui = read("app/src/main/java/za/org/rtc/community/feature/dailypost/presentation/AdminDailyPostStudioScreen.kt")
+main_activity = read("app/src/main/java/za/org/rtc/community/MainActivity.kt")
+fcm_service = read("app/src/main/java/za/org/rtc/community/app/RtcFirebaseMessagingService.kt")
 security = read("supabase/migrations/20260912011000_daily_post_security_and_workflows.sql")
 storage_security = read("supabase/migrations/20260912011500_daily_post_storage_security.sql")
 scheduler_activation = read("supabase/migrations/20260912012000_daily_post_scheduler_activation_and_comment_delete.sql")
@@ -54,11 +57,24 @@ for token in ('Breaking News', 'Hero Story', 'Gallery Story', 'Video Lead', 'Com
     assert token in domain
 for token in ('page(', 'comments(', 'addComment(', 'translate(', 'narration(', 'uploadMedia(', 'publishNow(', 'schedule(', 'archive('):
     assert token in repository, token
-for token in ('Comments', 'Translate', 'Listen', 'DailyPostPreviewDialog', 'Reply'):
+for token in ('Conversation', 'Translate', 'Listen', 'DailyPostPreviewDialog', 'Reply'):
     assert token in resident_ui, token
+assert 'comments' in resident_ui.lower()
 for token in ('Templates', 'Preview', 'Schedule', 'Push notification', 'Quote publication', 'Publication history'):
     assert token.lower() in studio_ui.lower(), token
 assert 'daily_post_studio' in admin_catalog
+
+# One-time foreground preview and push/deep-link open path.
+assert 'Lifecycle.Event.ON_START' in global_host
+assert 'viewModel.checkPreview()' in global_host
+assert 'viewModel.dismissPreview(open = false)' in global_host
+assert 'DailyPostScreen(' in global_host
+assert 'DailyPostGlobalHost(' in main_activity
+assert 'ACTION_OPEN_DAILY_POST' in main_activity
+assert 'EXTRA_DAILY_POST_ID' in main_activity
+assert 'rtc://community/daily-post/' in fcm_service
+assert 'postDailyPostNotification' in fcm_service
+assert 'notificationType == "DAILY_POST"' in fcm_service
 
 # Server trust boundaries and one-time preview semantics.
 for token in (
