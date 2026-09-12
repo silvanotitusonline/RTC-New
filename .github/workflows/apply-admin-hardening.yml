@@ -6,6 +6,7 @@ on:
       - feat/admin-operations-hub-ux
     paths:
       - tools/apply_remaining_admin_hardening.py
+      - .github/workflows/apply-admin-hardening.yml
 
 permissions:
   contents: write
