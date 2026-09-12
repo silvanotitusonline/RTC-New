@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { GoogleAuth } from "npm:google-auth-library";
-import { verifySchedulerCaller, writeAudit } from "../_shared/auth.ts";
+import { boundedText, writeAudit } from "../_shared/auth.ts";
 
 const URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SECRET_KEY") ?? "";
@@ -14,6 +14,12 @@ function json(status: number, body: Record<string, unknown>) { return new Respon
 async function fingerprint(token: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function verifyDailyPostSchedulerCaller(req: Request, admin: ReturnType<typeof createClient>) {
+  const secret = boundedText(req.headers.get("x-rtc-daily-post-scheduler-secret"), 512);
+  if (!secret) throw new Error("AUTH_REQUIRED");
+  const result = await admin.rpc("assert_daily_post_scheduler_secret", { p_secret: secret });
+  if (result.error || result.data !== true) throw new Error("AUTH_REQUIRED");
 }
 async function credentials(admin: ReturnType<typeof createClient>) {
   const fromEnv = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON") ?? "";
@@ -68,7 +74,14 @@ async function sendDevice(
     body: JSON.stringify({ message: {
       token: device.fcm_token,
       notification: { title: post.publicationType === "BREAKING" ? `BREAKING: ${post.headline}` : post.headline, body: post.excerpt || "Open The Daily Post for the full story." },
-      data: { type: "DAILY_POST", post_id: post.postId, destination: "resident_explore", tab: "daily_post", idempotency_key: job.dispatch_key },
+      data: {
+        type: "DAILY_POST",
+        notification_type: "DAILY_POST",
+        post_id: post.postId,
+        destination: "resident_explore",
+        tab: "daily_post",
+        idempotency_key: job.dispatch_key,
+      },
       android: { priority: post.publicationType === "BREAKING" ? "HIGH" : "NORMAL" },
     } }),
   });
@@ -95,7 +108,7 @@ Deno.serve(async (req: Request) => {
   if (!URL || !SERVICE) return json(503, { error: "Server configuration is incomplete." });
   const admin = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
   try {
-    await verifySchedulerCaller(req, admin);
+    await verifyDailyPostSchedulerCaller(req, admin);
     const claimed = await admin.rpc("daily_post_claim_due_jobs_v1", { p_limit: MAX_JOBS });
     if (claimed.error) throw new Error("JOB_CLAIM_FAILED");
     const jobs = Array.isArray(claimed.data) ? claimed.data : [];
