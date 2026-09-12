@@ -52,15 +52,20 @@ def test_community_mock_fixtures_cannot_cross_release_read_boundary():
     assert "rejectSyntheticPosts(posts)" in authoritative
 
 
-def test_authentication_requires_real_supabase_session_and_server_admin_guard():
+def test_resident_identity_is_anonymous_and_privileged_auth_stays_server_authoritative():
     auth = read("app/src/main/java/za/org/rtc/community/app/RtcAuthenticationCoordinator.kt")
+    repository = read("app/src/main/java/za/org/rtc/community/data/RtcRepository.kt")
     admin_guard = read(
         "app/src/main/java/za/org/rtc/community/feature/administration/security/AdminGuard.kt"
     )
     assert "supabase.auth.currentUserOrNull()" in auth
     assert "requireVerifiedSession()" in auth
-    assert "supabase.auth.signUpWith(Email" in auth
+    assert "!repository.session.value.role.isStaff" in auth
+    assert "Resident accounts are no longer required" in auth
+    assert "supabase.auth.signUpWith(Email" not in auth
     assert "repository.signUpWithEmail(" not in auth
+    assert "database.cachedSessionDao().getActiveSession()" not in repository
+    assert "isAdminEmail" not in repository
     assert 'supabase.postgrest.rpc("admin_access_guard")' in admin_guard
     for forbidden in ["cachedIsAdmin", "isAdminEmail", "userMetadata", "appMetadata"]:
         assert forbidden not in admin_guard
