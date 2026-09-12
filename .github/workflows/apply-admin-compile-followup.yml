@@ -1,4 +1,5 @@
 name: Apply Admin Compile Follow-up
+run-name: Apply admin compile follow-up
 
 on:
   push:
