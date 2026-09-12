@@ -59,11 +59,12 @@ def test_source_baseline_reconciles_obsolete_alert_retry_and_dispatch_path():
     assert 'net.http_post' not in text
 
 
-def test_community_sharing_uses_only_custom_post_uri_and_protected_load_path():
+def test_community_sharing_uses_only_custom_post_uri_and_public_privacy_filtered_load_path():
     manifest = (ROOT / 'app/src/main/AndroidManifest.xml').read_text()
     app = (ROOT / 'app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt').read_text()
     scoped_vm = (ROOT / 'app/src/main/java/za/org/rtc/community/feature/community/CommunityViewModel.kt').read_text()
     scoped_repo = (ROOT / 'app/src/main/java/za/org/rtc/community/feature/community/SupabaseCommunityRepository.kt').read_text()
+    migration = (ROOT / 'supabase/migrations/20260912173000_anonymous_resident_public_community_reads.sql').read_text()
     share = _function_body(NAV_METADATA, 'shareCommunityPost', ['directoryItemRoute'])
     assert 'android:scheme="rtc"' in manifest and 'android:host="community"' in manifest
     assert 'internal fun shareCommunityPost(' in NAV_METADATA
@@ -73,12 +74,16 @@ def test_community_sharing_uses_only_custom_post_uri_and_protected_load_path():
     assert 'signedUrl' not in share and 'author' not in share and 'content' not in share
     assert 'handleCommunityPostIntent(intent)' in MAIN
     assert 'openCommunityPostFromDeepLink' in VM
-    assert 'pendingCommunityPostId?.takeIf { session.authority == SessionAuthority.SUPABASE_AUTH }' in app
+    assert 'pendingCommunityPostId?.takeIf { session.authority == SessionAuthority.SUPABASE_AUTH }' not in app
+    assert 'pendingCommunityPostId?.let { postId ->' in app
     assert 'navController.navigateOverlay(communityPostRoute(postId))' in app
     assert 'communityViewModel.loadPostDetail(postId)' in COMMUNITY_DETAIL
     assert 'repository.loadPost(postId)' in scoped_vm
     assert 'override suspend fun loadPost(postId: String)' in scoped_repo
     assert 'supabase.from("community_post_feed").select' in scoped_repo
+    assert 'grant select on public.community_post_feed to anon' in migration.lower()
+    assert 'security_barrier = true' in migration.lower()
+    assert 'grant execute on function public.toggle_community_post_like' not in migration.lower()
 
 
 def test_profile_updates_rehydrate_community_identity_projections():
