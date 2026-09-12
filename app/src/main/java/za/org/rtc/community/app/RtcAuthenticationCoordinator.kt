@@ -64,14 +64,15 @@ internal class RtcAuthenticationCoordinator(
             }
 
             if (result.getOrDefault(false) && supabase.auth.currentUserOrNull() == null) {
-                // The repository may still contain a legacy cached-session fallback. Clear it rather
-                // than allowing that local identity to cross the authentication trust boundary.
                 repository.signOutToPublicWelcome()
-                _authenticationUi.value = AuthenticationUiState(
-                    message = "Your previous sign-in could not be verified. Please sign in again.",
-                )
+                Result.success(false)
+            } else if (result.getOrDefault(false) && !repository.session.value.role.isStaff) {
+                // Resident accounts are no longer part of the application runtime. A previously
+                // persisted non-staff Supabase session is discarded and the app stays anonymous.
+                repository.signOutToPublicWelcome()
                 Result.success(false)
             } else {
+                if (result.getOrDefault(false)) onStaffAuthenticated()
                 result
             }
         } finally {
@@ -135,9 +136,16 @@ internal class RtcAuthenticationCoordinator(
             )
             return
         }
-        _authenticationUi.value = AuthenticationUiState()
+        if (!repository.session.value.role.isStaff) {
+            scope.launch { repository.signOutToPublicWelcome() }
+            _authenticationUi.value = AuthenticationUiState(
+                message = "Staff access is restricted to authorised RTC staff accounts.",
+            )
+            return
+        }
+        _authenticationUi.value = AuthenticationUiState(isSuccess = true, message = "Staff access verified.")
         _notificationPermissionPrompt.value = true
-        if (repository.session.value.role.isStaff) onStaffAuthenticated()
+        onStaffAuthenticated()
         registerCurrentFcmToken()
     }
 
@@ -145,46 +153,11 @@ internal class RtcAuthenticationCoordinator(
         _authenticationUi.value = AuthenticationUiState(message = message.take(240))
     }
 
-    /**
-     * Registration goes directly to Supabase. No local account, role, or authenticated session is
-     * manufactured if the server rejects the request or email confirmation is still pending.
-     */
+    /** Resident self-registration was removed with authenticated resident identity. */
     fun signUpWithEmail(email: String, password: String, displayName: String) {
-        scope.launch {
-            _authenticationUi.value = AuthenticationUiState(isWorking = true)
-            runCatching {
-                val cleanEmail = email.trim()
-                val cleanDisplayName = displayName.trim()
-                require(cleanEmail.contains('@')) { "Enter a valid email address." }
-                require(cleanDisplayName.isNotEmpty()) { "Enter your name to create an account." }
-                require(password.isNotBlank()) { "Enter a password." }
-
-                supabase.auth.signUpWith(Email, "rtc://community") {
-                    this.email = cleanEmail
-                    this.password = password
-                    data = buildJsonObject { put("full_name", cleanDisplayName) }
-                }
-            }.onSuccess {
-                if (supabase.auth.currentUserOrNull() != null) {
-                    repository.restoreSupabaseSession()
-                        .onSuccess { completeAuthentication() }
-                        .onFailure { error ->
-                            _authenticationUi.value = AuthenticationUiState(
-                                message = SafeUiError.generic(error, "Account created, but the session could not be started."),
-                            )
-                        }
-                } else {
-                    _authenticationUi.value = AuthenticationUiState(
-                        message = "Check your email to confirm your account, then return here to sign in.",
-                        confirmationRequired = true,
-                    )
-                }
-            }.onFailure { error ->
-                _authenticationUi.value = AuthenticationUiState(
-                    message = SafeUiError.generic(error, "Account creation could not be completed."),
-                )
-            }
-        }
+        _authenticationUi.value = AuthenticationUiState(
+            message = "Resident accounts are no longer required. Authorised staff accounts are provisioned through RTC administration.",
+        )
     }
 
     fun dismissAuthenticationMessage() {

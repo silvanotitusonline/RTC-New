@@ -8,6 +8,8 @@ internal object SafeUiError {
     fun community(error: Throwable, fallback: String): String {
         val detail = error.message.orEmpty()
         return when {
+            detail.contains("ANONYMOUS_READ_ONLY", ignoreCase = true) ->
+                "RTC no longer requires resident accounts. This Community action is read-only until its anonymous server safety contract is enabled."
             detail.contains("permission", ignoreCase = true) ||
                 detail.contains("not authorized", ignoreCase = true) ||
                 detail.contains("forbidden", ignoreCase = true) ->

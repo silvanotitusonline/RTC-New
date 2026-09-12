@@ -50,7 +50,6 @@ import za.org.rtc.community.core.ResidentModernisationFeatureFlags
 import za.org.rtc.community.core.SessionAuthority
 import za.org.rtc.community.core.UserRole
 import za.org.rtc.community.feature.account.NotificationPanel
-import za.org.rtc.community.feature.account.PublicWelcomeScreen
 import za.org.rtc.community.feature.onboarding.InteractiveOnboardingTutorial
 import za.org.rtc.community.navigation.RouteAccessPolicy
 import za.org.rtc.community.navigation.RtcRoute
@@ -93,8 +92,6 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
     val session by viewModel.session.collectAsStateWithLifecycle()
     val pendingCommunityAlertId by viewModel.pendingCommunityAlertId.collectAsStateWithLifecycle()
     val pendingCommunityPostId by viewModel.pendingCommunityPostId.collectAsStateWithLifecycle()
-    val authenticationUi by viewModel.authenticationUi.collectAsStateWithLifecycle()
-    val passwordUi by viewModel.passwordUi.collectAsStateWithLifecycle()
     val passwordRecoveryActive by viewModel.passwordRecoveryActive.collectAsStateWithLifecycle()
     val notificationPermissionPrompt by viewModel.notificationPermissionPrompt.collectAsStateWithLifecycle()
     val isSessionRestoring by viewModel.isSessionRestoring.collectAsStateWithLifecycle()
@@ -117,21 +114,6 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
 
     if (isSessionRestoring) {
         RtcSplashScreen(configuration = LocalRtcUiConfiguration.current)
-        return
-    }
-
-    if (session.role == UserRole.ANONYMOUS_PUBLIC) {
-        PublicWelcomeScreen(
-            authenticationUi = authenticationUi,
-            passwordUi = passwordUi,
-            onSignIn = viewModel::signInWithEmail,
-            onGoogleCredential = viewModel::signInWithGoogleIdToken,
-            onGoogleSignInError = viewModel::reportGoogleSignInError,
-            onSignUp = viewModel::signUpWithEmail,
-            onDismissAuthenticationMessage = viewModel::dismissAuthenticationMessage,
-            onRequestPasswordRecovery = viewModel::requestPasswordRecovery,
-            onDismissPasswordMessage = viewModel::dismissPasswordUi,
-        )
         return
     }
 
@@ -179,14 +161,14 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
         }
     }
 
-    LaunchedEffect(pendingCommunityAlertId, session.authority) {
-        pendingCommunityAlertId?.takeIf { session.authority == SessionAuthority.SUPABASE_AUTH }?.let { alertId ->
+    LaunchedEffect(pendingCommunityAlertId) {
+        pendingCommunityAlertId?.let { alertId ->
             navController.navigateOverlay(RtcRoute.alertDetail(alertId))
             viewModel.consumePendingCommunityAlert()
         }
     }
-    LaunchedEffect(pendingCommunityPostId, session.authority) {
-        pendingCommunityPostId?.takeIf { session.authority == SessionAuthority.SUPABASE_AUTH }?.let { postId ->
+    LaunchedEffect(pendingCommunityPostId) {
+        pendingCommunityPostId?.let { postId ->
             navController.navigateOverlay(communityPostRoute(postId))
             viewModel.consumePendingCommunityPost()
         }
@@ -197,13 +179,16 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
             serviceCentreDeepLink.onConsumed()
         }
     }
-    LaunchedEffect(session.role, passwordRecoveryActive) {
+    LaunchedEffect(session.role, passwordRecoveryActive, route) {
         val intendedRoute = pendingPublicRoute
         if (!isStaff && intendedRoute != null) {
             navController.navigatePrimary(intendedRoute)
             pendingPublicRoute = null
         }
-        if (passwordRecoveryActive) navController.navigateOverlay(RtcRoute.ACCOUNT)
+        if (isStaff && route == RtcRoute.STAFF_ACCESS) {
+            navController.navigatePrimary(RtcRoute.OPERATIONS_HUB)
+        }
+        if (passwordRecoveryActive && isStaff) navController.navigateOverlay(RtcRoute.ACCOUNT)
     }
 
     val isPrimaryResidentRoute = route in residentPrimaryRoutes
@@ -358,7 +343,7 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
         )
     }
 
-    if (isInteractiveTutorialVisible && session.role != UserRole.ANONYMOUS_PUBLIC) {
+    if (isInteractiveTutorialVisible && !isStaff) {
         InteractiveOnboardingTutorial(
             onDismiss = { viewModel.dismissInteractiveTutorial(markCompleted = true) },
             onNavigateToFeature = { targetRoute ->

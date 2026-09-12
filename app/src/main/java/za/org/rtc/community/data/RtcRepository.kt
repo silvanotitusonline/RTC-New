@@ -80,6 +80,7 @@ import za.org.rtc.community.supabase.ProductionUxRepository
 import za.org.rtc.community.data.local.RtcDatabase
 import za.org.rtc.community.data.local.LocalDraftEntity
 import za.org.rtc.community.data.local.LocalDraftDao
+import za.org.rtc.community.data.local.InstallationIdentity
 import za.org.rtc.community.data.local.UserPreferencesStore
 import za.org.rtc.community.data.local.CommunityUploadWorker
 import za.org.rtc.community.data.local.CachedPostEntity
@@ -119,6 +120,7 @@ class RtcRepository @Inject constructor(
     private val communityEventsRepository: za.org.rtc.community.feature.events.domain.CommunityEventsRepository,
     private val database: RtcDatabase,
     private val localDraftDao: LocalDraftDao,
+    private val installationIdentity: InstallationIdentity,
     private val preferencesStore: UserPreferencesStore,
     private val workManager: WorkManager,
 ) {
@@ -133,11 +135,12 @@ class RtcRepository @Inject constructor(
     }
     private val _session = MutableStateFlow(
         RtcSession(
-            id = "public-visitor",
-            displayName = "Public visitor",
-            handle = "@visitor",
+            id = installationIdentity.id,
+            displayName = "Community member",
+            handle = "@community",
             role = UserRole.ANONYMOUS_PUBLIC,
-            onboardingComplete = false
+            onboardingComplete = true,
+            authority = SessionAuthority.PUBLIC,
         )
     )
     val session: StateFlow<RtcSession> = _session.asStateFlow()
@@ -223,10 +226,11 @@ class RtcRepository @Inject constructor(
         }
         repositoryScope.launch {
             session.collectLatest { activeSession ->
-                if (activeSession.authority != SessionAuthority.SUPABASE_AUTH) {
+                val ownerKey = draftOwnerIdOrNull(activeSession)
+                if (ownerKey == null) {
                     _pendingSyncCount.value = 0
                 } else {
-                    database.uploadOutboxDao().observePendingCountForOwner(activeSession.id)
+                    database.uploadOutboxDao().observePendingCountForOwner(ownerKey)
                         .collectLatest { _pendingSyncCount.value = it }
                 }
             }
@@ -282,96 +286,34 @@ class RtcRepository @Inject constructor(
     val editorialNotices: StateFlow<List<EditorialNoticeRecord>> = _editorialNotices.asStateFlow()
 
     suspend fun restoreSupabaseSession(): Result<Boolean> = runCatching {
-        if (supabase.auth.currentUserOrNull() != null) {
-            supabase.auth.startAutoRefreshForCurrentSession()
-            hydrateSupabaseSession()
-            recordPrivacyAnalyticsAppActivity()
-            enqueueUploadRecovery()
-            return@runCatching true
-        }
-        val cached = database.cachedSessionDao().getActiveSession()
-        if (cached != null) {
-            val isAdminEmail = cached.email.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
-                    cached.email.startsWith("admin", ignoreCase = true) ||
-                    cached.email.contains("admin@", ignoreCase = true)
-            val existingProfile = database.cachedUserProfileDao().getProfileByEmail(cached.email)
-            val targetRole = if (isAdminEmail) UserRole.SYSTEM_ADMIN else (existingProfile?.role?.let { runCatching { UserRole.valueOf(it) }.getOrNull() } ?: UserRole.RESIDENT_A)
-            _session.value = RtcSession(
-                id = cached.userId,
-                displayName = existingProfile?.displayName ?: if (isAdminEmail) "Silvano Titus (Admin)" else cached.email.substringBefore("@").replaceFirstChar { it.uppercase() },
-                role = targetRole,
-                authority = SessionAuthority.SUPABASE_AUTH,
-                authenticatedEmail = cached.email,
-                handle = if (isAdminEmail) "@silvano_admin" else "@${cached.email.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
-                avatarUrl = existingProfile?.avatarUrl,
-                bio = existingProfile?.bio.orEmpty(),
-                interests = existingProfile?.interestsJson?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
-                onboardingComplete = true,
-                administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
-            )
-            refreshLiveContent()
-            return@runCatching true
-        }
-        false
+        if (supabase.auth.currentUserOrNull() == null) return@runCatching false
+        supabase.auth.startAutoRefreshForCurrentSession()
+        hydrateSupabaseSession()
+        recordPrivacyAnalyticsAppActivity()
+        enqueueUploadRecovery()
+        true
     }
 
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
         val cleanEmail = email.trim()
-        val isAdminEmail = cleanEmail.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
-                cleanEmail.startsWith("admin", ignoreCase = true) ||
-                cleanEmail.contains("admin@", ignoreCase = true)
-
-        val remoteResult = runCatching {
-            supabase.auth.signInWith(Email) {
-                this.email = cleanEmail
-                this.password = password
-            }
-            supabase.auth.startAutoRefreshForCurrentSession()
-            hydrateSupabaseSession()
+        require(cleanEmail.contains('@')) { "Enter a valid staff email address." }
+        require(password.isNotBlank()) { "Enter your password." }
+        supabase.auth.signInWith(Email) {
+            this.email = cleanEmail
+            this.password = password
         }
-
-        if (remoteResult.isFailure) {
-            val targetRole = if (isAdminEmail) UserRole.SYSTEM_ADMIN else UserRole.RESIDENT_A
-            val userId = "user_${UUID.nameUUIDFromBytes(cleanEmail.toByteArray())}"
-            val existingProfile = database.cachedUserProfileDao().getProfileByEmail(cleanEmail)
-            val displayName = existingProfile?.displayName ?: if (isAdminEmail) "Silvano Titus (Admin)" else cleanEmail.substringBefore("@").replaceFirstChar { it.uppercase() }
-
-            _session.value = RtcSession(
-                id = userId,
-                displayName = displayName,
-                role = if (isAdminEmail) UserRole.SYSTEM_ADMIN else (existingProfile?.role?.let { runCatching { UserRole.valueOf(it) }.getOrNull() } ?: targetRole),
-                authority = SessionAuthority.SUPABASE_AUTH,
-                authenticatedEmail = cleanEmail,
-                handle = if (isAdminEmail) "@silvano_admin" else "@${cleanEmail.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
-                avatarUrl = existingProfile?.avatarUrl,
-                bio = existingProfile?.bio.orEmpty(),
-                interests = existingProfile?.interestsJson?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
-                onboardingComplete = true,
-                administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
+        supabase.auth.startAutoRefreshForCurrentSession()
+        hydrateSupabaseSession()
+        val current = _session.value
+        database.cachedSessionDao().upsertSession(
+            CachedSessionEntity(
+                userId = current.id,
+                email = cleanEmail,
+                isLoggedIn = true,
+                sessionJson = "",
+                updatedAtEpochMillis = System.currentTimeMillis(),
             )
-
-            database.cachedSessionDao().upsertSession(
-                CachedSessionEntity(
-                    userId = userId,
-                    email = cleanEmail,
-                    isLoggedIn = true,
-                    sessionJson = "",
-                    updatedAtEpochMillis = System.currentTimeMillis()
-                )
-            )
-        } else {
-            val current = _session.value
-            database.cachedSessionDao().upsertSession(
-                CachedSessionEntity(
-                    userId = current.id,
-                    email = cleanEmail,
-                    isLoggedIn = true,
-                    sessionJson = "",
-                    updatedAtEpochMillis = System.currentTimeMillis()
-                )
-            )
-        }
-
+        )
         recordPrivacyAnalyticsAppActivity()
         refreshLiveContent()
         enqueueUploadRecovery()
@@ -403,69 +345,8 @@ class RtcRepository @Inject constructor(
         enqueueUploadRecovery()
     }
 
-    /**
-     * Email confirmation remains enabled in Supabase. A successful sign-up normally requires
-     * the user to follow the message delivered to their verified email address before a session
-     * can be created on this device.
-     */
-    suspend fun signUpWithEmail(email: String, password: String, displayName: String): Result<Unit> = runCatching {
-        val cleanEmail = email.trim()
-        val cleanDisplayName = displayName.trim()
-        require(cleanDisplayName.isNotEmpty()) { "Enter your name to create an account." }
-        requireStrongPassword(password)
-        
-        runCatching {
-            supabase.auth.signUpWith(Email, "rtc://community") {
-                this.email = cleanEmail
-                this.password = password
-                data = buildJsonObject { put("full_name", cleanDisplayName) }
-            }
-        }
-
-        val userId = "user_${UUID.nameUUIDFromBytes(cleanEmail.toByteArray())}"
-        val isAdminEmail = cleanEmail.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
-                cleanEmail.startsWith("admin", ignoreCase = true) ||
-                cleanEmail.contains("admin@", ignoreCase = true)
-        val targetRole = if (isAdminEmail) UserRole.SYSTEM_ADMIN else UserRole.RESIDENT_A
-
-        database.cachedUserProfileDao().insertProfile(
-            CachedUserProfileEntity(
-                userId = userId,
-                email = cleanEmail,
-                displayName = cleanDisplayName,
-                bio = "",
-                interestsJson = "",
-                avatarUrl = null,
-                role = targetRole.name,
-                updatedAtEpochMillis = System.currentTimeMillis(),
-            )
-        )
-
-        _session.value = RtcSession(
-            id = userId,
-            displayName = cleanDisplayName,
-            role = targetRole,
-            authority = SessionAuthority.SUPABASE_AUTH,
-            authenticatedEmail = cleanEmail,
-            handle = if (isAdminEmail) "@silvano_admin" else "@${cleanEmail.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
-            onboardingComplete = true,
-            administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
-        )
-
-        database.cachedSessionDao().upsertSession(
-            CachedSessionEntity(
-                userId = userId,
-                email = cleanEmail,
-                isLoggedIn = true,
-                sessionJson = "",
-                updatedAtEpochMillis = System.currentTimeMillis()
-            )
-        )
-
-        recordPrivacyAnalyticsAppActivity()
-        refreshLiveContent()
-        enqueueUploadRecovery()
-    }
+    suspend fun signUpWithEmail(email: String, password: String, displayName: String): Result<Unit> =
+        Result.failure(UnsupportedOperationException("Resident account creation has been removed from RTC."))
 
     /** The result is intentionally generic so email address ownership is not disclosed. */
     suspend fun requestPasswordRecovery(email: String): Result<Unit> = runCatching {
@@ -616,30 +497,7 @@ class RtcRepository @Inject constructor(
 
     private suspend fun hydrateSupabaseSession() {
         val user = supabase.auth.currentUserOrNull() ?: error("A verified Supabase session is required.")
-        val email = user.email ?: "resident@rtc.community"
-        val isAdminEmail = email.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
-                email.startsWith("admin", ignoreCase = true) ||
-                email.contains("admin@", ignoreCase = true)
-
-        val userMetadata = user.userMetadata
-        val appMetadata = user.appMetadata
-
-        val isAdminUserClaim = userMetadata?.get("is_admin")?.let { element ->
-            element.jsonPrimitive.booleanOrNull
-                ?: element.jsonPrimitive.contentOrNull?.equals("true", ignoreCase = true)
-        } ?: false
-
-        val isAdminAppClaim = appMetadata?.get("is_admin")?.let { element ->
-            element.jsonPrimitive.booleanOrNull
-                ?: element.jsonPrimitive.contentOrNull?.equals("true", ignoreCase = true)
-        } ?: false
-
-        val userRoleClaim = userMetadata?.get("role")?.jsonPrimitive?.contentOrNull
-        val appRoleClaim = appMetadata?.get("role")?.jsonPrimitive?.contentOrNull
-        val hasAdminRoleClaim = userRoleClaim.equals("admin", ignoreCase = true) ||
-                userRoleClaim.equals("system_admin", ignoreCase = true) ||
-                appRoleClaim.equals("admin", ignoreCase = true) ||
-                appRoleClaim.equals("system_admin", ignoreCase = true)
+        val email = user.email ?: "staff@rtc.community"
 
         val resolvedRoles = runCatching {
             supabase.from("user_roles")
@@ -649,11 +507,11 @@ class RtcRepository @Inject constructor(
                 .distinct()
         }.getOrDefault(emptyList())
 
-        val isAdmin = isAdminUserClaim || isAdminAppClaim || hasAdminRoleClaim || isAdminEmail || resolvedRoles.contains(UserRole.SYSTEM_ADMIN)
-        val role = if (isAdmin) UserRole.SYSTEM_ADMIN else (resolvedRoles.singleOrNull() ?: UserRole.RESIDENT_A)
+        val role = resolvedRoles.maxByOrNull(::rolePrecedence) ?: UserRole.RESIDENT_A
+        val isAdmin = role == UserRole.SYSTEM_ADMIN
         val displayName = user.userMetadata?.get("full_name")?.jsonPrimitive?.contentOrNull
             ?.takeIf(String::isNotBlank)
-            ?: (if (isAdminEmail) "Silvano Titus (Admin)" else email.substringBefore("@"))
+            ?: email.substringBefore("@")
         val persistedProfile = productionUxRepository.ownPersistedProfile().getOrNull()
         val persistedExperience = productionUxRepository.ownExperiencePreferences().getOrNull()
         val supportNotifications = productionUxRepository.ownSupportNotificationPreference().getOrNull() ?: true
@@ -668,7 +526,7 @@ class RtcRepository @Inject constructor(
         _session.value = RtcSession(
             id = user.id,
             displayName = finalDisplayName,
-            handle = if (isAdminEmail) "@silvano_admin" else "@${email.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
+            handle = "@${email.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
             bio = finalBio,
             interests = finalInterests,
             role = role,
@@ -750,18 +608,21 @@ class RtcRepository @Inject constructor(
     }
 
     private fun publicSession() = RtcSession(
-        id = "public-visitor",
-        displayName = "Public visitor",
-        handle = "@visitor",
+        id = installationIdentity.id,
+        displayName = "Community member",
+        handle = "@community",
         role = UserRole.ANONYMOUS_PUBLIC,
-        onboardingComplete = false,
+        onboardingComplete = true,
         darkMode = _session.value.darkMode,
-        authority = SessionAuthority.PUBLIC
+        readingMode = _session.value.readingMode,
+        dynamicColor = _session.value.dynamicColor,
+        authority = SessionAuthority.PUBLIC,
     )
 
     private fun draftOwnerIdOrNull(session: RtcSession): String? = when (session.authority) {
-        SessionAuthority.SUPABASE_AUTH, SessionAuthority.DEVELOPMENT_ADAPTER -> session.id
-        SessionAuthority.PUBLIC -> null
+        SessionAuthority.SUPABASE_AUTH -> "staff:${session.id}"
+        SessionAuthority.DEVELOPMENT_ADAPTER -> "development:${session.id}"
+        SessionAuthority.PUBLIC -> installationIdentity.localOwnerKey
     }
 
     suspend fun refreshLiveContent() {
@@ -795,17 +656,17 @@ class RtcRepository @Inject constructor(
         val alerts = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
             productionUxRepository.communityAlertInbox()
         } else {
-            Result.success(RtcMockData.getSampleAlerts())
+            Result.success(emptyList())
         }
         val supportCases = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
             productionUxRepository.mySupportCases()
-        } else Result.success(RtcMockData.getSampleSupportCases())
+        } else Result.success(emptyList())
         val alertDashboard = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH
             && _session.value.role in setOf(UserRole.CONTENT_EDITOR, UserRole.SYSTEM_ADMIN)
-        ) productionUxRepository.communityAlertDashboard() else Result.success(RtcMockData.getSampleAlertDashboard())
+        ) productionUxRepository.communityAlertDashboard() else Result.success(emptyList())
         val assignedSupportCases = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH
             && _session.value.role == UserRole.CASE_STAFF
-        ) productionUxRepository.listAssignedSupportCases() else Result.success(RtcMockData.getSampleAssignedCases())
+        ) productionUxRepository.listAssignedSupportCases() else Result.success(emptyList())
         metrics.onSuccess { _dashboardMetrics.value = it }
         if (refreshGeneration == directoryGeneration) {
             projects.onSuccess { _projectsPage.value = it }
@@ -815,7 +676,7 @@ class RtcRepository @Inject constructor(
         notices.onSuccess { _notices.value = it }
         helpArticles.onSuccess { _helpArticles.value = it }
 
-        val samplePosts = CommunityMockData.getSamplePosts(context)
+        val samplePosts = if (BuildConfig.DEBUG) CommunityMockData.getSamplePosts(context) else emptyList()
         val cachedEntities = database.cachedPostDao().getAllPosts()
         if (cachedEntities.isEmpty()) {
             database.cachedPostDao().insertPosts(samplePosts.map { it.toCachedEntity() })
@@ -826,12 +687,10 @@ class RtcRepository @Inject constructor(
         val allRoomPosts = database.cachedPostDao().getAllPosts().map { it.toCommunityPost() }
         _posts.value = allRoomPosts
 
-        val loadedCases = supportCases.getOrDefault(emptyList()).ifEmpty {
-            RtcMockData.getSampleSupportCases()
-        }
+        val loadedCases = supportCases.getOrDefault(emptyList())
         _cases.value = loadedCases
         alerts.onSuccess { loaded ->
-            val effectiveAlerts = loaded.ifEmpty { RtcMockData.getSampleAlerts() }
+            val effectiveAlerts = loaded
             _communityAlerts.value = effectiveAlerts
             val alertNotifications = effectiveAlerts.map { alert ->
                 RtcNotification(
@@ -855,15 +714,13 @@ class RtcRepository @Inject constructor(
                     alertId = null,
                 )
             }
-            _notifications.value = (alertNotifications + caseNotifications).sortedByDescending { it.createdAt }.ifEmpty {
-                RtcMockData.getSampleNotifications()
-            }
+            _notifications.value = (alertNotifications + caseNotifications).sortedByDescending { it.createdAt }
         }
         alertDashboard.onSuccess { loaded ->
-            _communityAlertDashboard.value = loaded.ifEmpty { RtcMockData.getSampleAlertDashboard() }
+            _communityAlertDashboard.value = loaded
         }
         assignedSupportCases.onSuccess { loaded ->
-            _assignedSupportCases.value = loaded.ifEmpty { RtcMockData.getSampleAssignedCases() }
+            _assignedSupportCases.value = loaded
         }
         _liveContentMessage.value = null
         _isLiveContentLoading.value = false
@@ -925,7 +782,7 @@ class RtcRepository @Inject constructor(
         val post = remotePost
             ?: database.cachedPostDao().getPostById(postId)?.toCommunityPost()
             ?: _posts.value.firstOrNull { it.id == postId }
-            ?: CommunityMockData.getSamplePosts(context).firstOrNull { it.id == postId }
+            ?: if (BuildConfig.DEBUG) CommunityMockData.getSamplePosts(context).firstOrNull { it.id == postId } else null
 
         val roomComments = database.cachedCommentDao().getCommentsForPost(postId).map { it.toCommunityComment() }
         val comments = if (roomComments.isNotEmpty()) {
@@ -933,10 +790,8 @@ class RtcRepository @Inject constructor(
         } else if (!remoteComments.isNullOrEmpty()) {
             remoteComments
         } else {
-            val samples = CommunityMockData.getSampleComments(postId)
-            if (samples.isNotEmpty()) {
-                database.cachedCommentDao().insertComments(samples.map { it.toCachedEntity() })
-            }
+            val samples = if (BuildConfig.DEBUG) CommunityMockData.getSampleComments(postId) else emptyList()
+            if (samples.isNotEmpty()) database.cachedCommentDao().insertComments(samples.map { it.toCachedEntity() })
             samples
         }
 
@@ -948,77 +803,18 @@ class RtcRepository @Inject constructor(
     suspend fun createCommunityComment(postId: String, body: String): Result<Unit> {
         val cleanBody = body.trim()
         if (cleanBody.isBlank()) return Result.success(Unit)
-
-        val newComment = CommunityComment(
-            id = "comment_${UUID.randomUUID()}",
-            postId = postId,
-            authorId = _session.value.id,
-            author = _session.value.displayName.ifBlank { "You (Community Member)" },
-            handle = _session.value.handle.ifBlank { "@resident" },
-            authorAvatarUrl = _session.value.avatarUrl,
-            content = cleanBody,
-            createdAt = java.time.Instant.now().toString(),
-        )
-
-        database.cachedCommentDao().insertComment(newComment.toCachedEntity())
-
-        val existingPost = database.cachedPostDao().getPostById(postId)
-        if (existingPost != null) {
-            database.cachedPostDao().insertPost(existingPost.copy(comments = existingPost.comments + 1))
+        if (_session.value.authority == SessionAuthority.PUBLIC) return anonymousResidentWriteUnavailable("Commenting")
+        return productionUxRepository.createCommunityComment(postId, cleanBody).mapCatching {
+            loadCommunityPostDetail(postId)
         }
-
-        val updatedComments = _communityComments.value + newComment
-        _communityComments.value = updatedComments
-
-        _communityPostDetail.value?.let { current ->
-            if (current.id == postId) {
-                _communityPostDetail.value = current.copy(comments = current.comments + 1)
-            }
-        }
-        _posts.value = _posts.value.map { p ->
-            if (p.id == postId) p.copy(comments = p.comments + 1) else p
-        }
-
-        runCatching { productionUxRepository.createCommunityComment(postId, cleanBody) }
-        refreshLiveContent()
-        return Result.success(Unit)
     }
 
     suspend fun toggleCommunityPostLike(postId: String): Result<Unit> {
-        var newLikedState = false
-        var newReactionsCount = 0
-
-        val cachedPost = database.cachedPostDao().getPostById(postId)
-        if (cachedPost != null) {
-            newLikedState = !cachedPost.viewerHasLiked
-            newReactionsCount = (cachedPost.reactions + if (newLikedState) 1 else -1).coerceAtLeast(0)
-            database.cachedPostDao().insertPost(
-                cachedPost.copy(
-                    viewerHasLiked = newLikedState,
-                    reactions = newReactionsCount,
-                )
-            )
+        if (_session.value.authority == SessionAuthority.PUBLIC) return anonymousResidentWriteUnavailable("Reactions")
+        return productionUxRepository.toggleCommunityPostLike(postId).mapCatching {
+            loadCommunityPostDetail(postId)
+            refreshLiveContent()
         }
-
-        _posts.value = _posts.value.map { p ->
-            if (p.id == postId) {
-                newLikedState = !p.viewerHasLiked
-                newReactionsCount = (p.reactions + if (newLikedState) 1 else -1).coerceAtLeast(0)
-                p.copy(viewerHasLiked = newLikedState, reactions = newReactionsCount)
-            } else p
-        }
-
-        _communityPostDetail.value?.let { detail ->
-            if (detail.id == postId) {
-                _communityPostDetail.value = detail.copy(
-                    viewerHasLiked = newLikedState,
-                    reactions = newReactionsCount
-                )
-            }
-        }
-
-        runCatching { productionUxRepository.toggleCommunityPostLike(postId) }
-        return Result.success(Unit)
     }
 
     suspend fun searchAccessManagedAccount(email: String): Result<AccessManagedAccount?> =
@@ -1531,20 +1327,8 @@ class RtcRepository @Inject constructor(
     }
 
     suspend fun reportCommunityPost(postId: String, reason: ModerationReason, detail: String): Result<Unit> {
-        val reportEntity = CachedReportEntity(
-            id = "report_${UUID.randomUUID()}",
-            targetType = "COMMUNITY_POST",
-            targetId = postId,
-            reason = reason.name,
-            details = detail.trim(),
-            status = "PENDING_REVIEW",
-            createdAtEpochMillis = System.currentTimeMillis(),
-        )
-        database.cachedReportDao().insertReport(reportEntity)
-        if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
-            runCatching { productionUxRepository.reportCommunityPost(postId, reason, detail) }
-        }
-        return Result.success(Unit)
+        if (_session.value.authority == SessionAuthority.PUBLIC) return anonymousResidentWriteUnavailable("Community reporting")
+        return productionUxRepository.reportCommunityPost(postId, reason, detail)
     }
 
     suspend fun registerFcmDevice(token: String, appVersion: String?): Result<Unit> {
@@ -1553,51 +1337,16 @@ class RtcRepository @Inject constructor(
     }
 
     suspend fun createPost(text: String, mediaUris: List<Uri> = emptyList()): Result<String> {
-        val cleanText = text.trim()
-        val postId = "post_${UUID.randomUUID()}"
-        val mediaItems = mediaUris.mapIndexed { index, uri ->
-            za.org.rtc.community.core.MediaItem(
-                id = "media_${UUID.randomUUID()}",
-                targetType = za.org.rtc.community.core.MediaTargetType.COMMUNITY_POST,
-                targetId = postId,
-                storagePath = uri.toString(),
-                kind = za.org.rtc.community.core.MediaKind.IMAGE,
-                mimeType = "image/jpeg",
-                byteSize = 1024L,
-                position = index,
-                caption = "Attached image",
-                signedUrl = uri.toString(),
-            )
+        if (_session.value.authority == SessionAuthority.PUBLIC) return anonymousResidentWriteUnavailable("Community publishing")
+        return productionUxRepository.createCommunityPost(text.trim(), mediaUris).mapCatching { confirmedPostId ->
+            discardDraft(DraftArea.COMMUNITY)
+            refreshLiveContent()
+            confirmedPostId
         }
-
-        val newPost = za.org.rtc.community.core.CommunityPost(
-            id = postId,
-            author = _session.value.displayName.ifBlank { "You (Community Member)" },
-            handle = _session.value.handle.ifBlank { "@resident" },
-            content = cleanText,
-            category = "Community Updates",
-            createdAt = java.time.Instant.now().toString(),
-            reactions = 0,
-            comments = 0,
-            viewerHasLiked = false,
-            trendingScore = 50,
-            isFollowedTopic = true,
-            hasMedia = mediaItems.isNotEmpty(),
-            media = mediaItems,
-            isOfficial = _session.value.role in setOf(UserRole.SYSTEM_ADMIN, UserRole.CONTENT_EDITOR, UserRole.CASE_STAFF),
-            authorId = _session.value.id,
-            authorAvatarUrl = _session.value.avatarUrl,
-        )
-
-        database.cachedPostDao().insertPost(newPost.toCachedEntity())
-
-        _posts.value = listOf(newPost) + _posts.value.filterNot { it.id == newPost.id }
-        discardDraft(DraftArea.COMMUNITY)
-
-        runCatching { productionUxRepository.createCommunityPost(text, mediaUris) }
-        refreshLiveContent()
-        return Result.success(postId)
     }
+
+    private fun <T> anonymousResidentWriteUnavailable(feature: String): Result<T> =
+        Result.failure(IllegalStateException("ANONYMOUS_READ_ONLY:$feature"))
 
     suspend fun submitSupportRequest(title: String, detail: String): Result<String> {
         require(_session.value.authority == SessionAuthority.SUPABASE_AUTH) { "Sign in to create a support request." }

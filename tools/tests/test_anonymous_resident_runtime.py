@@ -15,6 +15,9 @@ def test_resident_runtime_has_no_authentication_gate():
     )
     assert "resident_requires_authentication" not in nav_sources.lower()
     assert "requireResidentAuthentication" not in nav_sources
+    app = read("app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt")
+    assert "PublicWelcomeScreen(" not in app
+    assert "if (session.role == UserRole.ANONYMOUS_PUBLIC)" not in app
 
 
 def test_installation_identity_cannot_grant_security_authority():
@@ -47,3 +50,19 @@ def test_resident_mutations_still_cross_server_truth_boundary():
     reports = read("app/src/main/java/za/org/rtc/community/publicreports/AuthoritativePublicReportRepository.kt")
     assert "rpc" in community.lower() or "delegate" in community.lower()
     assert "rpc" in reports.lower() or "supabase" in reports.lower()
+
+
+def test_resident_signup_is_not_a_runtime_feature():
+    coordinator = read("app/src/main/java/za/org/rtc/community/app/RtcAuthenticationCoordinator.kt")
+    assert "Resident accounts are no longer required" in coordinator
+    account = read("app/src/main/java/za/org/rtc/community/feature/account/AccountScreen.kt")
+    assert "No resident account required" in account
+    assert "Staff & administrator access" in account
+
+
+def test_public_session_uses_installation_continuity_not_account_authority():
+    repository = read("app/src/main/java/za/org/rtc/community/data/RtcRepository.kt")
+    assert "installationIdentity.localOwnerKey" in repository
+    assert 'displayName = "Community member"' in repository
+    assert "SessionAuthority.PUBLIC" in repository
+    assert 'ANONYMOUS_READ_ONLY' in repository

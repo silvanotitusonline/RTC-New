@@ -45,6 +45,7 @@ import za.org.rtc.community.feature.administration.ModerationDashboard
 import za.org.rtc.community.feature.administration.MyWorkProfileScreen
 import za.org.rtc.community.feature.administration.OperationalControlsScreen
 import za.org.rtc.community.feature.administration.SystemHealthScreen
+import za.org.rtc.community.feature.administration.StaffAccessScreen
 import za.org.rtc.community.feature.administration.branding.BrandExperienceScreen
 import za.org.rtc.community.feature.alerts.CommunityAlertDetailScreen
 import za.org.rtc.community.feature.alerts.CommunityAlertsScreen
@@ -102,6 +103,7 @@ internal fun RtcCommunityNavGraph(
     val publicSearchResults by viewModel.publicSearchResults.collectAsStateWithLifecycle()
     val isLiveContentLoading by viewModel.isLiveContentLoading.collectAsStateWithLifecycle()
     val communityActionUi by viewModel.communityActionUi.collectAsStateWithLifecycle()
+    val authenticationUi by viewModel.authenticationUi.collectAsStateWithLifecycle()
 
     val reducedMotion = LocalReducedMotion.current
 
@@ -449,11 +451,19 @@ internal fun RtcCommunityNavGraph(
         }
         composable(RtcRoute.ACCOUNT) {
             AccountScreen(
-                viewModel = viewModel,
                 isRefreshing = isLiveContentLoading,
                 onRefresh = viewModel::refreshLiveContent,
                 onHelp = { navController.navigateOverlay(RtcRoute.HELP) },
                 onMarketplace = { navController.navigateOverlay(it) },
+                onStaffAccess = { navController.navigateOverlay(RtcRoute.STAFF_ACCESS) },
+            )
+        }
+        composable(RtcRoute.STAFF_ACCESS) {
+            StaffAccessScreen(
+                authenticationUi = authenticationUi,
+                onSignIn = viewModel::signInWithEmail,
+                onDismissMessage = viewModel::dismissAuthenticationMessage,
+                onBack = { navController.popBackStack() },
             )
         }
         composable(RtcRoute.NOTIFICATIONS) {
