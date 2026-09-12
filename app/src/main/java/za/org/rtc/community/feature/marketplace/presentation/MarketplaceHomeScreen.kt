@@ -29,7 +29,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceHome
@@ -80,7 +79,7 @@ internal fun MarketplaceHomeScreen(
             CircularProgressIndicator()
             Text(
                 text = "Loading trusted local businesses…",
-                modifier = Modifier.padding(top = 12.dp),
+                modifier = Modifier.padding(top = RtcSpacing.small),
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -99,7 +98,7 @@ internal fun MarketplaceHomeScreen(
             )
             Text(
                 text = state.message,
-                modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
+                modifier = Modifier.padding(top = RtcSpacing.compact, bottom = RtcSpacing.standard),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -138,7 +137,7 @@ private fun MarketplaceHomeContent(
         verticalArrangement = Arrangement.spacedBy(RtcSpacing.contentGroup),
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
                 Text(
                     text = "Marketplace",
                     style = MaterialTheme.typography.headlineMedium,
@@ -156,7 +155,7 @@ private fun MarketplaceHomeContent(
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
             ) {
                 Button(onClick = onSearch, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Filled.Search, contentDescription = null)
@@ -178,9 +177,9 @@ private fun MarketplaceHomeContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(RtcSpacing.standard),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(RtcSpacing.small),
                 ) {
                     Icon(Icons.Filled.Storefront, contentDescription = null)
                     Column(Modifier.weight(1f)) {
@@ -196,9 +195,9 @@ private fun MarketplaceHomeContent(
 
         if (home.categories.isNotEmpty()) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
                     Text("Browse categories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
                         items(home.categories, key = { it.id }) { category ->
                             AssistChip(
                                 onClick = onSearch,
@@ -235,8 +234,8 @@ private fun MarketplaceHomeContent(
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(
-                        Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        Modifier.padding(RtcSpacing.standard),
+                        verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
                     ) {
                         Text("No businesses to show yet", fontWeight = FontWeight.Bold)
                         Text(
