@@ -137,13 +137,11 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
         )
         val notificationId = alertId?.hashCode() ?: System.currentTimeMillis().toInt()
 
-        // No image: post immediately on the current thread.
         if (mediaUrl.isNullOrBlank() || !mediaUrl.startsWith("http")) {
             postCommunityText(title, body, channel, pendingIntent, notificationId)
             return
         }
 
-        // Image present: fetch off the main thread, then post a BigPicture notification.
         serviceScope.launch {
             val bitmap = downloadNotificationImage(mediaUrl)
             withContext(Dispatchers.Main) {
@@ -183,17 +181,17 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
         notificationId: Int,
         bitmap: Bitmap,
     ) {
+        val pictureStyle = NotificationCompat.BigPictureStyle()
+            .bigPicture(bitmap)
+            .bigLargeIcon(null as Bitmap?)
+            .setSummaryText(body.take(240))
+
         val notification = NotificationCompat.Builder(this, channel)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title.take(120))
             .setContentText(body.take(240))
             .setLargeIcon(bitmap)
-            .setStyle(
-                NotificationCompat.BigPictureStyle()
-                    .bigPicture(bitmap)
-                    .bigLargeIcon(null)
-                    .setSummaryText(body.take(240)),
-            )
+            .setStyle(pictureStyle)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(if (channel == RTC_SAFETY_ALERTS_CHANNEL) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
@@ -209,6 +207,7 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
             connection.getInputStream().use { stream -> BitmapFactory.decodeStream(stream) }
         }.getOrNull()
     }
+
     private fun notifyIfPermitted(id: Int, notification: android.app.Notification) {
         if (android.os.Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
             getSystemService(NotificationManager::class.java).notify(id, notification)
@@ -216,4 +215,8 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun isSafeId(value: String): Boolean = value.length in 1..128 && value.all { it.isLetterOrDigit() || it in "-_" }
+
+    private companion object {
+        const val IMAGE_FETCH_TIMEOUT_MS = 5_000
+    }
 }
