@@ -22,6 +22,7 @@ import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -103,6 +104,7 @@ import javax.inject.Singleton
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import za.org.rtc.community.feature.community.CommunityMockData
+import za.org.rtc.community.feature.administration.security.hasServerAdminClaim
 import java.util.UUID
 
 data class AdministratorTotpEnrollment(
@@ -110,6 +112,19 @@ data class AdministratorTotpEnrollment(
     val secret: String,
     val uri: String,
 )
+
+/** Local cache is never authoritative for staff privilege. */
+internal fun resolveLocalRestoredRole(cachedEmail: String, cachedRole: String?): UserRole {
+    if (cachedEmail.isBlank()) return UserRole.RESIDENT_A
+    val parsed = cachedRole?.let { runCatching { UserRole.valueOf(it) }.getOrNull() }
+    return parsed?.takeUnless(UserRole::isStaff) ?: UserRole.RESIDENT_A
+}
+
+/** SYSTEM_ADMIN is a server-managed app_metadata capability, never an email or user_metadata convention. */
+internal fun resolveVerifiedServerRole(appMetadata: JsonObject?, resolvedRoles: List<UserRole>): UserRole {
+    if (hasServerAdminClaim(appMetadata)) return UserRole.SYSTEM_ADMIN
+    return resolvedRoles.filterNot { it == UserRole.SYSTEM_ADMIN }.singleOrNull() ?: UserRole.RESIDENT_A
+}
 
 @Singleton
 class RtcRepository @Inject constructor(
@@ -291,18 +306,16 @@ class RtcRepository @Inject constructor(
         }
         val cached = database.cachedSessionDao().getActiveSession()
         if (cached != null) {
-            val isAdminEmail = cached.email.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
-                    cached.email.startsWith("admin", ignoreCase = true) ||
-                    cached.email.contains("admin@", ignoreCase = true)
             val existingProfile = database.cachedUserProfileDao().getProfileByEmail(cached.email)
-            val targetRole = if (isAdminEmail) UserRole.SYSTEM_ADMIN else (existingProfile?.role?.let { runCatching { UserRole.valueOf(it) }.getOrNull() } ?: UserRole.RESIDENT_A)
+            val restoredRole = resolveLocalRestoredRole(cached.email, existingProfile?.role)
             _session.value = RtcSession(
                 id = cached.userId,
-                displayName = existingProfile?.displayName ?: if (isAdminEmail) "Silvano Titus (Admin)" else cached.email.substringBefore("@").replaceFirstChar { it.uppercase() },
-                role = targetRole,
+                displayName = existingProfile?.displayName
+                    ?: cached.email.substringBefore("@").replaceFirstChar { it.uppercase() },
+                role = restoredRole,
                 authority = SessionAuthority.SUPABASE_AUTH,
                 authenticatedEmail = cached.email,
-                handle = if (isAdminEmail) "@silvano_admin" else "@${cached.email.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
+                handle = "@${cached.email.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
                 avatarUrl = existingProfile?.avatarUrl,
                 bio = existingProfile?.bio.orEmpty(),
                 interests = existingProfile?.interestsJson?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
@@ -317,61 +330,23 @@ class RtcRepository @Inject constructor(
 
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
         val cleanEmail = email.trim()
-        val isAdminEmail = cleanEmail.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
-                cleanEmail.startsWith("admin", ignoreCase = true) ||
-                cleanEmail.contains("admin@", ignoreCase = true)
-
-        val remoteResult = runCatching {
-            supabase.auth.signInWith(Email) {
-                this.email = cleanEmail
-                this.password = password
-            }
-            supabase.auth.startAutoRefreshForCurrentSession()
-            hydrateSupabaseSession()
+        supabase.auth.signInWith(Email) {
+            this.email = cleanEmail
+            this.password = password
         }
+        supabase.auth.startAutoRefreshForCurrentSession()
+        hydrateSupabaseSession()
 
-        if (remoteResult.isFailure) {
-            val targetRole = if (isAdminEmail) UserRole.SYSTEM_ADMIN else UserRole.RESIDENT_A
-            val userId = "user_${UUID.nameUUIDFromBytes(cleanEmail.toByteArray())}"
-            val existingProfile = database.cachedUserProfileDao().getProfileByEmail(cleanEmail)
-            val displayName = existingProfile?.displayName ?: if (isAdminEmail) "Silvano Titus (Admin)" else cleanEmail.substringBefore("@").replaceFirstChar { it.uppercase() }
-
-            _session.value = RtcSession(
-                id = userId,
-                displayName = displayName,
-                role = if (isAdminEmail) UserRole.SYSTEM_ADMIN else (existingProfile?.role?.let { runCatching { UserRole.valueOf(it) }.getOrNull() } ?: targetRole),
-                authority = SessionAuthority.SUPABASE_AUTH,
-                authenticatedEmail = cleanEmail,
-                handle = if (isAdminEmail) "@silvano_admin" else "@${cleanEmail.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
-                avatarUrl = existingProfile?.avatarUrl,
-                bio = existingProfile?.bio.orEmpty(),
-                interests = existingProfile?.interestsJson?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
-                onboardingComplete = true,
-                administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
+        val current = _session.value
+        database.cachedSessionDao().upsertSession(
+            CachedSessionEntity(
+                userId = current.id,
+                email = current.authenticatedEmail ?: cleanEmail,
+                isLoggedIn = true,
+                sessionJson = "",
+                updatedAtEpochMillis = System.currentTimeMillis(),
             )
-
-            database.cachedSessionDao().upsertSession(
-                CachedSessionEntity(
-                    userId = userId,
-                    email = cleanEmail,
-                    isLoggedIn = true,
-                    sessionJson = "",
-                    updatedAtEpochMillis = System.currentTimeMillis()
-                )
-            )
-        } else {
-            val current = _session.value
-            database.cachedSessionDao().upsertSession(
-                CachedSessionEntity(
-                    userId = current.id,
-                    email = cleanEmail,
-                    isLoggedIn = true,
-                    sessionJson = "",
-                    updatedAtEpochMillis = System.currentTimeMillis()
-                )
-            )
-        }
-
+        )
         recordPrivacyAnalyticsAppActivity()
         refreshLiveContent()
         enqueueUploadRecovery()
@@ -423,10 +398,7 @@ class RtcRepository @Inject constructor(
         }
 
         val userId = "user_${UUID.nameUUIDFromBytes(cleanEmail.toByteArray())}"
-        val isAdminEmail = cleanEmail.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
-                cleanEmail.startsWith("admin", ignoreCase = true) ||
-                cleanEmail.contains("admin@", ignoreCase = true)
-        val targetRole = if (isAdminEmail) UserRole.SYSTEM_ADMIN else UserRole.RESIDENT_A
+        val targetRole = UserRole.RESIDENT_A
 
         database.cachedUserProfileDao().insertProfile(
             CachedUserProfileEntity(
@@ -447,7 +419,7 @@ class RtcRepository @Inject constructor(
             role = targetRole,
             authority = SessionAuthority.SUPABASE_AUTH,
             authenticatedEmail = cleanEmail,
-            handle = if (isAdminEmail) "@silvano_admin" else "@${cleanEmail.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
+            handle = "@${cleanEmail.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
             onboardingComplete = true,
             administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
         )
@@ -617,29 +589,6 @@ class RtcRepository @Inject constructor(
     private suspend fun hydrateSupabaseSession() {
         val user = supabase.auth.currentUserOrNull() ?: error("A verified Supabase session is required.")
         val email = user.email ?: "resident@rtc.community"
-        val isAdminEmail = email.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
-                email.startsWith("admin", ignoreCase = true) ||
-                email.contains("admin@", ignoreCase = true)
-
-        val userMetadata = user.userMetadata
-        val appMetadata = user.appMetadata
-
-        val isAdminUserClaim = userMetadata?.get("is_admin")?.let { element ->
-            element.jsonPrimitive.booleanOrNull
-                ?: element.jsonPrimitive.contentOrNull?.equals("true", ignoreCase = true)
-        } ?: false
-
-        val isAdminAppClaim = appMetadata?.get("is_admin")?.let { element ->
-            element.jsonPrimitive.booleanOrNull
-                ?: element.jsonPrimitive.contentOrNull?.equals("true", ignoreCase = true)
-        } ?: false
-
-        val userRoleClaim = userMetadata?.get("role")?.jsonPrimitive?.contentOrNull
-        val appRoleClaim = appMetadata?.get("role")?.jsonPrimitive?.contentOrNull
-        val hasAdminRoleClaim = userRoleClaim.equals("admin", ignoreCase = true) ||
-                userRoleClaim.equals("system_admin", ignoreCase = true) ||
-                appRoleClaim.equals("admin", ignoreCase = true) ||
-                appRoleClaim.equals("system_admin", ignoreCase = true)
 
         val resolvedRoles = runCatching {
             supabase.from("user_roles")
@@ -649,11 +598,11 @@ class RtcRepository @Inject constructor(
                 .distinct()
         }.getOrDefault(emptyList())
 
-        val isAdmin = isAdminUserClaim || isAdminAppClaim || hasAdminRoleClaim || isAdminEmail || resolvedRoles.contains(UserRole.SYSTEM_ADMIN)
-        val role = if (isAdmin) UserRole.SYSTEM_ADMIN else (resolvedRoles.singleOrNull() ?: UserRole.RESIDENT_A)
+        val role = resolveVerifiedServerRole(user.appMetadata, resolvedRoles)
+        val isAdmin = role == UserRole.SYSTEM_ADMIN
         val displayName = user.userMetadata?.get("full_name")?.jsonPrimitive?.contentOrNull
             ?.takeIf(String::isNotBlank)
-            ?: (if (isAdminEmail) "Silvano Titus (Admin)" else email.substringBefore("@"))
+            ?: email.substringBefore("@")
         val persistedProfile = productionUxRepository.ownPersistedProfile().getOrNull()
         val persistedExperience = productionUxRepository.ownExperiencePreferences().getOrNull()
         val supportNotifications = productionUxRepository.ownSupportNotificationPreference().getOrNull() ?: true
@@ -668,7 +617,7 @@ class RtcRepository @Inject constructor(
         _session.value = RtcSession(
             id = user.id,
             displayName = finalDisplayName,
-            handle = if (isAdminEmail) "@silvano_admin" else "@${email.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
+            handle = "@${email.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
             bio = finalBio,
             interests = finalInterests,
             role = role,

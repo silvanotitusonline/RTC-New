@@ -21,6 +21,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenu
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -63,12 +69,23 @@ internal fun OperationsWorkItemCard(
     onClaim: () -> Unit,
     onRelease: (String) -> Unit,
     onReadyForReview: (String) -> Unit,
+    eligibleAssignees: List<AdminEligibleAssignee>,
+    assigneesLoading: Boolean,
+    assigneesError: String?,
+    onLoadEligibleAssignees: () -> Unit,
+    onRetryEligibleAssignees: () -> Unit,
+    onClearEligibleAssignees: () -> Unit,
     onReassign: (String, String) -> Unit,
     onOpen: () -> Unit,
 ) {
     var releaseOpen by rememberSaveable(item.id) { mutableStateOf(false) }
     var readyOpen by rememberSaveable(item.id) { mutableStateOf(false) }
     var reassignOpen by rememberSaveable(item.id) { mutableStateOf(false) }
+
+    fun openReassignPicker() {
+        reassignOpen = true
+        onLoadEligibleAssignees()
+    }
 
     Card(
         modifier = Modifier
@@ -122,12 +139,12 @@ internal fun OperationsWorkItemCard(
                     ) {
                         OutlinedButton(onClick = { readyOpen = true }) { Text("Ready for review") }
                         TextButton(onClick = { releaseOpen = true }) { Text("Release") }
-                        if (canReassign) TextButton(onClick = { reassignOpen = true }) { Text("Reassign") }
+                        if (canReassign) TextButton(onClick = { openReassignPicker() }) { Text("Reassign") }
                     }
                 }
 
                 canReassign -> TextButton(
-                    onClick = { reassignOpen = true },
+                    onClick = { openReassignPicker() },
                     modifier = Modifier.align(Alignment.End),
                 ) { Text("Reassign") }
             }
@@ -154,8 +171,19 @@ internal fun OperationsWorkItemCard(
     }
     if (reassignOpen) {
         WorkItemReassignDialog(
-            onConfirm = { ownerId, reason -> onReassign(ownerId, reason); reassignOpen = false },
-            onDismiss = { reassignOpen = false },
+            assignees = eligibleAssignees,
+            isLoading = assigneesLoading,
+            errorMessage = assigneesError,
+            onRetry = onRetryEligibleAssignees,
+            onConfirm = { ownerId, reason ->
+                onReassign(ownerId, reason)
+                onClearEligibleAssignees()
+                reassignOpen = false
+            },
+            onDismiss = {
+                onClearEligibleAssignees()
+                reassignOpen = false
+            },
         )
     }
 }
@@ -191,32 +219,116 @@ private fun WorkItemReasonDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WorkItemReassignDialog(
+    assignees: List<AdminEligibleAssignee>,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onRetry: () -> Unit,
     onConfirm: (String, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var ownerId by rememberSaveable { mutableStateOf("") }
+    var selectedUserId by rememberSaveable { mutableStateOf<String?>(null) }
+    var expanded by remember { mutableStateOf(false) }
     var reason by rememberSaveable { mutableStateOf("") }
+    val selectedAssignee = assignees.firstOrNull { it.userId == selectedUserId }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Reassign work item") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
                 Text(
-                    "Enter an active staff account ID and a reason. The server verifies role eligibility and records assignment history.",
+                    "Choose an eligible staff member. Only accounts returned by the protected server role check can be selected.",
+                    style = MaterialTheme.typography.bodyMedium,
                 )
-                OutlinedTextField(
-                    value = ownerId,
-                    onValueChange = { ownerId = it },
-                    label = { Text("New owner account ID") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
+
+                when {
+                    isLoading -> Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.widthIn(max = 24.dp))
+                        Text("Loading eligible staff…", style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    errorMessage != null -> Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(RtcSpacing.compact),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                errorMessage,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                            TextButton(onClick = onRetry) { Text("Retry") }
+                        }
+                    }
+
+                    assignees.isEmpty() -> Text(
+                        "No eligible staff accounts are currently available for this work item.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    else -> ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = selectedAssignee?.let {
+                                "${it.displayName} · ${it.role.replace('_', ' ').lowercase().replaceFirstChar(Char::titlecase)}"
+                            }.orEmpty(),
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Assign to") },
+                            placeholder = { Text("Select eligible staff") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                            singleLine = true,
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false },
+                        ) {
+                            assignees.forEach { assignee ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(assignee.displayName, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                assignee.role.replace('_', ' ').lowercase().replaceFirstChar(Char::titlecase),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedUserId = assignee.userId
+                                        expanded = false
+                                    },
+                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                                )
+                            }
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = reason,
                     onValueChange = { reason = it },
                     label = { Text("Reassignment reason") },
+                    supportingText = { Text("Required for the assignment audit trail") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                 )
@@ -224,8 +336,8 @@ private fun WorkItemReassignDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(ownerId.trim(), reason.trim()) },
-                enabled = ownerId.trim().isNotEmpty() && reason.trim().length >= 3,
+                onClick = { selectedUserId?.let { onConfirm(it, reason.trim()) } },
+                enabled = selectedUserId != null && reason.trim().length >= 3 && !isLoading,
             ) { Text("Reassign") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },

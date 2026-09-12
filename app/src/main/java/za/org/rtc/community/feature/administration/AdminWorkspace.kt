@@ -254,12 +254,21 @@ internal fun AdminWorkspace(
             item { RtcEmptyState("No work matches this view", "Choose another filter or refresh the queue.") }
         }
         items(visibleWorkItems, key = { it.id }) { workItem ->
+            val eligibleAssignees = dashboardState.eligibleAssigneesByWorkItem[workItem.id].orEmpty()
+            val assigneesLoading = dashboardState.assigneeLoadingWorkItemId == workItem.id
+            val assigneesError = dashboardState.assigneeErrorByWorkItem[workItem.id]
             OperationsWorkItemCard(
                 item = workItem,
                 canReassign = session.role == UserRole.SYSTEM_ADMIN,
                 onClaim = { viewModel.claimOperationsWorkItem(workItem.id) },
                 onRelease = { reason -> viewModel.releaseOperationsWorkItem(workItem.id, reason) },
                 onReadyForReview = { note -> viewModel.markOperationsWorkReadyForReview(workItem.id, note) },
+                eligibleAssignees = eligibleAssignees,
+                assigneesLoading = assigneesLoading,
+                assigneesError = assigneesError,
+                onLoadEligibleAssignees = { dashboardViewModel.loadEligibleAssignees(workItem.id) },
+                onRetryEligibleAssignees = { dashboardViewModel.retryEligibleAssignees(workItem.id) },
+                onClearEligibleAssignees = { dashboardViewModel.invalidateEligibleAssignees(workItem.id) },
                 onReassign = { ownerId, reason -> viewModel.reassignOperationsWorkItem(workItem.id, ownerId, reason) },
                 onOpen = {
                     onOpenTool(
