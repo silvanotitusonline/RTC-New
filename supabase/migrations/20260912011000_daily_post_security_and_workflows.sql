@@ -1,19 +1,16 @@
 BEGIN;
 
-CREATE OR REPLACE FUNCTION public.daily_post_has_role(p_roles text[])
+CREATE OR REPLACE FUNCTION public.daily_post_has_role(p_roles public.app_role[])
 RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-    SELECT auth.uid() IS NOT NULL AND EXISTS (
-        SELECT 1 FROM public.user_roles ur
-        WHERE ur.user_id = auth.uid() AND ur.role = ANY(p_roles)
-    );
+    SELECT private.has_any_role(p_roles);
 $$;
-REVOKE ALL ON FUNCTION public.daily_post_has_role(text[]) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.daily_post_has_role(text[]) TO authenticated;
+REVOKE ALL ON FUNCTION public.daily_post_has_role(public.app_role[]) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.daily_post_has_role(public.app_role[]) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.daily_post_can_edit()
 RETURNS boolean
@@ -22,7 +19,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-    SELECT public.daily_post_has_role(ARRAY['CONTENT_EDITOR','SYSTEM_ADMIN']::text[]);
+    SELECT public.daily_post_has_role(ARRAY['CONTENT_EDITOR','SYSTEM_ADMIN']::public.app_role[]);
 $$;
 REVOKE ALL ON FUNCTION public.daily_post_can_edit() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.daily_post_can_edit() TO authenticated;
@@ -34,7 +31,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-    SELECT public.daily_post_has_role(ARRAY['MODERATOR','SYSTEM_ADMIN']::text[]);
+    SELECT public.daily_post_has_role(ARRAY['MODERATOR','SYSTEM_ADMIN']::public.app_role[]);
 $$;
 REVOKE ALL ON FUNCTION public.daily_post_can_moderate() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.daily_post_can_moderate() TO authenticated;
@@ -51,9 +48,7 @@ BEGIN
     IF auth.uid() IS NULL OR NOT public.daily_post_can_edit() THEN
         RAISE EXCEPTION 'Not authorised';
     END IF;
-    SELECT EXISTS(
-        SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'SYSTEM_ADMIN'
-    ) INTO is_admin;
+    SELECT private.has_role('SYSTEM_ADMIN'::public.app_role) INTO is_admin;
     IF is_admin AND COALESCE(auth.jwt()->>'aal', 'aal1') <> 'aal2' THEN
         RAISE EXCEPTION 'Administrator MFA required';
     END IF;
