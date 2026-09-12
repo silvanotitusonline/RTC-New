@@ -45,8 +45,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import za.org.rtc.community.ui.components.RtcNoResultsFound
 import java.text.SimpleDateFormat
 import java.util.*
-import za.org.rtc.community.core.map.tomtom.MarketplaceMapGateway
-import za.org.rtc.community.core.map.tomtom.UnavailableTomTomMarketplaceGateway
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceBusinessCard
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceHome
 import za.org.rtc.community.navigation.RtcRoute
