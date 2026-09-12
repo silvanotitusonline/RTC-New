@@ -46,10 +46,10 @@ internal fun skeletonPulse(): Float {
 /** Shared modifier form for compact/circular placeholders used outside this file. */
 @Composable
 internal fun Modifier.skeletonPulse(shape: Shape = RoundedCornerShape(6.dp)): Modifier {
-    val alpha = skeletonPulse()
+    val pulse = skeletonPulse()
     return this
         .clip(shape)
-        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha * 0.35f))
+        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulse * 0.35f))
 }
 
 /** A single shimmering placeholder block. */
