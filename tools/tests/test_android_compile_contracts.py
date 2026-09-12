@@ -177,7 +177,7 @@ def test_comment_avatar_uses_profile_revision_for_cache_busting():
     assert 'create policy' not in comment_view_migration
 
 
-def test_community_upload_recovery_is_scoped_to_the_authenticated_owner():
+def test_community_upload_recovery_is_scoped_to_runtime_owner_and_authenticated_upload_actor():
     database = (
         ROOT / "app/src/main/java/za/org/rtc/community/data/local/RtcDatabase.kt"
     ).read_text()
@@ -190,16 +190,17 @@ def test_community_upload_recovery_is_scoped_to_the_authenticated_owner():
 
     assert '@ColumnInfo(name = "owner_user_id") val ownerUserId: String? = null' in database
     assert "LocalDraftEntity::class" in database and "UploadOutboxEntity::class" in database
-    assert "version = 6" in database or "version = 3" in database
-    assert "RTC_DATABASE_MIGRATION_1_2" in database
-    assert "RTC_DATABASE_MIGRATION_2_3" in database
+    assert "version = 7" in database
+    for migration in ["RTC_DATABASE_MIGRATION_1_2", "RTC_DATABASE_MIGRATION_2_3", "RTC_DATABASE_MIGRATION_5_6", "RTC_DATABASE_MIGRATION_6_7"]:
+        assert migration in database
+        assert migration in app_module
     assert "ALTER TABLE community_upload_outbox ADD COLUMN owner_user_id TEXT" in database
     assert "suspend fun pendingForOwner" in database
     assert "suspend fun forDraftForOwner" in database
     assert "suspend fun deleteDraftForOwner" in database
-    assert "RTC_DATABASE_MIGRATION_1_2" in app_module and "RTC_DATABASE_MIGRATION_2_3" in app_module
-    assert "currentAuthenticatedUserIdOrNull() ?: return Result.success()" in worker
-    assert "pendingForOwner(ownerUserId)" in worker
+    assert "val currentUser = supabase.auth.currentUserOrNull() ?: return Result.failure()" in worker
+    assert "val ownerId = draftOwnerKeyForAuthenticatedUser(currentUser.id)" in worker
+    assert "pendingForOwner(ownerId)" in worker
     assert "ownerUserId = authorId" in PRODUCTION_REPOSITORY
     assert "forDraftForOwner(draftId, ownerUserId)" in PRODUCTION_REPOSITORY
     assert "deleteDraftForOwner(draftId, ownerUserId)" in PRODUCTION_REPOSITORY
@@ -207,7 +208,8 @@ def test_community_upload_recovery_is_scoped_to_the_authenticated_owner():
     assert "resumeCommunityUpload(draftId, allowEmptyMedia = mediaUris.isEmpty())" in PRODUCTION_REPOSITORY
     assert "resumeCommunityUpload(draftId: String, allowEmptyMedia: Boolean = false)" in PRODUCTION_REPOSITORY
     assert "rows.isNotEmpty() || allowEmptyMedia" in PRODUCTION_REPOSITORY
-    assert "observePendingCountForOwner(activeSession.id)" in RTC_REPOSITORY
+    assert "val ownerKey = draftOwnerIdOrNull(activeSession)" in RTC_REPOSITORY
+    assert "observePendingCountForOwner(ownerKey)" in RTC_REPOSITORY
     assert "enqueueUploadRecovery()" in RTC_REPOSITORY
 
 
