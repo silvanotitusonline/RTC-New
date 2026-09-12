@@ -21,7 +21,7 @@ object RouteAccessPolicy {
         RtcRoute.ANALYTICS_DASHBOARD, RtcRoute.SYSTEM_HEALTH, RtcRoute.ADMIN_ACTIVITY,
         RtcRoute.ADMIN_BRANDING,
     )
-    private val eventManagerRoutes = setOf(RtcRoute.ADMIN_EVENTS)
+    private val editorialRoutes = setOf(RtcRoute.ADMIN_DAILY_POST)
     private val marketplaceContentRoutes = setOf(
         RtcRoute.ADMIN_MARKETPLACE, RtcRoute.ADMIN_MARKETPLACE_BUSINESS,
         RtcRoute.ADMIN_MARKETPLACE_CATEGORIES, RtcRoute.ADMIN_MARKETPLACE_FEATURED,
@@ -45,11 +45,11 @@ object RouteAccessPolicy {
             val requiresMfa = authority == SessionAuthority.SUPABASE_AUTH && mfaStatus != AdministratorMfaStatus.VERIFIED
             return if (requiresMfa) RouteAccessDecision(false, requiresMfa = true, reason = "Verified administrator MFA required.") else RouteAccessDecision(true)
         }
-        if (route in eventManagerRoutes) {
+        if (route in editorialRoutes) {
             return if (role in setOf(UserRole.CONTENT_EDITOR, UserRole.SYSTEM_ADMIN)) {
                 RouteAccessDecision(true)
             } else {
-                RouteAccessDecision(false, reason = "Community Events require Content Editor or System Administrator access.")
+                RouteAccessDecision(false, reason = "Daily Post publishing requires Content Editor or System Administrator access.")
             }
         }
         if (route in marketplaceContentRoutes) {
