@@ -29,8 +29,8 @@ import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_4_5
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_5_6
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_6_7
 import javax.inject.Singleton
+import za.org.rtc.community.feature.community.AuthoritativeCommunityRepository
 import za.org.rtc.community.feature.community.CommunityRepository
-import za.org.rtc.community.feature.community.SupabaseCommunityRepository
 import za.org.rtc.community.feature.marketplace.data.remote.SupabaseMarketplaceRepository
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceAdminRepository
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceDiscoveryRepository
@@ -102,7 +102,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideCommunityRepository(repository: SupabaseCommunityRepository): CommunityRepository = repository
+    fun provideCommunityRepository(repository: AuthoritativeCommunityRepository): CommunityRepository = repository
 
     @Provides
     @Singleton
