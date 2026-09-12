@@ -29,6 +29,33 @@ class CommunityAuthoritativeMutationTest {
     }
 
     @Test
+    fun `failed optimistic mutation attempts rollback and propagates original failure`() = runTest {
+        val events = mutableListOf<String>()
+        val optimisticFailure = IllegalStateException("room unavailable")
+        var thrown: Throwable? = null
+
+        try {
+            runAuthoritativeOptimisticMutation(
+                applyOptimistic = {
+                    events += "optimistic"
+                    throw optimisticFailure
+                },
+                executeRemote = {
+                    events += "remote"
+                    7
+                },
+                applyAuthoritative = { events += "authoritative:$it" },
+                rollback = { events += "rollback" },
+            )
+        } catch (error: Throwable) {
+            thrown = error
+        }
+
+        assertSame(optimisticFailure, thrown)
+        assertEquals(listOf("optimistic", "rollback"), events)
+    }
+
+    @Test
     fun `failed remote mutation rolls back optimistic state and propagates failure`() = runTest {
         val events = mutableListOf<String>()
         val remoteFailure = IllegalStateException("offline")
