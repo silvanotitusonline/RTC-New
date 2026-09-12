@@ -155,14 +155,37 @@ fun PublicReportComposerScreen(
                         )
                         Text("I accept the current Public Reports / Community guidelines")
                     }
+                    if (state.hasPartialSubmission) {
+                        Text(
+                            "The report itself is confirmed on RTC. Evidence is not fully attached yet.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
                     Button(
                         onClick = viewModel::submit,
                         enabled = !state.submitting,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     ) {
-                        Text(if (state.submitting) "Submitting…" else "Submit Public Report")
+                        Text(
+                            when {
+                                state.submitting && state.hasPartialSubmission -> "Retrying evidence…"
+                                state.submitting -> "Submitting…"
+                                state.hasPartialSubmission -> "Retry evidence upload"
+                                else -> "Submit Public Report"
+                            },
+                        )
                     }
-                    state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    state.message?.let {
+                        Text(
+                            it,
+                            color = if (state.hasPartialSubmission) {
+                                MaterialTheme.colorScheme.tertiary
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                        )
+                    }
                 }
             }
         }
