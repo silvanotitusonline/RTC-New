@@ -45,7 +45,51 @@ begin
 end;
 $$;
 
+-- Purpose-limited assignee directory for the reassignment dialog. It exposes only the account id,
+-- profile display name and effective role, and only to a verified System Administrator. Eligibility
+-- is derived with the same role helper enforced again by ops_reassign_work_item.
+create or replace function public.ops_list_eligible_assignees_v1(p_work_item_id uuid)
+returns table(
+  user_id uuid,
+  display_name text,
+  role public.app_role
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_actor uuid := private.access_assert_system_admin();
+  v_target_role public.app_role;
+begin
+  select w.target_role
+    into v_target_role
+    from public.operational_work_items w
+   where w.id = p_work_item_id
+     and w.state not in ('RESOLVED', 'CANCELLED');
+
+  if v_target_role is null then
+    raise exception 'This work item is not available for reassignment.';
+  end if;
+
+  return query
+  select
+    p.id,
+    coalesce(nullif(trim(p.display_name), ''), 'Staff member') as display_name,
+    private.access_current_role(p.id) as role
+  from public.profiles p
+  where private.access_current_role(p.id) in (v_target_role, 'SYSTEM_ADMIN'::public.app_role)
+  order by
+    case when p.id = v_actor then 0 else 1 end,
+    lower(coalesce(nullif(trim(p.display_name), ''), 'Staff member')),
+    p.id
+  limit 100;
+end;
+$$;
+
 revoke all on function public.ops_workspace_summary_v1() from public, anon;
+revoke all on function public.ops_list_eligible_assignees_v1(uuid) from public, anon;
 grant execute on function public.ops_workspace_summary_v1() to authenticated;
+grant execute on function public.ops_list_eligible_assignees_v1(uuid) to authenticated;
 
 commit;
