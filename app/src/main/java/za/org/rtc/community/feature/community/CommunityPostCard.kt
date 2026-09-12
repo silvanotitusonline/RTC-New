@@ -1,5 +1,6 @@
 
-package za.org.rtc.community.feature.community
+package za.org.rtc.// Import added here
+import za.org.rtc.community.ui.components.RtcEnterpriseImage
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
