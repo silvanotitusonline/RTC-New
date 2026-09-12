@@ -11,7 +11,7 @@ ADD COLUMN IF NOT EXISTS parent_id uuid REFERENCES public.community_posts(id) ON
 ADD COLUMN IF NOT EXISTS thread_depth int DEFAULT 0 CHECK (thread_depth <= 5);
 
 -- 3. The la-Density Optimized Feed View (Eliminates N+1 Queries)
-CREATE OR REPLACE VIEW public.v_community_feed AS
+CREATE OR REPLACE VIEW public.v_community_feed WITH (security_invoker = true) AS
 SELECT 
     p.id, 
     p.body, 

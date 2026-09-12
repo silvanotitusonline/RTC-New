@@ -5,7 +5,7 @@ BEGIN;
 -- 1. N+1 Elimination: Advanced Feed View with Pre-aggregated Counts
 -- Instead of counting likes/replies per post in the application loop, 
 -- we use a materialized-style view or optimized joins.
-CREATE OR REPLACE VIEW public.v_community_feed_optimized AS
+CREATE OR REPLACE VIEW public.v_community_feed_optimized WITH (security_invoker = true) AS
 SELECT 
     p.id, p.body, p.created_at, p.parent_id, p.thread_depth,
     u.username, u.avatar_url, u.is_verified,
