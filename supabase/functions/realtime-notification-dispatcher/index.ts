@@ -1,8 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  APP_ROLES,
-  AuthError,
   enforceRateLimit,
   isUuid,
   publicErrorStatus,
@@ -13,6 +11,7 @@ import {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SECRET_KEY") ?? "";
+const NOTIFICATION_DISPATCH_ROLES = ["SYSTEM_ADMIN", "CONTENT_EDITOR"] as const;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,17 +46,16 @@ Deno.serve(async (request) => {
     const caller = await verifyCaller(
       request,
       { supabaseUrl: SUPABASE_URL, publishableKey: SUPABASE_ANON_KEY, admin },
-      APP_ROLES
+      NOTIFICATION_DISPATCH_ROLES,
     );
     const actorId = caller.userId;
-    await enforceRateLimit(admin, "realtime_notify", actorId, 120, 60);
+    await enforceRateLimit(admin, "realtime_notify", actorId, 60, 60);
 
     const payload = await readJsonObject(request, 4_096);
     const channel = typeof payload.channel === "string" ? payload.channel.slice(0, 100) : "community";
     const event = typeof payload.event === "string" ? payload.event.slice(0, 50) : "update";
     const data = typeof payload.data === "object" && payload.data !== null ? payload.data : {};
 
-    // Broadcast through postgres notify helper
     const { error: rpcError } = await admin.rpc("notify_realtime", {
       p_channel: channel,
       p_event: event,
@@ -65,21 +63,28 @@ Deno.serve(async (request) => {
     });
 
     if (rpcError) {
-      // Fallback: insert directly into notification_events if recipient specified
-      if (typeof payload.recipientId === "string" && isUuid(payload.recipientId)) {
-        await admin.from("notification_events").insert({
-          recipient_id: payload.recipientId,
-          notification_type: event,
-          title: typeof payload.title === "string" ? payload.title : "Community Notification",
-          body: typeof payload.body === "string" ? payload.body : "",
-          payload: data,
-        });
+      if (typeof payload.recipientId !== "string" || !isUuid(payload.recipientId)) {
+        throw new Error("REALTIME_DISPATCH_FAILED");
       }
+      const { error: insertError } = await admin.from("notification_events").insert({
+        recipient_id: payload.recipientId,
+        notification_type: event,
+        title: typeof payload.title === "string" ? payload.title.slice(0, 120) : "Community Notification",
+        body: typeof payload.body === "string" ? payload.body.slice(0, 600) : "",
+        payload: data,
+      });
+      if (insertError) throw new Error("REALTIME_DISPATCH_FAILED");
     }
 
     return json(200, { success: true, channel, event });
   } catch (error) {
     const status = publicErrorStatus(error);
-    return json(status, { error: error instanceof Error ? error.message : "Notification dispatch failed." });
+    return json(status, {
+      error: status === 401
+        ? "Authentication is required."
+        : status === 403
+        ? "This account is not authorised to dispatch notifications."
+        : "Notification dispatch failed.",
+    });
   }
 });
