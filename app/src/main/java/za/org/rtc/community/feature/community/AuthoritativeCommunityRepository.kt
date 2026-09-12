@@ -8,16 +8,18 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import za.org.rtc.community.BuildConfig
+import za.org.rtc.community.core.CommunityComment
+import za.org.rtc.community.core.CommunityPost
 import za.org.rtc.community.data.local.CachedCommentDao
 import za.org.rtc.community.data.local.CachedPostDao
 
 /**
  * Production safety decorator for CommunityRepository.
  *
- * Mutations may be optimistic for responsiveness, but local state is never accepted as the final
- * result. A mutation succeeds only after the authoritative Supabase operation succeeds. Where an
- * optimistic snapshot is used it is reconciled to server truth, and restored when the server
- * rejects the operation.
+ * Local state may support optimistic interaction and offline continuity, but it is never allowed
+ * to manufacture production truth. Mutations require an authoritative Supabase acknowledgement,
+ * and demo/mock entities are rejected from release read paths.
  */
 @Singleton
 class AuthoritativeCommunityRepository @Inject constructor(
@@ -26,6 +28,40 @@ class AuthoritativeCommunityRepository @Inject constructor(
     private val cachedPostDao: CachedPostDao,
     private val cachedCommentDao: CachedCommentDao,
 ) : CommunityRepository by delegate {
+
+    override suspend fun loadFeedPage(
+        cursor: CommunityCursor?,
+        limit: Int,
+    ): Result<CommunityFeedPage> = delegate.loadFeedPage(cursor, limit).mapCatching { page ->
+        rejectSyntheticPosts(page.items)
+        page
+    }
+
+    override suspend fun loadPost(postId: String): Result<CommunityPost?> =
+        delegate.loadPost(postId).mapCatching { post ->
+            if (!BuildConfig.DEBUG && post?.isSyntheticCommunityFixture() == true) {
+                error("Synthetic Community content is not available in production.")
+            }
+            post
+        }
+
+    override suspend fun loadComments(postId: String): Result<List<CommunityComment>> =
+        delegate.loadComments(postId).mapCatching { comments ->
+            if (!BuildConfig.DEBUG && (postId.startsWith(MOCK_POST_PREFIX) || comments.any { it.postId.startsWith(MOCK_POST_PREFIX) })) {
+                error("Synthetic Community comments are not available in production.")
+            }
+            comments
+        }
+
+    override suspend fun searchPosts(
+        query: String,
+        lastRank: Float?,
+        lastId: String?,
+        limit: Int,
+    ): Result<List<CommunityPost>> = delegate.searchPosts(query, lastRank, lastId, limit).mapCatching { posts ->
+        rejectSyntheticPosts(posts)
+        posts
+    }
 
     override suspend fun createComment(
         postId: String,
@@ -46,8 +82,8 @@ class AuthoritativeCommunityRepository @Inject constructor(
 
         // The server owns comment identity and counts. Refresh only after acknowledgement so Room
         // cannot contain a comment that the server never accepted.
-        delegate.loadPost(postId).getOrThrow()
-        delegate.loadComments(postId).getOrThrow()
+        loadPost(postId).getOrThrow()
+        loadComments(postId).getOrThrow()
         Unit
     }
 
@@ -260,6 +296,18 @@ class AuthoritativeCommunityRepository @Inject constructor(
                 original?.let { cachedPostDao.insertPost(it) }
             },
         )
+    }
+
+    private fun rejectSyntheticPosts(posts: List<CommunityPost>) {
+        if (!BuildConfig.DEBUG && posts.any(CommunityPost::isSyntheticCommunityFixture)) {
+            error("Synthetic Community content is not available in production.")
+        }
+    }
+
+    private fun CommunityPost.isSyntheticCommunityFixture(): Boolean = id.startsWith(MOCK_POST_PREFIX)
+
+    private companion object {
+        const val MOCK_POST_PREFIX = "mock_post_"
     }
 }
 
