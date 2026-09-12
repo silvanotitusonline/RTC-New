@@ -37,7 +37,6 @@ class DailyPostViewModel @Inject constructor(
 
     init {
         refresh()
-        checkPreview()
     }
 
     fun refresh() {
