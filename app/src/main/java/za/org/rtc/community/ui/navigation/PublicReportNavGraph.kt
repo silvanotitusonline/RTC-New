@@ -6,6 +6,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import za.org.rtc.community.core.RtcSession
+import za.org.rtc.community.core.UserRole
 import za.org.rtc.community.feature.publicreports.presentation.PublicReportAdminScreen
 import za.org.rtc.community.feature.publicreports.presentation.PublicReportComposerScreen
 import za.org.rtc.community.feature.publicreports.presentation.PublicReportDetailScreen
@@ -13,6 +14,7 @@ import za.org.rtc.community.feature.publicreports.presentation.PublicReportsScre
 import za.org.rtc.community.navigation.RtcRoute
 import za.org.rtc.community.navigation.navigateOverlay
 import za.org.rtc.community.navigation.returnToSafeWorkspace
+import za.org.rtc.community.ui.components.ResidentCapabilityNoticeScreen
 
 internal fun NavGraphBuilder.publicReportRoutes(
     navController: NavHostController,
@@ -26,10 +28,18 @@ internal fun NavGraphBuilder.publicReportRoutes(
         )
     }
     composable(RtcRoute.PUBLIC_REPORT_NEW) {
-        PublicReportComposerScreen(
-            guidelinesVersion = guidelinesVersion,
-            onSubmitted = { id -> navController.navigateOverlay(RtcRoute.publicReportDetail(id)) },
-        )
+        if (session.role == UserRole.ANONYMOUS_PUBLIC) {
+            ResidentCapabilityNoticeScreen(
+                title = "Public Report submission",
+                message = "Public Reports remain available to read without an account. New report submission is temporarily read-only until the server supports anonymous ownership, evidence recovery and abuse protection.",
+                onAction = { navController.popBackStack() },
+            )
+        } else {
+            PublicReportComposerScreen(
+                guidelinesVersion = guidelinesVersion,
+                onSubmitted = { id -> navController.navigateOverlay(RtcRoute.publicReportDetail(id)) },
+            )
+        }
     }
     composable(
         route = RtcRoute.PUBLIC_REPORT_DETAIL,
