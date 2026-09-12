@@ -109,6 +109,19 @@ internal fun QuickAccessSection(
                 horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
             ) {
                 OutlinedButton(
+                    onClick = { onOpenDirectory("projects") },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                ) { Text("Projects") }
+                OutlinedButton(
+                    onClick = { onOpenDirectory("centres") },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                ) { Text("Service centres") }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
+            ) {
+                OutlinedButton(
                     onClick = { onNavigate(MainDestination.COMMUNITY) },
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 ) { Text("Community") }
@@ -117,19 +130,10 @@ internal fun QuickAccessSection(
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 ) { Text("Support") }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
-            ) {
-                OutlinedButton(
-                    onClick = { onOpenDirectory("centres") },
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                ) { Text("Service centres") }
-                OutlinedButton(
-                    onClick = onHelp,
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                ) { Text("Help") }
-            }
+            TextButton(
+                onClick = onHelp,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) { Text("Help") }
         }
     }
 }
