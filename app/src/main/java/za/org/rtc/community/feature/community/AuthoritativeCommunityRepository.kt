@@ -299,7 +299,7 @@ class AuthoritativeCommunityRepository @Inject constructor(
     }
 
     private fun rejectSyntheticPosts(posts: List<CommunityPost>) {
-        if (!BuildConfig.DEBUG && posts.any(CommunityPost::isSyntheticCommunityFixture)) {
+        if (!BuildConfig.DEBUG && posts.any { post -> post.isSyntheticCommunityFixture() }) {
             error("Synthetic Community content is not available in production.")
         }
     }
