@@ -100,14 +100,16 @@ def test_inert_resident_activity_and_following_controls_are_not_presented_as_liv
     assert 'Topic and people following is not available yet.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
     assert 'Saved items will appear here when this feature is available.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
     assert 'Your recent Community activity will appear here when this feature is available.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
-    assert 'Saved items, followed topics, and personal Community history are not available in this version.' in COMMUNITY_FEED
+    assert 'tab == "Saved" -> feedState.items.filter { it.isBookmarkedByViewer }' in community
+    assert 'Saved items, followed topics, and personal Community history are not available in this version.' not in COMMUNITY_FEED
     assert 'AccountAction(title: String, description: String, icon: ImageVector, onClick: (() -> Unit)? = null)' in ACCOUNT_DIALOGS
     assert 'Open the Moderation workspace to act on assigned queue items.' in ADMIN_MODERATION
 
 
-def test_reference_community_feed_actions_and_one_time_guideline_gate_are_real():
+def test_reference_community_feed_actions_and_anonymous_write_boundary_are_real():
     community = _function_body(COMMUNITY_FEED, 'CommunityScreen', ['ComposerCard', 'CommunityActionFeedback'])
     feed_card = _function_body(COMMUNITY_CARD, 'CommunityPostCard', [])
+    safe_error = (ROOT / 'app/src/main/java/za/org/rtc/community/app/SafeUiError.kt').read_text()
     assert 'resumeComposerAfterGuidelines' in community
     assert 'composerOpen = true' in community
     assert 'guidelinesOpen = true' in community
@@ -117,15 +119,15 @@ def test_reference_community_feed_actions_and_one_time_guideline_gate_are_real()
     assert 'onOpenPost(post)' in feed_card
     assert 'onSharePost(post)' in feed_card
     assert 'Photo' in COMMUNITY_FEED and 'Video' in COMMUNITY_FEED
-    assert 'timestampLabel = relativeTimeLabel(post.createdAt)' in feed_card
+    assert 'relativeLabel(post.createdAt)' in feed_card
     assert 'postCommentAfterGuidelines' in COMMUNITY_DETAIL
     assert 'CommunityPostCard(' in COMMUNITY_FEED
     assert 'Text("${post.reactions} reactions  •  ${post.comments} comments"' not in COMPONENTS
     assert 'timestampLabel: String = post.createdAt' in COMPONENTS
-    resident = (ROOT / 'app/src/main/java/za/org/rtc/community/app/RtcResidentCoordinator.kt').read_text()
-    safe_error = (ROOT / 'app/src/main/java/za/org/rtc/community/app/SafeUiError.kt').read_text()
-    assert 'SafeUiError.community' in resident
-    assert 'fun community(error: Throwable, fallback: String)' in safe_error
+    assert 'if (_session.value.authority == SessionAuthority.PUBLIC) return anonymousResidentWriteUnavailable("Reactions")' in REPO
+    assert 'if (_session.value.authority == SessionAuthority.PUBLIC) return anonymousResidentWriteUnavailable("Community publishing")' in REPO
+    assert 'IllegalStateException("ANONYMOUS_READ_ONLY:$feature")' in REPO
+    assert 'ANONYMOUS_READ_ONLY' in safe_error
 
 
 def test_administrator_reference_tiles_are_accessible_real_actions_not_fake_analytics():
@@ -144,17 +146,15 @@ def test_administrator_reference_tiles_are_accessible_real_actions_not_fake_anal
     assert 'distinct from any future Nearby search area or live device-location feature.' in analytics
 
 
-def test_profile_photo_uses_visual_picker_and_has_a_terminal_safe_result():
-    auth = (ROOT / 'app/src/main/java/za/org/rtc/community/app/RtcAuthenticationCoordinator.kt').read_text()
-    safe_error = (ROOT / 'app/src/main/java/za/org/rtc/community/app/SafeUiError.kt').read_text()
-    assert 'ActivityResultContracts.PickVisualMedia()' in ACCOUNT_SCREEN
-    assert 'PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)' in ACCOUNT_SCREEN
+def test_anonymous_account_does_not_offer_authenticated_profile_photo_mutation():
+    assert 'No resident account required' in ACCOUNT_SCREEN
+    assert 'A device continuity key is not an account and never grants staff or administrator access.' in ACCOUNT_SCREEN
+    assert 'ActivityResultContracts.PickVisualMedia()' not in ACCOUNT_SCREEN
+    assert 'PickVisualMediaRequest' not in ACCOUNT_SCREEN
+    assert 'Profile photo' not in ACCOUNT_SCREEN
+    assert 'onStaffAccess: () -> Unit' in ACCOUNT_SCREEN
+    assert 'Staff & administrator access' in ACCOUNT_SCREEN
     assert 'import za.org.rtc.community.feature.account.AccountScreen' in MAIN
-    assert 'PROFILE_PHOTO_OPERATION_TIMEOUT_MS = 45_000L' in auth
-    assert 'withTimeout(PROFILE_PHOTO_OPERATION_TIMEOUT_MS)' in auth
-    assert 'SafeUiError.profilePhoto(error)' in auth
-    assert 'fun profilePhoto(error: Throwable)' in safe_error
-    assert 'Profile photo saved and refreshed across Community.' in auth
 
 
 def test_support_find_centre_uses_real_centres_directory_route():
