@@ -18,6 +18,7 @@ studio_ui = read("app/src/main/java/za/org/rtc/community/feature/dailypost/prese
 main_activity = read("app/src/main/java/za/org/rtc/community/MainActivity.kt")
 fcm_service = read("app/src/main/java/za/org/rtc/community/app/RtcFirebaseMessagingService.kt")
 security = read("supabase/migrations/20260912011000_daily_post_security_and_workflows.sql")
+storage = read("supabase/migrations/20260912010500_daily_post_storage.sql")
 storage_security = read("supabase/migrations/20260912011500_daily_post_storage_security.sql")
 scheduler_activation = read("supabase/migrations/20260912012000_daily_post_scheduler_activation_and_comment_delete.sql")
 language_fn = read("supabase/functions/daily-post-language/index.ts")
@@ -108,8 +109,14 @@ for token in (
 assert "state = 'PUBLISHED'" in security
 assert "auth.uid()" in security
 assert "aal2" in security
-assert 'daily-post-media' in storage_security
-assert 'daily-post-ai-audio' in storage_security
+# Publication media is private storage with published/editor RLS. AI narration is a distinct
+# private bucket with no client RLS policy; the service-role Edge Function alone issues signed URLs.
+assert "('daily-post-media', 'daily-post-media', false" in storage
+assert "('daily-post-ai-audio', 'daily-post-ai-audio', false" in storage
+assert "bucket_id = 'daily-post-media'" in storage_security
+assert 'daily_post_ai_audio_client_read' in storage_security
+assert 'daily_post_ai_audio_client_write' in storage_security
+assert 'CREATE POLICY daily_post_ai_audio' not in storage_security
 assert 'verifyDailyPostSchedulerCaller' in scheduler_fn
 assert 'assert_daily_post_scheduler_secret' in scheduler_fn
 assert 'x-rtc-daily-post-scheduler-secret' in scheduler_fn
