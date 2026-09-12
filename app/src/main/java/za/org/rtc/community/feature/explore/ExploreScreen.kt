@@ -52,21 +52,25 @@ import za.org.rtc.community.ui.theme.RtcSpacing
  * 1. The Daily Post — RTC's official publication and breaking-news experience.
  * 2. Community Updates — the former Explore overview (notices, map, projects, opportunities).
  *
- * The legacy Events Calendar is intentionally absent from this surface and from application routing.
+ * Legacy event parameters are accepted temporarily only to keep the route call source-compatible
+ * during the removal migration; they are deliberately not rendered or acted upon.
  */
 @Composable
 internal fun ExploreScreen(
     projects: List<ProjectRecord>,
     opportunities: List<OpportunityRecord>,
     notices: List<OfficialNotice>,
+    events: List<za.org.rtc.community.feature.events.domain.CommunityEvent> = emptyList(),
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onOpenDirectory: (String) -> Unit,
+    onToggleRsvp: (String) -> Unit = {},
     currentUserId: String? = null,
     initialDailyPostId: String? = null,
     reports: List<PublicReport> = PublicReportMockData.getSampleReports(),
     onOpenReport: (String) -> Unit = {},
 ) {
+    @Suppress("UNUSED_VARIABLE") val calendarRemovalCompatibility = events.size to onToggleRsvp
     var activeTab by remember { mutableIntStateOf(0) }
 
     Column(modifier = Modifier.fillMaxSize()) {
