@@ -18,7 +18,6 @@ import za.org.rtc.community.feature.publicreports.domain.PublicReportDraft
 import za.org.rtc.community.feature.publicreports.domain.PublicReportFilters
 import za.org.rtc.community.feature.publicreports.domain.PublicReportPage
 import za.org.rtc.community.feature.publicreports.domain.PublicReportRepository
-import za.org.rtc.community.feature.publicreports.domain.PublicReportSort
 import za.org.rtc.community.feature.publicreports.domain.PublicReportTimelineEntry
 import za.org.rtc.community.feature.publicreports.domain.PublicReportUrgency
 import za.org.rtc.community.feature.publicreports.domain.PublicReportValidation
@@ -191,8 +190,11 @@ class AuthoritativePublicReportRepository @Inject constructor(
             )
     }
 
-    private inline fun <T> authoritative(block: () -> T): Result<T> =
-        runCatching(block).recoverCatching { error -> throw PublicReportFailure.from(error) }
+    private suspend fun <T> authoritative(block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (error: Throwable) {
+        Result.failure(PublicReportFailure.from(error))
+    }
 
     private fun decodeObjects(
         result: io.github.jan.supabase.postgrest.result.PostgrestResult,
