@@ -1,0 +1,135 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { GoogleAuth } from "npm:google-auth-library";
+import { verifySchedulerCaller, writeAudit } from "../_shared/auth.ts";
+
+const URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SECRET_KEY") ?? "";
+const PROJECT = Deno.env.get("GOOGLE_CLOUD_PROJECT_ID") ?? "";
+const MAX_JOBS = 20;
+const CONCURRENCY = 12;
+const headers = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
+
+function json(status: number, body: Record<string, unknown>) { return new Response(JSON.stringify(body), { status, headers }); }
+async function fingerprint(token: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function credentials(admin: ReturnType<typeof createClient>) {
+  const fromEnv = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON") ?? "";
+  if (fromEnv) return JSON.parse(fromEnv);
+  const result = await admin.rpc("get_firebase_fcm_service_account");
+  if (result.error || typeof result.data !== "string" || !result.data.trim()) throw new Error("FCM_CREDENTIALS_UNAVAILABLE");
+  return JSON.parse(result.data);
+}
+async function accessToken(admin: ReturnType<typeof createClient>) {
+  const creds = await credentials(admin);
+  const auth = new GoogleAuth({ credentials: creds, scopes: ["https://www.googleapis.com/auth/firebase.messaging"] });
+  const client = await auth.getClient();
+  const token = await client.getAccessToken();
+  if (!token.token) throw new Error("FCM_CREDENTIALS_UNAVAILABLE");
+  return { token: token.token, project: PROJECT || creds.project_id };
+}
+async function pool<T>(items: T[], fn: (item: T) => Promise<void>) {
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, async () => {
+    while (cursor < items.length) await fn(items[cursor++]);
+  }));
+}
+async function allDevices(admin: ReturnType<typeof createClient>) {
+  const devices: Array<{ id: string; user_id: string; fcm_token: string }> = [];
+  let from = 0;
+  for (;;) {
+    const result = await admin.from("device_registrations").select("id,user_id,fcm_token").range(from, from + 999);
+    if (result.error) throw new Error("DEVICE_LOOKUP_FAILED");
+    const page = Array.isArray(result.data) ? result.data : [];
+    devices.push(...page.filter((d: any) => typeof d?.fcm_token === "string" && d.fcm_token.length > 20));
+    if (page.length < 1000) return devices;
+    from += 1000;
+    if (from >= 50_000) return devices;
+  }
+}
+async function sendDevice(
+  admin: ReturnType<typeof createClient>, bearer: string, project: string,
+  job: any, post: any, device: { id: string; user_id: string; fcm_token: string },
+) {
+  const fp = await fingerprint(device.fcm_token);
+  const existing = await admin.from("notification_delivery_attempts")
+    .select("id,state").eq("source_type", "DAILY_POST_JOB").eq("source_id", job.job_id).eq("token_fingerprint", fp).maybeSingle();
+  if (existing.data?.state === "ACCEPTED" || existing.data?.state === "PERMANENT_FAILURE") return;
+  const attempt = await admin.from("notification_delivery_attempts").upsert({
+    source_type: "DAILY_POST_JOB", source_id: job.job_id, device_registration_id: device.id,
+    token_fingerprint: fp, state: "PENDING",
+  }, { onConflict: "source_type,source_id,token_fingerprint" }).select("id,attempt_count").single();
+  if (attempt.error || !attempt.data) throw new Error("ATTEMPT_PERSISTENCE_FAILED");
+  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${project}/messages:send`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ message: {
+      token: device.fcm_token,
+      notification: { title: post.publicationType === "BREAKING" ? `BREAKING: ${post.headline}` : post.headline, body: post.excerpt || "Open The Daily Post for the full story." },
+      data: { type: "DAILY_POST", post_id: post.postId, destination: "resident_explore", tab: "daily_post", idempotency_key: job.dispatch_key },
+      android: { priority: post.publicationType === "BREAKING" ? "HIGH" : "NORMAL" },
+    } }),
+  });
+  if (response.ok) {
+    await admin.from("notification_delivery_attempts").update({ state: "ACCEPTED", accepted_at: new Date().toISOString(), last_http_status: response.status, attempt_count: (attempt.data.attempt_count ?? 0) + 1 }).eq("id", attempt.data.id);
+    return;
+  }
+  let payload: any = {};
+  try { payload = await response.json(); } catch { /* no-op */ }
+  const code = String(payload?.error?.status ?? `HTTP_${response.status}`);
+  const stale = response.status === 404 || response.status === 410 || code === "UNREGISTERED";
+  await admin.from("notification_delivery_attempts").update({
+    state: stale ? "PERMANENT_FAILURE" : "RETRY_PENDING",
+    permanently_failed_at: stale ? new Date().toISOString() : null,
+    next_retry_at: stale ? null : new Date(Date.now() + 5 * 60_000).toISOString(),
+    last_http_status: response.status, last_error_code: code, attempt_count: (attempt.data.attempt_count ?? 0) + 1,
+  }).eq("id", attempt.data.id);
+  if (stale) await admin.from("device_registrations").delete().eq("id", device.id);
+  if (!stale) throw new Error(`FCM_RETRY:${code}`);
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method !== "POST") return json(405, { error: "POST is required." });
+  if (!URL || !SERVICE) return json(503, { error: "Server configuration is incomplete." });
+  const admin = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
+  try {
+    await verifySchedulerCaller(req, admin);
+    const claimed = await admin.rpc("daily_post_claim_due_jobs_v1", { p_limit: MAX_JOBS });
+    if (claimed.error) throw new Error("JOB_CLAIM_FAILED");
+    const jobs = Array.isArray(claimed.data) ? claimed.data : [];
+    let completed = 0, failed = 0, pushed = 0;
+    for (const job of jobs) {
+      try {
+        const executed = await admin.rpc("daily_post_execute_job_v1", { p_job_id: job.job_id });
+        if (executed.error || !executed.data) throw new Error("JOB_EXECUTION_FAILED");
+        const post = executed.data;
+        if (job.push_enabled === true) {
+          const devices = await allDevices(admin);
+          if (devices.length > 0) {
+            const auth = await accessToken(admin);
+            const errors: string[] = [];
+            await pool(devices, async (device) => {
+              try { await sendDevice(admin, auth.token, auth.project, job, post, device); }
+              catch (error) { errors.push(error instanceof Error ? error.message : "FCM_FAILED"); }
+            });
+            if (errors.length > 0) throw new Error(`FCM_PARTIAL_FAILURE:${errors.length}`);
+            pushed += devices.length;
+          }
+        }
+        await admin.rpc("daily_post_complete_job_v1", { p_job_id: job.job_id, p_success: true, p_error: null });
+        completed++;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "UNKNOWN";
+        await admin.rpc("daily_post_complete_job_v1", { p_job_id: job.job_id, p_success: false, p_error: message });
+        await writeAudit(admin, { actorId: null, eventType: "DAILY_POST_JOB_FAILED", result: "FAILED", entityType: "DAILY_POST", entityId: job.post_id, metadata: { jobId: job.job_id, code: message } });
+        failed++;
+      }
+    }
+    return json(200, { claimed: jobs.length, completed, failed, pushed });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "UNKNOWN";
+    return json(code === "AUTH_REQUIRED" ? 401 : 500, { error: "Daily Post scheduler could not complete.", code });
+  }
+});
