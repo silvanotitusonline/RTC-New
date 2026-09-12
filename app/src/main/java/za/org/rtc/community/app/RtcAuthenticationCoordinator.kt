@@ -5,12 +5,17 @@ import android.net.Uri
 import android.os.Build
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import za.org.rtc.community.BuildConfig
 import za.org.rtc.community.core.ThemePreference
 import za.org.rtc.community.core.UserRole
@@ -18,6 +23,7 @@ import za.org.rtc.community.data.RtcRepository
 
 internal class RtcAuthenticationCoordinator(
     private val repository: RtcRepository,
+    private val supabase: SupabaseClient,
     private val applicationContext: Context,
     private val scope: CoroutineScope,
     private val onStaffAuthenticated: () -> Unit,
@@ -39,24 +45,42 @@ internal class RtcAuthenticationCoordinator(
     private val _feedbackUi = MutableStateFlow(WorkflowSubmissionUiState())
     val feedbackUi = _feedbackUi.asStateFlow()
 
+    /**
+     * A locally cached identity may help continuity, but it is never accepted as authenticated
+     * authority. Restoration succeeds only when the shared Supabase client exposes a current user.
+     */
     suspend fun restoreSession(): Result<Boolean> {
         _isSessionRestoring.value = true
         return try {
             val result = withTimeoutOrNull(2500L) {
                 repository.restoreSupabaseSession()
             } ?: Result.success(false)
-            result.onFailure {
+
+            if (result.isFailure) {
                 _authenticationUi.value = AuthenticationUiState(
-                    message = "Your saved session could not be restored. Please sign in again."
+                    message = "Your saved session could not be restored. Please sign in again.",
                 )
+                return result
             }
-            result
+
+            if (result.getOrDefault(false) && supabase.auth.currentUserOrNull() == null) {
+                // The repository may still contain a legacy cached-session fallback. Clear it rather
+                // than allowing that local identity to cross the authentication trust boundary.
+                repository.signOutToPublicWelcome()
+                _authenticationUi.value = AuthenticationUiState(
+                    message = "Your previous sign-in could not be verified. Please sign in again.",
+                )
+                Result.success(false)
+            } else {
+                result
+            }
         } finally {
             _isSessionRestoring.value = false
         }
     }
 
     fun registerCurrentFcmToken() {
+        if (supabase.auth.currentUserOrNull() == null) return
         runCatching { FirebaseApp.initializeApp(applicationContext) }.getOrNull() ?: return
         runCatching { FirebaseMessaging.getInstance().token }
             .onSuccess { task ->
@@ -74,10 +98,14 @@ internal class RtcAuthenticationCoordinator(
         scope.launch {
             _authenticationUi.value = AuthenticationUiState(isWorking = true)
             repository.signInWithEmail(email, password)
+                .mapCatching {
+                    requireVerifiedSession()
+                }
                 .onSuccess { completeAuthentication() }
                 .onFailure { error ->
+                    clearUnverifiedLocalSession()
                     _authenticationUi.value = AuthenticationUiState(
-                        message = SafeUiError.generic(error, "Sign-in could not be completed.")
+                        message = SafeUiError.generic(error, "Sign-in could not be completed."),
                     )
                 }
         }
@@ -87,16 +115,26 @@ internal class RtcAuthenticationCoordinator(
         scope.launch {
             _authenticationUi.value = AuthenticationUiState(isWorking = true)
             repository.signInWithGoogleIdToken(idToken, nonce)
+                .mapCatching {
+                    requireVerifiedSession()
+                }
                 .onSuccess { completeAuthentication() }
                 .onFailure { error ->
+                    clearUnverifiedLocalSession()
                     _authenticationUi.value = AuthenticationUiState(
-                        message = SafeUiError.generic(error, "Google sign-in could not be completed.")
+                        message = SafeUiError.generic(error, "Google sign-in could not be completed."),
                     )
                 }
         }
     }
 
     private fun completeAuthentication() {
+        if (supabase.auth.currentUserOrNull() == null) {
+            _authenticationUi.value = AuthenticationUiState(
+                message = "The account session could not be verified. Please sign in again.",
+            )
+            return
+        }
         _authenticationUi.value = AuthenticationUiState()
         _notificationPermissionPrompt.value = true
         if (repository.session.value.role.isStaff) onStaffAuthenticated()
@@ -107,21 +145,45 @@ internal class RtcAuthenticationCoordinator(
         _authenticationUi.value = AuthenticationUiState(message = message.take(240))
     }
 
+    /**
+     * Registration goes directly to Supabase. No local account, role, or authenticated session is
+     * manufactured if the server rejects the request or email confirmation is still pending.
+     */
     fun signUpWithEmail(email: String, password: String, displayName: String) {
         scope.launch {
             _authenticationUi.value = AuthenticationUiState(isWorking = true)
-            repository.signUpWithEmail(email, password, displayName)
-                .onSuccess {
+            runCatching {
+                val cleanEmail = email.trim()
+                val cleanDisplayName = displayName.trim()
+                require(cleanEmail.contains('@')) { "Enter a valid email address." }
+                require(cleanDisplayName.isNotEmpty()) { "Enter your name to create an account." }
+                require(password.isNotBlank()) { "Enter a password." }
+
+                supabase.auth.signUpWith(Email, "rtc://community") {
+                    this.email = cleanEmail
+                    this.password = password
+                    data = buildJsonObject { put("full_name", cleanDisplayName) }
+                }
+            }.onSuccess {
+                if (supabase.auth.currentUserOrNull() != null) {
+                    repository.restoreSupabaseSession()
+                        .onSuccess { completeAuthentication() }
+                        .onFailure { error ->
+                            _authenticationUi.value = AuthenticationUiState(
+                                message = SafeUiError.generic(error, "Account created, but the session could not be started."),
+                            )
+                        }
+                } else {
                     _authenticationUi.value = AuthenticationUiState(
                         message = "Check your email to confirm your account, then return here to sign in.",
                         confirmationRequired = true,
                     )
                 }
-                .onFailure { error ->
-                    _authenticationUi.value = AuthenticationUiState(
-                        message = SafeUiError.generic(error, "Account creation could not be completed.")
-                    )
-                }
+            }.onFailure { error ->
+                _authenticationUi.value = AuthenticationUiState(
+                    message = SafeUiError.generic(error, "Account creation could not be completed."),
+                )
+            }
         }
     }
 
@@ -143,12 +205,12 @@ internal class RtcAuthenticationCoordinator(
             repository.requestPasswordRecovery(email)
                 .onSuccess {
                     _passwordUi.value = PasswordUiState(
-                        message = "If this email is registered, a password-reset link has been sent."
+                        message = "If this email is registered, a password-reset link has been sent.",
                     )
                 }
                 .onFailure {
                     _passwordUi.value = PasswordUiState(
-                        message = "Password recovery could not be started. Check the email address and try again."
+                        message = "Password recovery could not be started. Check the email address and try again.",
                     )
                 }
         }
@@ -170,7 +232,7 @@ internal class RtcAuthenticationCoordinator(
                 }
                 .onFailure {
                     _passwordUi.value = PasswordUiState(
-                        message = "Password update could not be completed. Check the password requirements and try again."
+                        message = "Password update could not be completed. Check the password requirements and try again.",
                     )
                 }
         }
@@ -197,7 +259,7 @@ internal class RtcAuthenticationCoordinator(
                 }
                 .onFailure {
                     _administratorMfaUi.value = AdministratorMfaUiState(
-                        message = "MFA enrollment could not be started. Please sign in again and retry."
+                        message = "MFA enrollment could not be started. Please sign in again and retry.",
                     )
                 }
         }
@@ -213,7 +275,7 @@ internal class RtcAuthenticationCoordinator(
             repository.verifySystemAdministratorTotp(factorId, code)
                 .onSuccess {
                     _administratorMfaUi.value = AdministratorMfaUiState(
-                        message = "Authenticator verification complete."
+                        message = "Authenticator verification complete.",
                     )
                 }
                 .onFailure {
@@ -243,7 +305,7 @@ internal class RtcAuthenticationCoordinator(
                 )
             }.onFailure { error ->
                 _authenticationUi.value = AuthenticationUiState(
-                    message = SafeUiError.profilePhoto(error)
+                    message = SafeUiError.profilePhoto(error),
                 )
             }
         }
@@ -258,7 +320,7 @@ internal class RtcAuthenticationCoordinator(
                 }
                 .onFailure {
                     _authenticationUi.value = AuthenticationUiState(
-                        message = SafeUiError.generic(it, "Profile photo could not be removed.")
+                        message = SafeUiError.generic(it, "Profile photo could not be removed."),
                     )
                 }
         }
@@ -321,7 +383,7 @@ internal class RtcAuthenticationCoordinator(
                 }
                 .onFailure { error ->
                     _declaredLocalityUi.value = DeclaredLocalityUiState(
-                        message = SafeUiError.generic(error, "Declared locality could not be saved.")
+                        message = SafeUiError.generic(error, "Declared locality could not be saved."),
                     )
                 }
         }
@@ -344,7 +406,7 @@ internal class RtcAuthenticationCoordinator(
                 }
                 .onFailure { error ->
                     _feedbackUi.value = WorkflowSubmissionUiState(
-                        message = SafeUiError.generic(error, "Feedback could not be submitted.")
+                        message = SafeUiError.generic(error, "Feedback could not be submitted."),
                     )
                 }
         }
@@ -352,6 +414,18 @@ internal class RtcAuthenticationCoordinator(
 
     fun dismissFeedbackMessage() {
         _feedbackUi.value = WorkflowSubmissionUiState()
+    }
+
+    private fun requireVerifiedSession() {
+        check(supabase.auth.currentUserOrNull() != null) {
+            "The authentication server did not establish a verified session."
+        }
+    }
+
+    private suspend fun clearUnverifiedLocalSession() {
+        if (supabase.auth.currentUserOrNull() == null) {
+            repository.signOutToPublicWelcome()
+        }
     }
 
     private companion object {
