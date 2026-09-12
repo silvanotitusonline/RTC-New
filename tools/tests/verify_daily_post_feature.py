@@ -85,6 +85,8 @@ assert 'daily_post_translations' in language_fn
 # Multilingual onboarding persists a locale choice instead of hard-coding one language.
 for token in ('English', 'isiZulu', 'isiXhosa', 'Afrikaans', 'Setswana'):
     assert token in onboarding, token
-assert 'preferredLocale' in preferences or 'preferred_locale' in preferences
+assert 'onboardingLanguage' in preferences
+assert 'onboarding_language' in preferences
+assert 'SUPPORTED_ONBOARDING_LANGUAGES' in preferences
 
 print('Daily Post feature contracts passed.')
