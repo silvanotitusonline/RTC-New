@@ -1,0 +1,127 @@
+name: Daily Post Integration Verification
+
+on:
+  push:
+    branches: [ integration/daily-post-full ]
+  pull_request:
+    paths:
+      - 'app/src/main/java/za/org/rtc/community/feature/dailypost/**'
+      - 'app/src/main/java/za/org/rtc/community/feature/explore/**'
+      - 'app/src/main/java/za/org/rtc/community/feature/onboarding/**'
+      - 'app/src/main/java/za/org/rtc/community/data/local/UserPreferencesStore.kt'
+      - 'app/src/main/java/za/org/rtc/community/navigation/**'
+      - 'app/src/main/java/za/org/rtc/community/ui/navigation/**'
+      - 'supabase/functions/daily-post-*/**'
+      - 'supabase/migrations/2026091201*.sql'
+      - 'tools/tests/verify_daily_post_feature.py'
+      - '.github/workflows/daily-post-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: '21'
+
+jobs:
+  verify-daily-post:
+    name: Daily Post compile, test and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install required Android SDK packages
+        shell: bash
+        run: |
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Restore isolated debug runtime for verification
+        env:
+          RTC_NONPROD_SUPABASE_URL: ${{ secrets.RTC_NONPROD_SUPABASE_URL }}
+          RTC_NONPROD_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.RTC_NONPROD_SUPABASE_PUBLISHABLE_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$RTC_NONPROD_SUPABASE_URL" ] || [ -z "$RTC_NONPROD_SUPABASE_PUBLISHABLE_KEY" ]; then
+            RTC_NONPROD_SUPABASE_URL="https://rtc-ci.invalid"
+            RTC_NONPROD_SUPABASE_PUBLISHABLE_KEY="sb_publishable_ci_placeholder"
+          fi
+          umask 077
+          {
+            printf 'supabase.nonproduction.url=%s\n' "$RTC_NONPROD_SUPABASE_URL"
+            printf 'supabase.nonproduction.publishableKey=%s\n' "$RTC_NONPROD_SUPABASE_PUBLISHABLE_KEY"
+          } > runtime.local.properties
+
+      - name: Restore Firebase Android configuration when supplied
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        shell: bash
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            umask 077
+            printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > app/google-services.json
+          fi
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.13'
+          cache-read-only: true
+
+      - name: Verify Daily Post source contracts
+        run: python3 tools/tests/verify_daily_post_feature.py
+
+      - name: Type-check Daily Post Edge Functions
+        run: |
+          deno check supabase/functions/daily-post-language/index.ts
+          deno check supabase/functions/daily-post-scheduler/index.ts
+
+      - name: Run shared Edge authorization tests
+        run: deno test supabase/functions/_shared/auth_test.ts
+
+      - name: Run JVM unit tests
+        run: gradle --no-daemon --stacktrace testDebugUnitTest
+
+      - name: Run Android lint
+        run: gradle --no-daemon --stacktrace lintDebug
+
+      - name: Assemble debug APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Compile Compose smoke tests
+        run: gradle --no-daemon --stacktrace assembleDebugAndroidTest
+
+      - name: Upload verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtc-daily-post-verification
+          if-no-files-found: warn
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+            app/build/reports/lint-results-debug.html
+            app/build/reports/tests/testDebugUnitTest/**
+
+      - name: Cleanup reconstructed CI credentials
+        if: always()
+        shell: bash
+        run: rm -f runtime.local.properties app/google-services.json
