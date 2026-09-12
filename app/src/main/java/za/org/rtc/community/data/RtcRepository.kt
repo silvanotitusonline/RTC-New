@@ -388,55 +388,15 @@ class RtcRepository @Inject constructor(
         val cleanDisplayName = displayName.trim()
         require(cleanDisplayName.isNotEmpty()) { "Enter your name to create an account." }
         requireStrongPassword(password)
-        
-        runCatching {
-            supabase.auth.signUpWith(Email, "rtc://community") {
-                this.email = cleanEmail
-                this.password = password
-                data = buildJsonObject { put("full_name", cleanDisplayName) }
-            }
+
+        // Supabase remains authoritative for account creation. With email confirmation enabled,
+        // a successful sign-up is confirmation-pending and must not manufacture a local
+        // authenticated session before Supabase establishes one on a later sign-in.
+        supabase.auth.signUpWith(Email, "rtc://community") {
+            this.email = cleanEmail
+            this.password = password
+            data = buildJsonObject { put("full_name", cleanDisplayName) }
         }
-
-        val userId = "user_${UUID.nameUUIDFromBytes(cleanEmail.toByteArray())}"
-        val targetRole = UserRole.RESIDENT_A
-
-        database.cachedUserProfileDao().insertProfile(
-            CachedUserProfileEntity(
-                userId = userId,
-                email = cleanEmail,
-                displayName = cleanDisplayName,
-                bio = "",
-                interestsJson = "",
-                avatarUrl = null,
-                role = targetRole.name,
-                updatedAtEpochMillis = System.currentTimeMillis(),
-            )
-        )
-
-        _session.value = RtcSession(
-            id = userId,
-            displayName = cleanDisplayName,
-            role = targetRole,
-            authority = SessionAuthority.SUPABASE_AUTH,
-            authenticatedEmail = cleanEmail,
-            handle = "@${cleanEmail.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
-            onboardingComplete = true,
-            administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
-        )
-
-        database.cachedSessionDao().upsertSession(
-            CachedSessionEntity(
-                userId = userId,
-                email = cleanEmail,
-                isLoggedIn = true,
-                sessionJson = "",
-                updatedAtEpochMillis = System.currentTimeMillis()
-            )
-        )
-
-        recordPrivacyAnalyticsAppActivity()
-        refreshLiveContent()
-        enqueueUploadRecovery()
     }
 
     /** The result is intentionally generic so email address ownership is not disclosed. */
