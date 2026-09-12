@@ -1,0 +1,39 @@
+name: Apply Admin Hardening Patch
+
+on:
+  push:
+    branches:
+      - feat/admin-operations-hub-ux
+    paths:
+      - tools/apply_remaining_admin_hardening.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/admin-operations-hub-ux
+          fetch-depth: 0
+      - name: Apply remaining admin hardening
+        run: python tools/apply_remaining_admin_hardening.py
+      - name: Validate patch shape
+        run: |
+          git diff --check
+          git diff --exit-code -- tools/apply_remaining_admin_hardening.py .github/workflows/apply-admin-hardening.yml
+          git diff -- app/src/main/java/za/org/rtc/community/feature/administration/AdminWorkspaceComponents.kt
+          git diff -- app/src/main/java/za/org/rtc/community/feature/administration/AdminWorkspace.kt
+          git diff -- app/src/main/java/za/org/rtc/community/data/RtcRepository.kt
+      - name: Commit patched sources
+        run: |
+          git config user.name "rtc-ci"
+          git config user.email "rtc-ci@users.noreply.github.com"
+          git add \
+            app/src/main/java/za/org/rtc/community/feature/administration/AdminWorkspaceComponents.kt \
+            app/src/main/java/za/org/rtc/community/feature/administration/AdminWorkspace.kt \
+            app/src/main/java/za/org/rtc/community/data/RtcRepository.kt
+          git commit -m "fix(admin): complete secure reassignment and session restoration"
+          git push origin HEAD:feat/admin-operations-hub-ux
