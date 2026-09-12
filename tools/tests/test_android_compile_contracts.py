@@ -190,7 +190,7 @@ def test_community_upload_recovery_is_scoped_to_the_authenticated_owner():
 
     assert '@ColumnInfo(name = "owner_user_id") val ownerUserId: String? = null' in database
     assert "LocalDraftEntity::class" in database and "UploadOutboxEntity::class" in database
-    assert "version = 6" in database or "version = 3" in database
+    assert "version = 7" in database
     assert "RTC_DATABASE_MIGRATION_1_2" in database
     assert "RTC_DATABASE_MIGRATION_2_3" in database
     assert "ALTER TABLE community_upload_outbox ADD COLUMN owner_user_id TEXT" in database
@@ -224,7 +224,13 @@ def test_media_preparation_uses_managed_androidx_exifinterface():
     assert 'androidx-exifinterface = { module = "androidx.exifinterface:exifinterface"' in versions
 
 
-def test_explore_uses_approved_two_card_information_architecture():
+def test_explore_preserves_community_updates_inside_two_tabs():
+    assert 'Text("The Daily Post"' in EXPLORE_SCREEN
+    assert 'Text("Community Updates"' in EXPLORE_SCREEN
+    assert 'TabRow(selectedTabIndex = activeTab' in EXPLORE_SCREEN
+    assert 'if (tab == 0)' in EXPLORE_SCREEN
+    assert 'DailyPostScreen(' in EXPLORE_SCREEN
+    assert 'CommunityUpdatesScreen(' in EXPLORE_SCREEN
     assert 'Text("Community Notices"' in EXPLORE_SCREEN
     assert 'Text("Projects and Opportunities"' in EXPLORE_SCREEN
     assert "private fun ExploreActionRow(" in EXPLORE_SCREEN
@@ -234,7 +240,9 @@ def test_explore_uses_approved_two_card_information_architecture():
     assert 'notices.count { it.status == NoticeStatus.PUBLISHED }' in EXPLORE_SCREEN
     assert 'count = "${projects.size} available"' in EXPLORE_SCREEN
     assert 'count = "${opportunities.size} open"' in EXPLORE_SCREEN
-    assert "Explore overview" not in EXPLORE_SCREEN
+    updates = EXPLORE_SCREEN.split('private fun CommunityUpdatesScreen(', 1)[1]
+    assert 'RtcScreenScaffold' in updates
+    assert 'InteractiveMunicipalCanvasMap(' in updates
     assert "ExploreCategoryTile" not in EXPLORE_SCREEN
     assert 'onOpenDirectory("centres")' not in EXPLORE_SCREEN
     assert 'onOpenDirectory("services")' not in EXPLORE_SCREEN

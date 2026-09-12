@@ -27,7 +27,7 @@ import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Preview
-import androidx.compose.material.icons.filled.Quote
+import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -332,7 +332,7 @@ private fun DailyPostEditor(
                             }
                         },
                         label = { Text(quoted.headline, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        leadingIcon = { Icon(Icons.Default.Quote, null, modifier = Modifier.size(16.dp)) },
+                        leadingIcon = { Icon(Icons.Default.FormatQuote, null, modifier = Modifier.size(16.dp)) },
                     )
                 }
             }

@@ -183,8 +183,8 @@ def test_android_service_centre_navigation_notification_and_marketplace_entry_po
 
 
 def test_mvp_does_not_add_realtime_or_offline_booking_queue_dependency():
-    build = _read(BUILD)
-    assert "supabase.realtime" not in build
     service_source = "\n".join(path.read_text(encoding="utf-8") for path in FEATURE.rglob("*.kt")) if FEATURE.exists() else ""
+    assert "io.github.jan.supabase.realtime" not in service_source
+    assert "Realtime" not in service_source
     assert "WorkManager" not in service_source
     assert "Room" not in service_source

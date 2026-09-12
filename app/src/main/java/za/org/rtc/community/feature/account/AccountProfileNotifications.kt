@@ -31,7 +31,6 @@ internal fun ProfileEditorSheet(
     photoMessage: String?,
     onSave: (String, String, List<String>) -> Unit,
     onChooseGallery: () -> Unit,
-    onTakePhoto: () -> Unit,
     onSavePhoto: (Uri) -> Unit,
     onClearSelectedPhoto: () -> Unit,
     onRemovePhoto: () -> Unit,
@@ -56,9 +55,8 @@ internal fun ProfileEditorSheet(
                         Text(if (pendingPhotoUri == null) "Choose an image, preview it, then save it to your private account folder." else "Selected photo preview. Save it when you are satisfied.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = onChooseGallery, modifier = Modifier.weight(1f), enabled = !photoSaveInProgress) { Text("Choose gallery") }
-                    OutlinedButton(onClick = onTakePhoto, modifier = Modifier.weight(1f), enabled = !photoSaveInProgress) { Text("Use camera") }
+                OutlinedButton(onClick = onChooseGallery, modifier = Modifier.fillMaxWidth(), enabled = !photoSaveInProgress) {
+                    Text("Choose photo")
                 }
                 pendingPhotoUri?.let { selectedUri ->
                     Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact), modifier = Modifier.fillMaxWidth()) {

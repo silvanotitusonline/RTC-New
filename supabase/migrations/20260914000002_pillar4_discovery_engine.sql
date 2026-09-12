@@ -2,24 +2,13 @@
 -- PILLAR 4: SEARCH, DISCOVERY & TRENDS
 BEGIN;
 
--- 1. Full-Text Search Implementation
--- We create a search vector column for fast searching across body and author
-ALTER TABLE public.community_posts 
-ADD COLUMN IF NOT EXISTS search_vector tsvector;
+-- 1. Reuse the stored generated vector introduced by the canonical search migration.
+-- A trigger must not assign it, and author_name is a feed field, not a post column.
+ALTER TABLE public.community_posts
+ADD COLUMN IF NOT EXISTS search_vector tsvector
+GENERATED ALWAYS AS (to_tsvector('english', coalesce(body, ''))) STORED;
 
 CREATE INDEX IF NOT EXISTS idx_posts_search_vector ON public.community_posts USING GIN (search_vector);
-
--- Trigger to keep search_vector updated automatically
-CREATE OR REPLACE FUNCTION public.community_posts_search_trigger() RETURNS trigger AS $$
-BEGIN
-  new.search_vector := to_tsvector('english', coalesce(new.body, '') || ' ' || coalesce(new.author_name, ''));
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_posts_search_update 
-BEFORE INSERT OR UPDATE ON public.community_posts
-FOR EACH ROW EXECUTE FUNCTION public.community_posts_search_trigger();
 
 -- 2. Trending Hashtags Engine
 CREATE TABLE IF NOT EXISTS public.trending_hashtags (
@@ -28,27 +17,25 @@ CREATE TABLE IF NOT EXISTS public.trending_hashtags (
     last_mentioned_at timestamptz DEFAULT now()
 );
 
--- 3. Optimized Search Function ( la la la la-density result sets)
+-- 3. Search only the canonical visible feed and keep result ordering deterministic.
 CREATE OR REPLACE FUNCTION public.community_search(search_term text)
-RETURNS TABLE (
-    post_id uuid, 
-    body text, 
-    username text, 
-    rank float4
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        p.id, 
-        p.body, 
-        u.username, 
-        ts_rank(p.search_vector, websearch_to_tsquery('english', search_term)) as rank
-    FROM public.community_posts p
-    JOIN public.profiles u ON p.author_id = u.id
-    WHERE p.search_vector @@ websearch_to_tsquery('english', search_term)
-    ORDER BY rank DESC
+RETURNS TABLE (post_id uuid, body text, username text, rank float4)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+    SELECT f.id, f.body, f.author_handle,
+           ts_rank(p.search_vector, websearch_to_tsquery('english', search_term)) AS rank
+    FROM public.community_post_feed f
+    JOIN public.community_posts p ON p.id = f.id
+    WHERE nullif(btrim(search_term), '') IS NOT NULL
+      AND p.search_vector @@ websearch_to_tsquery('english', search_term)
+    ORDER BY rank DESC, f.created_at DESC, f.id DESC
     LIMIT 50;
-END;
-$$ LANGUAGE plpgsql;
+$$;
+
+REVOKE ALL ON FUNCTION public.community_search(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.community_search(text) TO authenticated;
 
 COMMIT;
