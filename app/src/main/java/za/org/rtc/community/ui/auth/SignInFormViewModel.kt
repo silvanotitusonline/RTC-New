@@ -63,7 +63,7 @@ data class SignInFormState(
 @HiltViewModel
 class SignInFormViewModel @Inject constructor(
     private val userPreferencesStore: UserPreferencesStore,
-) : ViewModel() {
+) : BaseViewModel() {
 
     private val _email = MutableStateFlow("")
     private val _password = MutableStateFlow("")
@@ -93,7 +93,7 @@ class SignInFormViewModel @Inject constructor(
 
     init {
         // Pre-fill remembered email from DataStore if present
-        viewModelScope.launch {
+        launchSafe {
             userPreferencesStore.rememberedEmail.collect { savedEmail ->
                 if (savedEmail.isNotBlank()) {
                     _email.value = savedEmail

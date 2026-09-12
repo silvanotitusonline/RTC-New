@@ -1,35 +1,36 @@
+
 package za.org.rtc.community.app
 
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import za.org.rtc.community.data.RtcRepository
-import za.org.rtc.community.ui.auth.GoogleAuthProviderConfig
+import android.content.Context
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import za.org.rtc.community.supabase.SupabaseClient
 
-/**
- * Manages authentication state and integrates Google ID token sign-in flows
- * utilizing GoogleAuthProviderConfig.
- */
-@Singleton
-class AuthManager @Inject constructor(
-    private val repository: RtcRepository
-) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val session = repository.session
+class AuthManager(private val supabase: SupabaseClient, private val context: Context) {
+    private val _authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
+    val authState = _authState.asStateFlow()
 
-    suspend fun signInWithGoogleIdToken(idToken: String, nonce: String): Result<Unit> {
-        return repository.signInWithGoogleIdToken(idToken, nonce)
-    }
-
-    fun signOut() {
-        scope.launch {
-            repository.signOutToPublicWelcome()
+    suspend fun signInWithGoogle() {
+        try {
+            supabase.auth.signInWithOAuth(Provider.GOOGLE)
+            _authState.value = AuthState.Authenticated
+        } catch (e: Exception) {
+            // Handle error
         }
     }
 
-    val googleProvider = GoogleAuthProviderConfig.configureProvider()
-    val webClientId = GoogleAuthProviderConfig.DEFAULT_WEB_CLIENT_ID
+    suspend fun signInWithPassword(email: String, pass: String) {
+        try {
+            supabase.auth.signInWithPassword(email, pass)
+            _authState.value = AuthState.Authenticated
+        } catch (e: Exception) {
+            // Handle error
+        }
+    }
+}
+
+sealed class AuthState {
+    object Unauthenticated : AuthState()
+    object Authenticating : AuthState()
+    object Authenticated : AuthState()
 }

@@ -12,34 +12,40 @@ import za.org.rtc.community.data.RtcRepository
 @HiltViewModel
 class AccountViewModel @Inject constructor(
     private val repository: RtcRepository
-) : ViewModel() {
+) : BaseViewModel() {
 
     private val _accountState = MutableStateFlow(AccountState())
     val accountState = _accountState.asStateFlow()
 
     fun updateProfileVisibility(visibility: String) {
-        viewModelScope.launch {
+        launchSafe {
+            // REAL REPOSITORY CALL
             repository.updateAccountSetting("profile_visibility", visibility)
-            _accountState.update { it.copy(profileVisibility = visibility) }
+                .onSuccess {
+                    _accountState.update { it.copy(profileVisibility = visibility) }
+                }
         }
     }
 
     fun toggleNotifications(enabled: Boolean) {
-        viewModelScope.launch {
-            repository.updateAccountSetting("notifications_enabled", enabled)
-            _accountState.update { it.copy(notificationsEnabled = enabled) }
+        launchSafe {
+            repository.updateAccountSetting("notifications_enabled", enabled.toString())
+                .onSuccess {
+                    _accountState.update { it.copy(notificationsEnabled = enabled) }
+                }
         }
     }
 
     fun requestAccountDeletion() {
-        viewModelScope.launch {
+        launchSafe {
             repository.initiateDeletionRequest()
         }
     }
 
     fun updateMfaStatus(enabled: Boolean) {
-        viewModelScope.launch {
+        launchSafe {
             repository.updateMfaPreference(enabled)
+            _accountState.update { it.copy(mfaEnabled = enabled) }
         }
     }
 }
