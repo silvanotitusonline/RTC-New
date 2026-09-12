@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - integration/truth-boundary-consistency
+      - integration/anonymous-resident-runtime
   workflow_dispatch:
 
 permissions:
@@ -70,7 +71,10 @@ jobs:
           gradle-version: '8.13'
 
       - name: Install source-contract dependencies
-        run: python3 -m pip install --disable-pip-version-check --no-input Pillow==11.3.0
+        run: python3 -m pip install --disable-pip-version-check --no-input Pillow==11.3.0 pytest==8.4.2
+
+      - name: Verify anonymous resident trust contracts
+        run: python3 -m pytest -q tools/tests/test_anonymous_resident_runtime.py tools/tests/test_truth_boundary_consistency.py
 
       - name: Record legacy source-contract state without blocking compile verification
         continue-on-error: true
