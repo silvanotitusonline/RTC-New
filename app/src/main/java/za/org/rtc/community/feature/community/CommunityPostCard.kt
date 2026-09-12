@@ -1,29 +1,22 @@
 
-
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.ui.graphics.vector.ImageVector
-import za.org.rtc.community.ui.components.*
-import za.org.rtc.community.ui.theme.RtcDesignSystem
-
 package za.org.rtc.community.feature.community
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import za.org.rtc.community.core.CommunityPost
@@ -37,92 +30,96 @@ fun CommunityPostCard(
     onCommentClick: () -> Unit,
     onRepostClick: () -> Unit
 ) {
-    Row(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = RtcDesignSystem.FeedPadding, vertical = 8.dp)
+            .padding(vertical = 4.dp, horizontal = 12.dp)
             .clickable { onPostClick() },
-        verticalAlignment = Alignment.Top
+        colors = CardDefaults.cardColors(containerColor = RtcDesignSystem.SurfaceDark),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.border(1.dp, RtcDesignSystem.AccentBorder, RoundedCornerShape(16.dp))
     ) {
-        // Avatar Column
-        AsyncAsyncImage(
-            model = post.authorAvatar,
-            contentDescription = "Profile",
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-        )
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        // Content Column
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = post.authorName,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = RtcDesignSystem.TextPrimary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "@${post.authorHandle} • ${post.timeAgo}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = RtcDesignSystem.TextSecondary
-                )
-            }
-
-            Text(
-                text = post.body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = RtcDesignSystem.TextPrimary,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-
-            // Media Section (Edge-to-Edge style)
-            if (post.media.isNotEmpty()) {
-                MediaGallery(post.media, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)))
-            }
-
-            // Global Action Bar (Standard Social Layout)
-            Row(
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Author Avatar
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(RtcDesignSystem.PrimaryBrand),
+                contentAlignment = Alignment.Center
             ) {
-                ActionButton(icon = Icons.Default.ChatBubble, count = post.commentCount, onClick = onCommentClick)
-                ActionButton(icon = Icons.Default.Repeat, count = post.repostCount, onClick = onRepostClick)
-                ActionButton(
-                    icon = if (post.viewerHasLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    count = post.reactions,
-                    active = post.viewerHasLiked,
-                    onClick = onLikeClick
+                Text(post.authorName.take(1), color = Color.White, fontWeight = FontWeight.Bold)
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                // Header: Name and Time
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = post.authorName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = RtcDesignSystem.TextPrimary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "• 2h",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RtcDesignSystem.TextSecondary
+                    )
+                }
+
+                // Body Content
+                Text(
+                    text = post.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = RtcDesignSystem.TextPrimary,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
                 )
-                ActionButton(icon = Icons.Default.Bookmark, count = null, onClick = { /* Bookmark logic */ })
+
+                // Media Placeholder
+                if (post.mediaUrl != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.DarkGray)
+                            .padding(8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Image Loading...", color = RtcDesignSystem.TextSecondary, fontSize = 12.sp)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // Engagement Bar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    EngagementButton(Icons.Default.Favorite, post.likeCount.toString(), onLikeClick, if (post.isLiked) RtcDesignSystem.PrimaryBrand else RtcDesignSystem.TextSecondary)
+                    EngagementButton(Icons.Default.ChatBubble, post.replyCount.toString(), onCommentClick, RtcDesignSystem.TextSecondary)
+                    EngagementButton(Icons.Default.Repeat, "0", onRepostClick, RtcDesignSystem.TextSecondary)
+                }
             }
         }
     }
 }
 
 @Composable
-fun ActionButton(icon: ImageVector, count: Int?, active: Boolean = false, onClick: () -> Unit) {
+fun EngagementButton(icon: androidx.compose.ui.graphics.vector.ImageVector, count: String, onClick: () -> Unit, color: Color) {
     Row(
+        modifier = Modifier.clickable { onClick() }.padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable { onClick() }.padding(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = "Post Media", placeholder = { RtcSkeletonLoader() }, error = { RtcImageFallback("Error") },
-            modifier = Modifier.size(18.dp),
-            tint = if (active) Color.Red else RtcDesignSystem.TextSecondary
-        )
-        if (count != null) {
-            Text(
-                text = count.toString(),
-                modifier = Modifier.padding(start = 4.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = RtcDesignSystem.TextSecondary
-            )
-        }
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = color)
+        Text(count, style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
