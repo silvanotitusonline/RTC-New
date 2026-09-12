@@ -45,7 +45,7 @@ fun CommunityPostCard(
         verticalAlignment = Alignment.Top
     ) {
         // Avatar Column
-        AsyncImage(
+        AsyncAsyncImage(
             model = post.authorAvatar,
             contentDescription = "Profile",
             modifier = Modifier
@@ -112,7 +112,7 @@ fun ActionButton(icon: ImageVector, count: Int?, active: Boolean = false, onClic
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = "Post Media", placeholder = { RtcSkeletonLoader() }, error = { RtcImageFallback("Error") },
             modifier = Modifier.size(18.dp),
             tint = if (active) Color.Red else RtcDesignSystem.TextSecondary
         )

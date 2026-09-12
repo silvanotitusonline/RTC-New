@@ -7,57 +7,62 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import za.org.rtc.community.core.BaseViewModel
 import za.org.rtc.community.core.CommunityPost
 import za.org.rtc.community.data.RtcRepository
 
 @HiltViewModel
 class CommunityViewModel @Inject constructor(
     private val repository: RtcRepository,
-) : ViewModel() {
+) : BaseViewModel() {
     private val _feedState = MutableStateFlow(CommunityFeedState(initialLoading = true))
     val feedState = _feedState.asStateFlow()
+    private val _unreadNotifications = MutableStateFlow(0)
+    val unreadNotifications = _unreadNotifications.asStateFlow()
 
-    private val _detailState = MutableStateFlow(CommunityDetailState())
-    val detailState = _detailState.asStateFlow()
+    private var currentCursor: String? = null
 
     init {
-        refreshFeed()
+        loadNextPage()
     }
 
-    fun refreshFeed() {
-        viewModelScope.launch {
-            _feedState.update { it.copy(initialLoading = true) }
-            repository.getCommunityPosts()
-                .onSuccess { posts ->
-                    _feedState.update { it.copy(posts = posts, initialLoading = false) }
+    fun loadNextPage() {
+        launchSafe {
+            _feedState.update { it.copy(isLoadingMore = true) }
+            repository.getCommunityPosts(cursor = currentCursor)
+                .onSuccess { newPosts ->
+                    currentCursor = newPosts.lastOrNull()?.createdAt
+                    _feedState.update { state -> 
+                        state.copy(
+                            posts = state.posts + newPosts, 
+                            initialLoading = false, 
+                            isLoadingMore = false 
+                        ) 
+                    }
                 }
                 .onFailure { error ->
-                    _feedState.update { it.copy(error = error.message, initialLoading = false) }
-                }
-        }
-    }
-
-    fun loadPostDetail(postId: String) {
-        viewModelScope.launch {
-            _detailState.update { it.copy(isLoading = true) }
-            repository.getPostDetail(postId)
-                .onSuccess { post ->
-                    _detailState.update { it.copy(post = post, isLoading = false) }
-                }
-                .onFailure { error ->
-                    _detailState.update { it.copy(error = error.message, isLoading = false) }
+                    _feedState.update { it.copy(error = error.message, isLoadingMore = false) }
                 }
         }
     }
 
     fun toggleLike(postId: String) {
-        viewModelScope.launch {
-            repository.toggleLike(postId)
-                .onSuccess { updatedPost ->
-                    _feedState.update { state ->
-                        state.copy(posts = state.posts.map { if (it.id == postId) updatedPost else it })
-                    }
-                }
+        val previousPosts = _feedState.value.posts
+        
+        // OPTIMISTIC UPDATE
+        _feedState.update { state ->
+            state.copy(posts = state.posts.map { 
+                if (it.id == postId) {
+                    it.copy(isLiked = !it.isLiked, likeCount = if (it.isLiked) it.likeCount - 1 else it.likeCount + 1)
+                } else it
+            })
+        }
+
+        launchSafe {
+            repository.toggleLike(postId).onFailure {
+                // ROLLBACK on failure
+                _feedState.update { it.copy(posts = previousPosts) }
+            }
         }
     }
 }
