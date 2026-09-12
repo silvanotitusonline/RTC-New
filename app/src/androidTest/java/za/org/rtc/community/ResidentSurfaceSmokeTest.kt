@@ -3,11 +3,13 @@ package za.org.rtc.community
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import kotlinx.coroutines.flow.emptyFlow
 import org.junit.Rule
 import org.junit.Test
 import za.org.rtc.community.app.CommunityActionUiState
 import za.org.rtc.community.core.CommunityComment
 import za.org.rtc.community.core.CommunityPost
+import za.org.rtc.community.core.CommunityRealtimeNotification
 import za.org.rtc.community.core.HomeLayout
 import za.org.rtc.community.core.MainDestination
 import za.org.rtc.community.core.ThemePreference
@@ -18,8 +20,8 @@ import za.org.rtc.community.feature.community.CommunityRepository
 import za.org.rtc.community.feature.community.CommunityScreen
 import za.org.rtc.community.feature.community.CommunityViewModel
 import za.org.rtc.community.feature.explore.ExploreScreen
-import za.org.rtc.community.feature.home.HomeScreen
 import za.org.rtc.community.feature.home.HomePublicReportState
+import za.org.rtc.community.feature.home.HomeScreen
 import za.org.rtc.community.feature.support.SupportScreen
 import za.org.rtc.community.ui.components.RtcResidentBottomNavigation
 import za.org.rtc.community.ui.components.RtcResidentNavItem
@@ -182,6 +184,25 @@ class ResidentSurfaceSmokeTest {
         override suspend fun toggleReaction(postId: String, emoji: String): Result<CommunityLikeOutcome> =
             Result.success(CommunityLikeOutcome(liked = true, reactionCount = 1))
 
+        override suspend fun repostPost(postId: String): Result<Pair<Boolean, Int>> = Result.success(false to 0)
+
+        override suspend fun toggleBookmark(postId: String): Result<Pair<Boolean, Int>> = Result.success(false to 0)
+
+        override suspend fun searchPosts(
+            query: String,
+            lastRank: Float?,
+            lastId: String?,
+            limit: Int,
+        ): Result<List<CommunityPost>> = Result.success(emptyList())
+
+        override suspend fun getHashtagAutocomplete(prefix: String): Result<List<String>> = Result.success(emptyList())
+
+        override suspend fun getMentionAutocomplete(prefix: String): Result<List<String>> = Result.success(emptyList())
+
         override suspend fun refreshMediaUrl(mediaId: String): Result<String?> = Result.success(null)
+
+        override fun observeNotificationEvents(userId: String) = emptyFlow<CommunityRealtimeNotification>()
+
+        override fun observeCommunityFeedRealtime() = emptyFlow<String>()
     }
 }
