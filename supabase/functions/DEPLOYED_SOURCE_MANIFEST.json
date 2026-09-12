@@ -1,0 +1,13 @@
+{
+  "project": "RTC Community Production",
+  "project_ref": "pbzzfzfgwzwdstvnwzqu",
+  "snapshot_date": "2026-08-26",
+  "functions": [
+    {"slug":"rtc-admin-ai","version":3,"verify_jwt":true,"deployment_sha256":"15591900f2a2985185729168da9fae0e72bdece16ace9ddb68ec49eaf2cd352e"},
+    {"slug":"rtc-fcm-dispatch","version":2,"verify_jwt":true,"deployment_sha256":"dbdb03e8baed131131f296098f3b10384636fbfdb8d692e668e5b2ab3899b13e"},
+    {"slug":"community-media-url","version":3,"verify_jwt":true,"deployment_sha256":"e3b231df33b6b519f49ca3240d99d0b5ff33538b318541d0bedf5d132a9a09dc"},
+    {"slug":"rtc-privacy-requests","version":2,"verify_jwt":true,"deployment_sha256":"7c45c7bde518fd065b4bfd5344ebcbbaca0c7137340201cd54a212b9d29159eb"},
+    {"slug":"report-community-post","version":2,"verify_jwt":true,"deployment_sha256":"3537bc985ef629459e3694c29aceb1d30534989480a70793915d01edc5a7ab1f"},
+    {"slug":"dispatch-community-alerts","version":3,"verify_jwt":false,"authentication":"scheduler secret","deployment_sha256":"27586a6763ffcb5c31ff1bb4cd2534f66d803c45cc54e33ad16a248e1ba2fee8"}
+  ]
+}

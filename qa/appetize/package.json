@@ -1,0 +1,13 @@
+{
+  "name": "rtc-community-appetize-automation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:resident-menu": "playwright test --project=pixel7-resident",
+    "test:resident-menu:headed": "playwright test --project=pixel7-resident --headed"
+  },
+  "devDependencies": {
+    "@appetize/playwright": "^1.8.0",
+    "@playwright/test": "^1.57.0"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "RTC Community",
+  "description": "RTC Community Android application",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

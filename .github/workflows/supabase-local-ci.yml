@@ -1,0 +1,46 @@
+name: Supabase Local Verification
+
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/resident-modernisation-v1
+    paths:
+      - "supabase/**"
+      - "tools/supabase-local/**"
+      - ".github/workflows/supabase-local-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Reset and pgTAP
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.115.0
+
+      - name: Build disposable local project
+        run: python3 tools/supabase-local/build_local_project.py
+
+      - name: Start isolated local Supabase
+        run: supabase --workdir .supabase-local start
+
+      - name: Reset local database from migrations
+        run: supabase --workdir .supabase-local db reset
+
+      - name: Run database tests
+        run: supabase --workdir .supabase-local test db
+
+      - name: Stop isolated local Supabase
+        if: always()
+        run: supabase --workdir .supabase-local stop --no-backup

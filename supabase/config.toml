@@ -1,0 +1,26 @@
+project_id = "eqwstpdjoineycrkhpht"
+
+[functions.rtc-privacy-requests]
+verify_jwt = true
+
+[functions.rtc-fcm-dispatch]
+verify_jwt = true
+
+[functions.dispatch-community-alerts]
+verify_jwt = true
+
+[functions.community-media-url]
+verify_jwt = true
+
+[functions.report-community-post]
+verify_jwt = true
+
+[functions.rtc-admin-ai]
+verify_jwt = true
+
+
+[functions.service-centre-notify]
+verify_jwt = true
+
+[functions.civic-report-media-url]
+verify_jwt = true

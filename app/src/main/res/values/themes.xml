@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.RtcCommunity" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+
+    <style name="Theme.RtcCommunity.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0C1013</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/rtc_community_logo_transparent</item>
+        <item name="postSplashScreenTheme">@style/Theme.RtcCommunity</item>
+        <item name="android:windowBackground">@drawable/rtc_splash_background</item>
+    </style>
+</resources>
