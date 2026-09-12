@@ -1,4 +1,3 @@
-
 package za.org.rtc.community.feature.home
 
 import androidx.compose.foundation.clickable
@@ -7,12 +6,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import za.org.rtc.community.ui.theme.RtcDesignSystem
 
 @Composable
 fun HomeFeedHeader(
-    selectedTab: String, 
+    selectedTab: String,
     onTabSelected: (String) -> Unit
 ) {
     Row(
