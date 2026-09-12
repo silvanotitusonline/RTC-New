@@ -1,0 +1,36 @@
+name: Apply Anonymous Resident Runtime Patch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/anonymous-resident-runtime
+    paths:
+      - tools/patch_anonymous_resident_runtime.py
+      - .github/workflows/apply-anonymous-resident-runtime.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message || '', '[anonymous-runtime-patch]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: integration/anonymous-resident-runtime
+          fetch-depth: 0
+      - name: Apply deterministic refactor
+        run: python3 tools/patch_anonymous_resident_runtime.py
+      - name: Commit refactor
+        run: |
+          if git diff --quiet; then
+            echo "No source changes required."
+            exit 0
+          fi
+          git config user.name "rtc-truth-boundary-bot"
+          git config user.email "rtc-truth-boundary-bot@users.noreply.github.com"
+          git add app tools/tests
+          git commit -m "feat: remove resident authenticated identity [anonymous-runtime-patch]"
+          git push origin HEAD:integration/anonymous-resident-runtime
