@@ -1,0 +1,34 @@
+name: Apply Admin Compile Follow-up
+
+on:
+  push:
+    branches:
+      - feat/admin-operations-hub-ux
+    paths:
+      - tools/apply_admin_compile_followup.py
+      - .github/workflows/apply-admin-compile-followup.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/admin-operations-hub-ux
+          fetch-depth: 0
+      - name: Apply follow-up
+        run: python tools/apply_admin_compile_followup.py
+      - name: Validate
+        run: git diff --check
+      - name: Commit source fixes
+        run: |
+          git config user.name "rtc-ci"
+          git config user.email "rtc-ci@users.noreply.github.com"
+          git add \
+            app/src/main/java/za/org/rtc/community/feature/administration/AdminWorkspace.kt \
+            app/src/main/java/za/org/rtc/community/feature/administration/AdminWorkspaceComponents.kt
+          git commit -m "fix(admin): resolve operations hub compile integration"
+          git push origin HEAD:feat/admin-operations-hub-ux
