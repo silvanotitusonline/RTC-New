@@ -15,6 +15,7 @@ import za.org.rtc.community.feature.dailypost.domain.*
 data class DailyPostUiState(
     val items: List<DailyPost> = emptyList(),
     val selected: DailyPost? = null,
+    val media: List<DailyPostMedia> = emptyList(),
     val comments: List<DailyPostComment> = emptyList(),
     val translation: DailyPostTranslation? = null,
     val narrationUrl: String? = null,
@@ -64,7 +65,7 @@ class DailyPostViewModel @Inject constructor(
     }
 
     fun open(postId: String) {
-        _state.update { it.copy(selected = null, comments = emptyList(), translation = null, narrationUrl = null, loading = true, message = null) }
+        _state.update { it.copy(selected = null, media = emptyList(), comments = emptyList(), translation = null, narrationUrl = null, loading = true, message = null) }
         viewModelScope.launch {
             val post = repository.get(postId).getOrElse { error ->
                 _state.update { it.copy(loading = false, message = error.safeMessage("Publication could not be opened.")) }
@@ -75,11 +76,12 @@ class DailyPostViewModel @Inject constructor(
                 return@launch
             }
             val comments = repository.comments(postId).getOrDefault(emptyList())
-            _state.update { it.copy(selected = post, comments = comments, loading = false) }
+            val media = repository.media(postId).getOrDefault(emptyList())
+            _state.update { it.copy(selected = post, media = media, comments = comments, loading = false) }
         }
     }
 
-    fun closeDetail() = _state.update { it.copy(selected = null, comments = emptyList(), translation = null, narrationUrl = null) }
+    fun closeDetail() = _state.update { it.copy(selected = null, media = emptyList(), comments = emptyList(), translation = null, narrationUrl = null) }
 
     fun addComment(body: String, parentId: String? = null) {
         val post = _state.value.selected ?: return
@@ -156,6 +158,7 @@ data class DailyPostStudioState(
     val publications: List<DailyPost> = emptyList(),
     val filter: DailyPostState? = null,
     val draft: DailyPostDraft = DailyPostDraft(),
+    val media: List<DailyPostMedia> = emptyList(),
     val editing: Boolean = false,
     val previewing: Boolean = false,
     val working: Boolean = false,
@@ -182,17 +185,22 @@ class DailyPostStudioViewModel @Inject constructor(
 
     fun newDraft(template: DailyPostTemplate) {
         val blocks = template.starterBlocks.mapIndexed { index, type -> DailyPostBlock("block-${index + 1}", type) }
-        _state.update { it.copy(draft = DailyPostDraft(templateKey = template.key, blocks = blocks), editing = true, previewing = false, message = null) }
+        _state.update { it.copy(draft = DailyPostDraft(templateKey = template.key, blocks = blocks), media = emptyList(), editing = true, previewing = false, message = null) }
     }
 
-    fun edit(post: DailyPost) = _state.update { it.copy(
-        draft = DailyPostDraft(post.id, post.publicationType, post.templateKey, post.canonicalLanguage, post.headline, post.excerpt, post.blocks, post.quotedPostId, post.pushEnabled, post.previewPopupEnabled, post.scheduledFor),
-        editing = true, previewing = false, message = null,
-    ) }
+    fun edit(post: DailyPost) {
+        _state.update { it.copy(
+            draft = DailyPostDraft(post.id, post.publicationType, post.templateKey, post.canonicalLanguage, post.headline, post.excerpt, post.blocks, post.quotedPostId, post.pushEnabled, post.previewPopupEnabled, post.scheduledFor),
+            media = emptyList(), editing = true, previewing = false, message = null,
+        ) }
+        viewModelScope.launch {
+            repository.media(post.id).onSuccess { media -> _state.update { it.copy(media = media) } }
+        }
+    }
 
     fun updateDraft(transform: (DailyPostDraft) -> DailyPostDraft) = _state.update { it.copy(draft = transform(it.draft)) }
     fun preview(enabled: Boolean) = _state.update { it.copy(previewing = enabled) }
-    fun closeEditor() = _state.update { it.copy(editing = false, previewing = false, draft = DailyPostDraft()) }
+    fun closeEditor() = _state.update { it.copy(editing = false, previewing = false, draft = DailyPostDraft(), media = emptyList()) }
 
     fun save(onSaved: (() -> Unit)? = null) {
         val draft = _state.value.draft
@@ -201,10 +209,56 @@ class DailyPostStudioViewModel @Inject constructor(
             repository.saveDraft(draft)
                 .onSuccess { id ->
                     _state.update { it.copy(working = false, draft = it.draft.copy(id = id), message = "Draft saved.") }
+                    repository.media(id).onSuccess { media -> _state.update { it.copy(media = media) } }
                     refresh(_state.value.filter)
                     onSaved?.invoke()
                 }
                 .onFailure { error -> _state.update { it.copy(working = false, message = error.safeMessage("Draft could not be saved.")) } }
+        }
+    }
+
+    fun uploadMedia(upload: DailyPostMediaUpload, blockId: String? = null) {
+        val currentDraft = _state.value.draft
+        _state.update { it.copy(working = true, message = null) }
+        viewModelScope.launch {
+            val postId = currentDraft.id ?: repository.saveDraft(currentDraft).getOrElse { error ->
+                _state.update { it.copy(working = false, message = error.safeMessage("Save the draft before uploading media.")) }
+                return@launch
+            }
+            if (currentDraft.id == null) _state.update { it.copy(draft = it.draft.copy(id = postId)) }
+            repository.uploadMedia(postId, upload, _state.value.media.size)
+                .onSuccess { media ->
+                    _state.update { state ->
+                        val updatedBlocks = if (blockId == null) state.draft.blocks else state.draft.blocks.map { block ->
+                            if (block.id == blockId) block.copy(mediaIds = (block.mediaIds + media.id).distinct()) else block
+                        }
+                        state.copy(
+                            working = false,
+                            media = state.media + media,
+                            draft = state.draft.copy(blocks = updatedBlocks),
+                            message = "Media added. Save the draft to persist its layout placement.",
+                        )
+                    }
+                }
+                .onFailure { error -> _state.update { it.copy(working = false, message = error.safeMessage("Media could not be uploaded.")) } }
+        }
+    }
+
+    fun deleteMedia(mediaId: String) {
+        _state.update { it.copy(working = true, message = null) }
+        viewModelScope.launch {
+            repository.deleteMedia(mediaId)
+                .onSuccess {
+                    _state.update { state ->
+                        state.copy(
+                            working = false,
+                            media = state.media.filterNot { it.id == mediaId },
+                            draft = state.draft.copy(blocks = state.draft.blocks.map { block -> block.copy(mediaIds = block.mediaIds.filterNot { it == mediaId }) }),
+                            message = "Media removed.",
+                        )
+                    }
+                }
+                .onFailure { error -> _state.update { it.copy(working = false, message = error.safeMessage("Media could not be removed.")) } }
         }
     }
 
@@ -229,8 +283,8 @@ class DailyPostStudioViewModel @Inject constructor(
                 _state.update { it.copy(working = false, message = error.safeMessage("Draft could not be saved.")) }
                 return@launch
             }
-            action(id, draft)
-                .onSuccess { _state.update { it.copy(working = false, editing = false, previewing = false, draft = DailyPostDraft(), message = "Publication updated.") }; refresh(_state.value.filter) }
+            action(id, draft.copy(id = id))
+                .onSuccess { _state.update { it.copy(working = false, editing = false, previewing = false, draft = DailyPostDraft(), media = emptyList(), message = "Publication updated.") }; refresh(_state.value.filter) }
                 .onFailure { error -> _state.update { it.copy(working = false, message = error.safeMessage("Publication action failed.")) } }
         }
     }
