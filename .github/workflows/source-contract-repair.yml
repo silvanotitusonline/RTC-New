@@ -21,7 +21,9 @@ jobs:
       - name: Install source-contract dependencies
         run: python -m pip install --disable-pip-version-check pytest pillow
       - name: Apply production repair
-        run: python tools/apply_main_source_contract_repair.py
+        run: |
+          python tools/apply_main_source_contract_repair.py
+          python tools/apply_main_source_contract_repair_followup.py
       - name: Run complete source regression contracts
         run: python -m pytest tools/tests -q
       - name: Commit verified repair
