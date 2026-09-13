@@ -27,8 +27,8 @@ def test_concept6_shared_system_is_used_by_major_surfaces():
     assert 'RtcCommunityFeedCard' in COMPONENTS
     assert 'RtcEmergencyBanner' in COMPONENTS
     assert 'RtcCaseProgress' in COMPONENTS
-    for name in ['CommunityScreen', 'ExploreScreen', 'SupportScreen', 'AccountScreen', 'SearchScreen', 'NotificationsScreen', 'AiAssistantScreen']:
-        source = COMMUNITY_FEED if name == 'CommunityScreen' else EXPLORE_SCREEN if name == 'ExploreScreen' else SUPPORT_SCREENS if name == 'SupportScreen' else ACCOUNT_SCREEN if name == 'AccountScreen' else ACCOUNT_NOTIFICATIONS if name == 'NotificationsScreen' else PUBLIC_SEARCH if name == 'SearchScreen' else ADMIN_AI
+    for name in ['CommunityScreen', 'CommunityUpdatesScreen', 'SupportScreen', 'AccountScreen', 'SearchScreen', 'NotificationsScreen', 'AiAssistantScreen']:
+        source = COMMUNITY_FEED if name == 'CommunityScreen' else EXPLORE_SCREEN if name == 'CommunityUpdatesScreen' else SUPPORT_SCREENS if name == 'SupportScreen' else ACCOUNT_SCREEN if name == 'AccountScreen' else ACCOUNT_NOTIFICATIONS if name == 'NotificationsScreen' else PUBLIC_SEARCH if name == 'SearchScreen' else ADMIN_AI
         block = re.search(rf'(?:private|internal) fun {name}\(.*?(?=\n@Composable|\Z)', source, re.S)
         assert block and 'RtcScreenScaffold' in block.group(0), name
     assert 'import za.org.rtc.community.feature.community.CommunityScreen' in MAIN
@@ -115,8 +115,8 @@ def test_reference_driven_makeover_uses_transparent_rtc_brand_and_shared_palette
     assert 'val RtcInk = Color(0xFF0C1013)' in theme
     assert 'val RtcMint = Color(0xFF2EC27E)' in theme
     assert 'val RtcCivicGold = Color(0xFFD4AF37)' in theme
-    assert '@drawable/rtc_community_logo_transparent' in splash
-    assert '@drawable/rtc_community_logo_transparent' in splash_background
+    assert '@drawable/rtc_splash_logo' in splash
+    assert '@drawable/rtc_splash_logo' in splash_background
     assert logo.exists() and logo.stat().st_size > 0
     assert 'fun RtcBrandLockup(' in BRAND_LOCKUP
     assert 'R.drawable.rtc_logo_mark_transparent' in BRAND_LOCKUP

@@ -12,8 +12,8 @@ object RtcRoute {
     const val SUPPORT_CASE_DETAIL = "support_case/{caseId}"
     const val ACCOUNT = "account"
     const val SERVICES = "services"
-    const val EVENTS = "events"
-    const val ADMIN_EVENTS = "admin/events"
+    const val DAILY_POST_DETAIL = "daily-post/{postId}"
+    const val ADMIN_DAILY_POST = "admin/daily-post"
     const val NOTIFICATIONS = "notifications"
     const val SEARCH = "search"
     const val HELP = "help"
@@ -71,6 +71,9 @@ object RtcRoute {
     const val SERVICE_CENTRE_BOOKING = "account/service-centre/booking/{bookingId}"
     const val SERVICE_CENTRE_CHAT = "account/service-centre/chat/{bookingId}"
 
+    fun dailyPost(postId: String) = "daily-post/$postId"
+    fun marketplaceDirections(businessId: String, locationId: String = "primary") =
+        "community/marketplace/business/${android.net.Uri.encode(businessId)}/directions/${android.net.Uri.encode(locationId)}"
     fun marketplaceBusiness(idOrSlug: String) = "community/marketplace/business/$idOrSlug"
     fun marketplaceReviews(businessId: String) = "community/marketplace/business/$businessId/reviews"
     fun marketplaceEdit(businessId: String) = "account/marketplace/business/$businessId/edit"

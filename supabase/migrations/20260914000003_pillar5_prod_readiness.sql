@@ -2,23 +2,12 @@
 -- PILLAR 5: INFRASTRUCTURE & PRODUCTION READINESS
 BEGIN;
 
--- 1. N+1 Elimination: Advanced Feed View with Pre-aggregated Counts
--- Instead of counting likes/replies per post in the application loop, 
--- we use a materialized-style view or optimized joins.
+-- 1. Reuse canonical pre-aggregated reaction/comment counts and visibility rules.
 CREATE OR REPLACE VIEW public.v_community_feed_optimized WITH (security_invoker = true) AS
-SELECT 
-    p.id, p.body, p.created_at, p.parent_id, p.thread_depth,
-    u.username, u.avatar_url, u.is_verified,
-    COALESCE(l.like_count, 0) as like_count,
-    COALESCE(r.reply_count, 0) as reply_count
-FROM public.community_posts p
-JOIN public.profiles u ON p.author_id = u.id
-LEFT JOIN (
-    SELECT post_id, count(*) as like_count FROM public.post_likes GROUP BY post_id
-) l ON l.post_id = p.id
-LEFT JOIN (
-    SELECT parent_id, count(*) as reply_count FROM public.community_posts WHERE parent_id IS NOT NULL GROUP BY parent_id
-) r ON r.parent_id = p.id;
+SELECT * FROM public.v_community_feed;
+
+REVOKE ALL ON public.v_community_feed_optimized FROM PUBLIC, anon;
+GRANT SELECT ON public.v_community_feed_optimized TO authenticated, service_role;
 
 -- 2. API Rate Limiting & Abuse Prevention
 -- Create a table to track API request buckets for rate limiting

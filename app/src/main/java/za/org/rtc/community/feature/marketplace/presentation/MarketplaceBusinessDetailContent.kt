@@ -52,10 +52,10 @@ internal fun MarketplaceBusinessDetailContent(
     onAddReview: (Int, String, String, List<String>) -> Unit,
     onReportBusiness: (reason: String, details: String) -> Unit = { _, _ -> },
 ) {
-    val context = LocalContext.current
     var showReviewDialog by rememberSaveable { mutableStateOf(false) }
     var showReportDialog by rememberSaveable { mutableStateOf(false) }
     var isBookmarked by rememberSaveable(detail.saved) { mutableStateOf(detail.saved) }
+    val publishedLocations = remember(detail) { detail.toMarketplaceMapListings() }
     val activeRating = remember(reviewsState, detail.rating) {
         (reviewsState as? MarketplaceLoadState.Data)?.value?.second ?: detail.rating
     }
@@ -137,13 +137,9 @@ internal fun MarketplaceBusinessDetailContent(
                     }
                     OutlinedButton(
                         onClick = {
-                            launchDeviceMapDirections(
-                                context = context,
-                                location = detail.locations.firstOrNull(),
-                                businessName = detail.card.displayName,
-                                localityFallback = detail.card.locality,
-                            )
+                            onNavigate(RtcRoute.marketplaceDirections(detail.card.id))
                         },
+                        enabled = publishedLocations.isNotEmpty(),
                         modifier = Modifier.height(RtcSize.minimumTouchTarget),
                     ) {
                         Icon(Icons.Filled.LocationOn, contentDescription = null)
@@ -225,13 +221,9 @@ internal fun MarketplaceBusinessDetailContent(
                 MarketplaceLocationCard(
                     location = location,
                     businessName = detail.card.displayName,
+                    directionsAvailable = location.publicMapMarker(detail.card) != null,
                     onGetDirections = {
-                        launchDeviceMapDirections(
-                            context = context,
-                            location = location,
-                            businessName = detail.card.displayName,
-                            localityFallback = detail.card.locality,
-                        )
+                        onNavigate(RtcRoute.marketplaceDirections(detail.card.id, location.id))
                     },
                 )
             }

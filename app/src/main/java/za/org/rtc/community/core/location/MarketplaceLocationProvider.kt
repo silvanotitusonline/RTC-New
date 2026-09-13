@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceCoordinates
@@ -26,9 +27,15 @@ class MarketplaceLocationProvider @Inject constructor(
             add(LocationManager.NETWORK_PROVIDER)
             add(LocationManager.PASSIVE_PROVIDER)
         }
+        val now = SystemClock.elapsedRealtimeNanos()
         val location = providers.asSequence().mapNotNull { provider ->
             runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
-        }.maxByOrNull { it.time } ?: return null
+        }.filter { fix ->
+            val ageNanos = now - fix.elapsedRealtimeNanos
+            fix.elapsedRealtimeNanos > 0 && ageNanos in 0L..60_000_000_000L &&
+                fix.latitude.isFinite() && fix.longitude.isFinite() &&
+                fix.latitude in -90.0..90.0 && fix.longitude in -180.0..180.0
+        }.maxByOrNull { it.elapsedRealtimeNanos } ?: return null
         return MarketplaceCoordinates(location.latitude, location.longitude)
     }
 }

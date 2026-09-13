@@ -1,9 +1,17 @@
 package za.org.rtc.community
 
+import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import kotlinx.coroutines.flow.emptyFlow
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import za.org.rtc.community.app.CommunityActionUiState
@@ -105,6 +113,7 @@ class ResidentSurfaceSmokeTest {
 
     @Test
     fun exploreSurfaceRendersWithLocalState() {
+        var openedDirectory: String? = null
         composeRule.setContent {
             RtcCommunityTheme(ThemePreference.LIGHT) {
                 ExploreScreen(
@@ -114,12 +123,38 @@ class ResidentSurfaceSmokeTest {
                     events = emptyList(),
                     isRefreshing = false,
                     onRefresh = {},
-                    onOpenDirectory = {},
+                    onOpenDirectory = { openedDirectory = it },
                     onToggleRsvp = {},
+                    reports = emptyList(),
+                    // Exercise Explore navigation without constructing the production feed owner.
+                    dailyPostContent = { Text("Local publication preview") },
                 )
             }
         }
         composeRule.onNodeWithText("Explore").assertIsDisplayed()
+        val dailyPostTab = composeRule.onNode(hasText("The Daily Post") and hasClickAction())
+        val updatesTab = composeRule.onNode(hasText("Community Updates") and hasClickAction())
+        dailyPostTab.assertIsSelected()
+        composeRule.onNodeWithText("Local publication preview").assertIsDisplayed()
+
+        updatesTab.performClick().assertIsSelected()
+        composeRule.onNodeWithText("Local publication preview").assertDoesNotExist()
+        val updatesList = composeRule.onNode(hasScrollToNodeAction())
+        updatesList.performScrollToNode(hasText("Civic map"))
+        composeRule.onNodeWithText("Civic map").assertIsDisplayed()
+        listOf(
+            "Community Notices" to "notices",
+            "Projects" to "projects",
+            "Opportunities" to "opportunities",
+        ).forEach { (label, directory) ->
+            updatesList.performScrollToNode(hasText(label))
+            composeRule.onNodeWithText(label).assertIsDisplayed().performClick()
+            composeRule.runOnIdle { assertEquals(directory, openedDirectory) }
+        }
+
+        dailyPostTab.performClick().assertIsSelected()
+        composeRule.onNodeWithText("Local publication preview").assertIsDisplayed()
+        composeRule.onNodeWithText("Community Notices").assertDoesNotExist()
     }
 
     @Test

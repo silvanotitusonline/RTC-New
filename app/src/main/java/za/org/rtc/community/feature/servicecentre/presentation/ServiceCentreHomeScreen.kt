@@ -125,6 +125,9 @@ fun ServiceCentreHomeRoute(
         items(state.providers, key = { it.providerUserId }) { provider ->
             ServiceCentreProviderCard(
                 provider = provider,
+                onViewMap = provider.marketplaceBusinessId?.takeIf(String::isNotBlank)?.let { businessId ->
+                    { onNavigate(RtcRoute.marketplaceDirections(businessId)) }
+                },
                 onRequest = { onNavigate(RtcRoute.serviceCentreRequest(provider.providerUserId)) },
             )
         }

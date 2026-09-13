@@ -41,6 +41,11 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
         val notificationType = message.data["notification_type"].orEmpty()
+        val payloadType = message.data["type"].orEmpty()
+        if (notificationType == "DAILY_POST" || payloadType == "DAILY_POST") {
+            postDailyPostNotification(message)
+            return
+        }
         if (notificationType.startsWith("SERVICE_BOOKING")) {
             postServiceBookingNotification(message)
             return
@@ -50,6 +55,35 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
             return
         }
         postCommunityNotification(message)
+    }
+
+    private fun postDailyPostNotification(message: RemoteMessage) {
+        val postId = message.data["post_id"] ?: message.data["daily_post_id"] ?: return
+        if (!isSafeId(postId)) return
+        val title = message.notification?.title ?: message.data["title"] ?: "The Daily Post"
+        val body = message.notification?.body ?: message.data["body"] ?: "Open The Daily Post for the full story."
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            action = MainActivity.ACTION_OPEN_DAILY_POST
+            data = Uri.parse("rtc://community/daily-post/$postId")
+            putExtra(MainActivity.EXTRA_DAILY_POST_ID, postId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            ("daily-post:$postId").hashCode(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, RTC_COMMUNITY_UPDATES_CHANNEL)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title.take(120))
+            .setContentText(body.take(240))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body.take(1000)))
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(if (title.startsWith("BREAKING", ignoreCase = true)) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        notifyIfPermitted(("daily-post:$postId").hashCode(), notification)
     }
 
     private fun postPublicReportNotification(message: RemoteMessage) {

@@ -10,20 +10,22 @@ ALTER TABLE public.community_posts
 ADD COLUMN IF NOT EXISTS parent_id uuid REFERENCES public.community_posts(id) ON DELETE SET NULL,
 ADD COLUMN IF NOT EXISTS thread_depth int DEFAULT 0 CHECK (thread_depth <= 5);
 
--- 3. The la-Density Optimized Feed View (Eliminates N+1 Queries)
+-- 3. Compatibility projection over the canonical, RLS-aware community feed.
+-- Public handles and media paths belong to community_profiles, not profiles.
+-- A staff badge is not identity verification; keep this legacy badge field false
+-- until a separately defined public verification contract exists.
 CREATE OR REPLACE VIEW public.v_community_feed WITH (security_invoker = true) AS
-SELECT 
-    p.id, 
-    p.body, 
-    p.created_at, 
-    p.parent_id,
-    p.thread_depth,
-    u.username, 
-    u.avatar_url, 
-    u.is_verified,
-    (SELECT count(*) FROM public.post_likes pl WHERE pl.post_id = p.id) as like_count,
-    (SELECT count(*) FROM public.community_posts replies WHERE replies.parent_id = p.id) as reply_count
-FROM public.community_posts p
-JOIN public.profiles u ON p.author_id = u.id;
+SELECT
+    f.id, f.body, f.created_at, p.parent_id, p.thread_depth,
+    f.author_handle AS username,
+    f.avatar_path AS avatar_url,
+    false AS is_verified,
+    f.reaction_count::bigint AS like_count,
+    f.comment_count::bigint AS reply_count
+FROM public.community_post_feed f
+JOIN public.community_posts p ON p.id = f.id;
+
+REVOKE ALL ON public.v_community_feed FROM PUBLIC, anon;
+GRANT SELECT ON public.v_community_feed TO authenticated, service_role;
 
 COMMIT;
