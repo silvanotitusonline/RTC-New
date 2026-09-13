@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import za.org.rtc.community.BuildConfig
 import za.org.rtc.community.core.ThemePreference
 import za.org.rtc.community.core.UserRole
@@ -42,9 +41,7 @@ internal class RtcAuthenticationCoordinator(
     suspend fun restoreSession(): Result<Boolean> {
         _isSessionRestoring.value = true
         return try {
-            val result = withTimeoutOrNull(2500L) {
-                repository.restoreSupabaseSession()
-            } ?: Result.success(false)
+            val result = repository.restoreSupabaseSession()
             result.onFailure {
                 _authenticationUi.value = AuthenticationUiState(
                     message = "Your saved session could not be restored. Please sign in again."
