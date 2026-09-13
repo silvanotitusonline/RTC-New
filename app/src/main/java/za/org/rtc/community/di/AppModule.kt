@@ -1,5 +1,7 @@
 package za.org.rtc.community.di
 
+import androidx.room.Room
+import androidx.work.WorkManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -11,16 +13,15 @@ import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
+import javax.inject.Singleton
 import za.org.rtc.community.BuildConfig
-import androidx.room.Room
-import androidx.work.WorkManager
+import za.org.rtc.community.core.location.MarketplaceLocationProvider
 import za.org.rtc.community.data.local.CachedAppStateDao
 import za.org.rtc.community.data.local.CachedCommentDao
 import za.org.rtc.community.data.local.CachedPostDao
 import za.org.rtc.community.data.local.CachedReportDao
 import za.org.rtc.community.data.local.CachedSessionDao
 import za.org.rtc.community.data.local.CachedUserProfileDao
-import za.org.rtc.community.data.local.RtcDatabase
 import za.org.rtc.community.data.local.LocalDraftDao
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_1_2
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_2_3
@@ -28,16 +29,17 @@ import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_3_4
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_4_5
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_5_6
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_6_7
-import javax.inject.Singleton
+import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_7_8
+import za.org.rtc.community.data.local.RtcDatabase
+import za.org.rtc.community.data.local.VerifiedPublicReportDao
 import za.org.rtc.community.feature.community.CommunityRepository
 import za.org.rtc.community.feature.community.SupabaseCommunityRepository
 import za.org.rtc.community.feature.marketplace.data.remote.SupabaseMarketplaceRepository
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceAdminRepository
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceDiscoveryRepository
+import za.org.rtc.community.feature.marketplace.domain.MarketplaceLocationRepository
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceOwnerRepository
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceReviewRepository
-import za.org.rtc.community.feature.marketplace.domain.MarketplaceLocationRepository
-import za.org.rtc.community.core.location.MarketplaceLocationProvider
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -66,6 +68,7 @@ object AppModule {
                 RTC_DATABASE_MIGRATION_4_5,
                 RTC_DATABASE_MIGRATION_5_6,
                 RTC_DATABASE_MIGRATION_6_7,
+                RTC_DATABASE_MIGRATION_7_8,
             )
             .fallbackToDestructiveMigration(true)
             .build()
@@ -75,6 +78,9 @@ object AppModule {
 
     @Provides
     fun provideCachedReportDao(database: RtcDatabase): CachedReportDao = database.cachedReportDao()
+
+    @Provides
+    fun provideVerifiedPublicReportDao(database: RtcDatabase): VerifiedPublicReportDao = database.verifiedPublicReportDao()
 
     @Provides
     fun provideCachedAppStateDao(database: RtcDatabase): CachedAppStateDao = database.cachedAppStateDao()
