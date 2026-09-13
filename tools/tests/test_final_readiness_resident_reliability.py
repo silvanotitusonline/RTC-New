@@ -31,17 +31,6 @@ def test_saved_draft_discard_requires_explicit_confirmation():
     assert 'TextButton(onClick = onDiscard)' not in body
 
 
-def test_service_centre_booking_detail_enters_and_leaves_loading_state():
-    view_model = read('app/src/main/java/za/org/rtc/community/feature/servicecentre/presentation/viewmodel/ServiceCentreBookingViewModel.kt')
-    start = view_model.index('fun loadDetail(bookingId: String)')
-    end = view_model.index('fun createBooking(', start)
-    body = view_model[start:end]
-    request = body.index('bookingRepository.bookingDetail(bookingId)')
-    loading_true = body.index('_state.value = _state.value.copy(loading = true, message = null)')
-    assert loading_true < request
-    assert body.count('loading = false') >= 2
-
-
 def test_marketplace_save_mutation_has_visible_failure_feedback_without_destroying_detail():
     view_model = read('app/src/main/java/za/org/rtc/community/feature/marketplace/presentation/viewmodel/MarketplaceDiscoveryViewModel.kt')
     screen = read('app/src/main/java/za/org/rtc/community/feature/marketplace/presentation/MarketplaceBusinessScreen.kt')

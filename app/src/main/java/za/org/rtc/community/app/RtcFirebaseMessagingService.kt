@@ -25,7 +25,6 @@ import za.org.rtc.community.R
 import za.org.rtc.community.data.RtcRepository
 import za.org.rtc.community.notifications.RTC_COMMUNITY_UPDATES_CHANNEL
 import za.org.rtc.community.notifications.RTC_SAFETY_ALERTS_CHANNEL
-import za.org.rtc.community.notifications.RTC_SERVICE_BOOKINGS_CHANNEL
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -44,10 +43,6 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
         val payloadType = message.data["type"].orEmpty()
         if (notificationType == "DAILY_POST" || payloadType == "DAILY_POST") {
             postDailyPostNotification(message)
-            return
-        }
-        if (notificationType.startsWith("SERVICE_BOOKING")) {
-            postServiceBookingNotification(message)
             return
         }
         if (notificationType.startsWith("PUBLIC_REPORT") || notificationType.startsWith("REPORT_STATUS") || message.data.containsKey("report_id") || message.data.containsKey("public_report_id")) {
@@ -117,35 +112,6 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
         notifyIfPermitted(reportId.hashCode(), notification)
-    }
-
-    private fun postServiceBookingNotification(message: RemoteMessage) {
-        val bookingId = message.data["booking_id"] ?: message.data["bookingId"] ?: return
-        if (!isSafeId(bookingId)) return
-        val title = message.notification?.title ?: message.data["title"] ?: "Service booking"
-        val body = message.notification?.body ?: message.data["body"] ?: "Your service booking has been updated."
-        val openIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            action = MainActivity.ACTION_OPEN_SERVICE_BOOKING
-            data = Uri.parse("rtc://service-centre/booking/$bookingId")
-            putExtra(MainActivity.EXTRA_SERVICE_BOOKING_ID, bookingId)
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            bookingId.hashCode(),
-            openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val notification = NotificationCompat.Builder(this, RTC_SERVICE_BOOKINGS_CHANNEL)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title.take(120))
-            .setContentText(body.take(240))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body.take(1000)))
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
-        notifyIfPermitted(bookingId.hashCode(), notification)
     }
 
     private fun postCommunityNotification(message: RemoteMessage) {
