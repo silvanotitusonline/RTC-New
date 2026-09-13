@@ -14,7 +14,7 @@ project SECURITY DEFINER signatures with fingerprint
 `656f031a7e278433a69ed6d037d26c1e`. That observation alone was not approval: four
 functions lacked fixed search paths and several newly exposed APIs required repair.
 
-The forward migration removes twelve signatures from that client definer surface:
+The forward migration removes ten signatures from that client definer surface:
 
 | Boundary | Disposition |
 |---|---|
@@ -35,11 +35,19 @@ The generic `admin_access_guard()` retains a staff boundary: any canonical staff
 role with a current session and `aal2`. It is not a substitute for an RPC's more
 specific role check.
 
-The security classification test remains fail-closed. It accepts the restricted
-surface only when adding back the exact twelve retired signatures reconstructs
-the observed 198-signature fingerprint, with no retired signature still exposed.
-Unexpected additions, removals, renames, and argument changes continue to fail.
-Existing previously approved baselines remain available for their deployment shapes.
+The security classification test remains fail-closed and pins the verified final
+188-signature surface to `97400b5f6408be76b8fb3d6ee737f260`. Removing the nineteen
+explicitly reviewed additions from the actual CI catalogue exactly reproduces
+both count 169 and the previously approved fingerprint
+`42f7bc4ca9978dfe129a65cd0e6ded86`. The additions are thirteen Daily Post RPCs,
+two operations workspace RPCs, the staff guard, and three engagement RPCs.
+
+The comment-count trigger and editor assertion already lacked authenticated
+execution in this replay; their explicit revocations also cover environments
+with broader default grants. They do not contribute to the ten-signature reduction.
+Unexpected signature drift continues to fail. CI replay and all 32 new behavior/
+authority assertions passed on `a03c634`; the initial catalogue expectation was
+corrected using the exact emitted signatures, not by relaxing the security gate.
 
 ## Verification scope
 
