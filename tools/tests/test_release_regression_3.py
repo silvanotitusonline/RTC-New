@@ -123,22 +123,23 @@ def test_notification_permission_launch_is_guarded_at_the_api_33_action_boundary
     assert 'notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)' in notification_dialog
 
 
-def test_home_daily_post_snapshot_replaces_obsolete_quick_access_without_fake_directory_links():
+def test_home_lower_half_is_daily_post_snapshot_and_directory_access_remains_elsewhere():
     home = _function_body(HOME_SCREEN, 'HomeScreen', ['DailyPostSnapshotSection'])
-    assert 'upperHomeItems' in home
-    assert 'HomeSection.WELCOME' in home
-    assert 'HomeSection.COMMUNITY_SNAPSHOT' in home
-    assert 'HomeSection.QUICK_ACCESS' in home
-    assert 'renderItems.take(quickAccessIndex)' in home
-    assert 'DailyPostSnapshotSection(' in HOME_SCREEN
-    assert 'item(key = "home_daily_post_snapshot")' in HOME_SCREEN
-    assert 'onOpenPost = { postId -> openDailyPost(context, postId) }' in HOME_SCREEN
-    assert 'onViewAll = { actions.onNavigate(MainDestination.EXPLORE) }' in HOME_SCREEN
-    assert 'onOpenDirectory("projects")' not in home
-    assert 'onOpenDirectory("centres")' not in home
+    snapshot = _function_body(HOME_SCREEN, 'DailyPostSnapshotSection', ['DailyPostSnapshotCard'])
+    refresh = re.search(r'ResidentPullToRefresh\(.*?\n    \) \{', home, re.S).group(0)
+    assert 'DailyPostViewModel' in home
+    assert 'isRefreshing = state.isRefreshing || state.publicReports.refreshing || dailyPostState.loading' in refresh
+    assert 'actions.onRefresh()' in refresh
+    assert 'dailyPostViewModel.refresh()' in refresh
+    assert 'DailyPostSnapshotSection(' in home
+    assert 'items.take(2)' in snapshot
+    assert 'onViewAll = { actions.onNavigate(MainDestination.EXPLORE) }' in home
+    assert 'QuickAccessSection(' not in home
+    assert 'onOpenDirectory("projects")' in EXPLORE_SCREEN
+    assert 'exploreDirectoryRoute("centres")' in MAIN
 
 
-def test_home_renderer_validates_configuration_and_limits_runtime_to_compiled_snapshot_sections():
+def test_home_renderer_uses_validated_compiled_upper_sections_before_daily_post():
     configuration = (ROOT / 'app/src/main/java/za/org/rtc/community/core/UiConfiguration.kt').read_text()
     home = _function_body(HOME_SCREEN, 'HomeScreen', ['DailyPostSnapshotSection'])
     rendering = (ROOT / 'app/src/main/java/za/org/rtc/community/ui/config/HomeRendering.kt').read_text()
@@ -152,9 +153,11 @@ def test_home_renderer_validates_configuration_and_limits_runtime_to_compiled_sn
     assert 'layout = HomeLayout.default()' in MAIN
     assert 'HomeLayout.validatedOrDefault(layout)' in home
     assert 'resolvedLayout.renderItems()' in home
-    assert 'upperHomeItems' in home
-    assert 'HomeSection.WELCOME' in home
-    assert 'HomeSection.COMMUNITY_SNAPSHOT' in home
+    assert 'renderItems.retainedForDailyPostSnapshot()' in home
+    assert 'fun List<HomeRenderItem>.retainedForDailyPostSnapshot()' in rendering
+    assert 'item.section in retainedSections' in rendering
+    assert 'item.widget.anchorSection in retainedSections' in rendering
+    assert 'upperHomeItems.forEach { renderItem ->' in home
     assert 'sealed interface HomeRenderItem' in rendering
     assert 'data class Section(val section: HomeSection) : HomeRenderItem' in rendering
     assert 'data class Image(val widget: HomeImageWidget) : HomeRenderItem' in rendering
@@ -164,6 +167,11 @@ def test_home_renderer_validates_configuration_and_limits_runtime_to_compiled_sn
     assert 'widget?.anchorSection == section' in rendering
     assert 'HomeImagePlacement.BEFORE' in rendering
     assert 'HomeImagePlacement.AFTER' in rendering
+    assert 'is HomeRenderItem.Section -> when (renderItem.section)' in home
+    assert 'is HomeRenderItem.Image -> item(key = "home_image_${renderItem.widget.assetId}")' in home
+    assert 'HomeSection.WELCOME -> item(key = "home_welcome")' in home
+    assert 'HomeSection.COMMUNITY_SNAPSHOT -> item(key = "home_community_snapshot")' in home
+    assert 'item(key = "home_daily_post_snapshot")' in home
     non_executable_renderer = (home + rendering).lower()
     for forbidden in ['external_url', 'javascript:', 'android.content.intent', 'android.net.uri']:
         assert forbidden not in non_executable_renderer
