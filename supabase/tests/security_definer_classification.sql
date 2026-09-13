@@ -1,27 +1,14 @@
 -- SECURITY DEFINER classification gate for resident modernisation.
 --
--- This test intentionally locks the reviewed project-defined SECURITY DEFINER surface
--- executable by `authenticated`. A new/removed/renamed signature changes the fingerprint
--- and fails closed until the full set is reviewed and this baseline is deliberately updated.
+-- This test locks the reviewed project-defined SECURITY DEFINER surface executable by
+-- `authenticated`. A new/removed/renamed signature changes the fingerprint and fails closed
+-- until the complete set is reviewed and this baseline is deliberately updated.
 -- Extension-owned functions are excluded because their lifecycle belongs to the extension.
 --
--- Nine deterministic reviewed surfaces are accepted:
---   * DEPLOYED_CANONICAL: the current Non-Production/deployed canonical catalogue.
---   * ISOLATED_LOCAL_REPLAY: the source-reproducible foundation subset reconstructed by local CI.
---   * ISOLATED_LOCAL_EVENTS_INBOX: local replay plus the reviewed Events/Inbox RPC surface.
---   * ISOLATED_LOCAL_PUBLIC_REPORTS: local replay plus the reviewed Public Reports RPC surface.
---   * ISOLATED_LOCAL_COMBINED: Public Reports and Events/Inbox together after A -> B integration.
---   * PRODUCTION_BETA_COMBINED: the combined surface after verified-only reads and
---     idempotent Community guideline/moderation controls.
---   * PUBLIC_REPORTS_RPC_READ_BOUNDARY: the reviewed production-beta surface after moving
---     sanitized Public Reports reads behind explicit SECURITY DEFINER RPC boundaries.
---   * NO_PAYMENTS_SERVICE_CENTRE: the reviewed surface after removing all Service Centre
---     payment RPCs while preserving direct-confirmation booking authority.
---   * DAILY_POST_RECONCILED: the 169-signature no-payments surface plus nineteen
---     reviewed Daily Post, operations, guarded engagement and staff-access RPCs.
---     CI verified the retained 169-signature fingerprint remains unchanged.
--- All are pinned by count AND signature fingerprint. Arbitrary local/deployed drift remains
--- UNREVIEWED and fails this gate.
+-- Reviewed surfaces include historical local/deployed states plus the current
+-- SERVICE_CENTRE_RETIRED surface. The retirement surface was derived from a clean local replay
+-- after the forward-only Service Centre migration removed only service_centre_% functions:
+-- count=172, fingerprint=2caf400cd8c797769ff6d1448ea453da.
 --
 -- Disposition policy:
 -- INTENTIONAL = reviewed least-privilege use.
@@ -34,6 +21,26 @@ begin;
 set local search_path = extensions, public, pg_catalog;
 
 select plan(12);
+
+create temporary table approved_security_definer_baselines (
+  exposed_count bigint not null,
+  exposed_fingerprint text not null,
+  surface_name text not null,
+  primary key (exposed_count, exposed_fingerprint)
+) on commit drop;
+
+insert into approved_security_definer_baselines(exposed_count, exposed_fingerprint, surface_name)
+values
+  (182, '66cda900664e76083670f8186087aece', 'DEPLOYED_CANONICAL'),
+  (142, '3e6d958c14e0fa7c1509490af1ca7fff', 'ISOLATED_LOCAL_REPLAY'),
+  (149, '89b13d92160e4f33af98f41a715a0e27', 'ISOLATED_LOCAL_EVENTS_INBOX'),
+  (152, 'e6de756df6b23c7a27bea99bc0d62672', 'ISOLATED_LOCAL_PUBLIC_REPORTS'),
+  (159, '96c90025230ec19ee868ca38219e3632', 'ISOLATED_LOCAL_COMBINED'),
+  (162, '9e419d099be445182a8514f5e045b144', 'PRODUCTION_BETA_COMBINED'),
+  (170, 'bbf47cab25e2ff0e4c20a5917c8358dc', 'PUBLIC_REPORTS_RPC_READ_BOUNDARY'),
+  (169, '42f7bc4ca9978dfe129a65cd0e6ded86', 'NO_PAYMENTS_SERVICE_CENTRE'),
+  (188, '97400b5f6408be76b8fb3d6ee737f260', 'DAILY_POST_RECONCILED'),
+  (172, '2caf400cd8c797769ff6d1448ea453da', 'SERVICE_CENTRE_RETIRED');
 
 create temporary table resident_security_definer_registry on commit drop as
 with exposed_definers as (
@@ -78,17 +85,6 @@ with exposed_definers as (
     count(*)::bigint as exposed_count,
     md5(string_agg(signature, E'\n' order by signature)) as exposed_fingerprint
   from normalized
-), approved_baselines(exposed_count, exposed_fingerprint) as (
-  values
-    (182::bigint, '66cda900664e76083670f8186087aece'::text),
-    (142::bigint, '3e6d958c14e0fa7c1509490af1ca7fff'::text),
-    (149::bigint, '89b13d92160e4f33af98f41a715a0e27'::text),
-    (152::bigint, 'e6de756df6b23c7a27bea99bc0d62672'::text),
-    (159::bigint, '96c90025230ec19ee868ca38219e3632'::text),
-    (162::bigint, '9e419d099be445182a8514f5e045b144'::text),
-    (170::bigint, 'bbf47cab25e2ff0e4c20a5917c8358dc'::text),
-    (169::bigint, '42f7bc4ca9978dfe129a65cd0e6ded86'::text),
-    (188::bigint, '97400b5f6408be76b8fb3d6ee737f260'::text)
 )
 select
   n.function_oid,
@@ -101,13 +97,13 @@ select
   n.fixed_search_path,
   n.contains_caller_or_authority_guard,
   case
-    when not exists (
+    when exists (
       select 1
-      from approved_baselines a
+      from approved_security_definer_baselines a
       where a.exposed_count = r.exposed_count
         and a.exposed_fingerprint = r.exposed_fingerprint
-    ) then 'UNREVIEWED'
-    else 'INTENTIONAL'
+    ) then 'INTENTIONAL'
+    else 'UNREVIEWED'
   end as disposition
 from normalized n
 cross join reviewed_set r;
@@ -137,7 +133,11 @@ with registry_stats as (
   from resident_security_definer_registry
 )
 select ok(
-  exposed_count in (182::bigint, 142::bigint, 149::bigint, 152::bigint, 159::bigint, 162::bigint, 170::bigint, 169::bigint, 188::bigint),
+  exists (
+    select 1
+    from approved_security_definer_baselines a
+    where a.exposed_count = registry_stats.exposed_count
+  ),
   'authenticated SECURITY DEFINER count matches a reviewed surface'
 )
 from registry_stats;
@@ -149,23 +149,12 @@ with registry_stats as (
   from resident_security_definer_registry
 )
 select ok(
-  (exposed_count = 182::bigint and exposed_fingerprint = '66cda900664e76083670f8186087aece'::text)
-  or
-  (exposed_count = 142::bigint and exposed_fingerprint = '3e6d958c14e0fa7c1509490af1ca7fff'::text)
-  or
-  (exposed_count = 149::bigint and exposed_fingerprint = '89b13d92160e4f33af98f41a715a0e27'::text)
-  or
-  (exposed_count = 152::bigint and exposed_fingerprint = 'e6de756df6b23c7a27bea99bc0d62672'::text)
-  or
-  (exposed_count = 159::bigint and exposed_fingerprint = '96c90025230ec19ee868ca38219e3632'::text)
-  or
-  (exposed_count = 162::bigint and exposed_fingerprint = '9e419d099be445182a8514f5e045b144'::text)
-  or
-  (exposed_count = 170::bigint and exposed_fingerprint = 'bbf47cab25e2ff0e4c20a5917c8358dc'::text)
-  or
-  (exposed_count = 169::bigint and exposed_fingerprint = '42f7bc4ca9978dfe129a65cd0e6ded86'::text)
-  or
-  (exposed_count = 188::bigint and exposed_fingerprint = '97400b5f6408be76b8fb3d6ee737f260'::text),
+  exists (
+    select 1
+    from approved_security_definer_baselines a
+    where a.exposed_count = registry_stats.exposed_count
+      and a.exposed_fingerprint = registry_stats.exposed_fingerprint
+  ),
   'authenticated SECURITY DEFINER fingerprint matches its reviewed surface'
 )
 from registry_stats;
@@ -210,8 +199,6 @@ select is(
   'Public Reports authenticated SECURITY DEFINER mutation/private RPCs are explicitly guarded on reviewed local surfaces'
 );
 
--- Use regprocedure OIDs rather than rendered argument-name text so this remains exact
--- across PostgreSQL's formatting of identity arguments while still pinning overloads.
 with reviewed_rpc_oids(function_oid) as (
   values
     ('public.civic_report_page_v1(text,text,text,boolean,text,timestamptz,uuid,integer,timestamptz)'::regprocedure::oid),
@@ -248,7 +235,10 @@ select is(
      )
      and exists (
        select 1
-       from aclexplode(coalesce((select p.proacl from pg_proc p where p.oid = r.function_oid), acldefault('f', (select p.proowner from pg_proc p where p.oid = r.function_oid)))) acl
+       from aclexplode(coalesce(
+         (select p.proacl from pg_proc p where p.oid = r.function_oid),
+         acldefault('f', (select p.proowner from pg_proc p where p.oid = r.function_oid))
+       )) acl
        where acl.grantee = 0
          and acl.privilege_type = 'EXECUTE'
      )),
