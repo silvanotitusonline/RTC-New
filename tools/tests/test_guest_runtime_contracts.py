@@ -25,6 +25,15 @@ def test_guest_entry_is_persisted_without_forging_authentication():
     assert "SessionAuthority.SUPABASE_AUTH" not in entry
 
 
+def test_authenticated_session_clears_stale_guest_entry_for_future_sign_out():
+    app = text("app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt")
+
+    assert "LaunchedEffect(session.authority, residentEntryGranted)" in app
+    assert "session.authority == SessionAuthority.SUPABASE_AUTH && residentEntryGranted" in app
+    authenticated_reset = app.split("LaunchedEffect(session.authority, residentEntryGranted)", 1)[1].split("\n    }", 1)[0]
+    assert "residentEntryViewModel.returnToWelcome()" in authenticated_reset
+
+
 def test_selected_language_is_process_stable_and_provided_to_resident_ui():
     preferences = text("app/src/main/java/za/org/rtc/community/data/local/UserPreferencesStore.kt")
     entry = text("app/src/main/java/za/org/rtc/community/feature/account/ResidentEntryViewModel.kt")
