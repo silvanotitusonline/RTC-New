@@ -6,7 +6,11 @@ ACCOUNT_PATH = ROOT / "app/src/main/java/za/org/rtc/community/feature/account/Ac
 BINDINGS_PATH = ROOT / "app/src/main/java/za/org/rtc/community/ui/navigation/ResidentModernisationBindings.kt"
 GRAPH_PATH = ROOT / "app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityNavGraph.kt"
 APP_PATH = ROOT / "app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt"
+MAIN_ACTIVITY_PATH = ROOT / "app/src/main/java/za/org/rtc/community/MainActivity.kt"
+FCM_PATH = ROOT / "app/src/main/java/za/org/rtc/community/app/RtcFirebaseMessagingService.kt"
+CHANNELS_PATH = ROOT / "app/src/main/java/za/org/rtc/community/notifications/RtcNotificationChannels.kt"
 APP_MODULE_PATH = ROOT / "app/src/main/java/za/org/rtc/community/di/AppModule.kt"
+NOTIFY_EDGE_PATH = ROOT / "supabase/functions/service-centre-notify/index.ts"
 MIGRATION_PATH = ROOT / "supabase/migrations/20260914000008_remove_service_centre_domain.sql"
 ACCOUNT_BOOKINGS = ROOT / "app/src/main/java/za/org/rtc/community/feature/account/AccountServiceBookingsTracker.kt"
 SERVICE_CENTRE_MAIN = ROOT / "app/src/main/java/za/org/rtc/community/feature/servicecentre"
@@ -40,9 +44,7 @@ def test_settings_no_longer_routes_to_help_and_provider_entry_is_removed():
 
 
 def test_service_centre_routes_and_deep_links_are_not_exposed_by_android():
-    nav = read(NAV_PATH)
-    graph = read(GRAPH_PATH)
-    app = read(APP_PATH)
+    sources = "\n".join(read(path) for path in [NAV_PATH, GRAPH_PATH, APP_PATH, MAIN_ACTIVITY_PATH])
     forbidden = [
         'SERVICE_CENTRE_HOME',
         'SERVICE_CENTRE_REQUEST',
@@ -56,11 +58,28 @@ def test_service_centre_routes_and_deep_links_are_not_exposed_by_android():
         'serviceCentreChat(',
         'ServiceCentreDeepLink',
         'ACTION_OPEN_SERVICE_BOOKING',
+        'EXTRA_SERVICE_BOOKING_ID',
+        'rtc://service-centre/',
     ]
     for token in forbidden:
-        assert token not in nav, token
-        assert token not in graph, token
-        assert token not in app, token
+        assert token not in sources, token
+
+
+def test_service_booking_push_and_notification_channel_are_retired():
+    fcm = read(FCM_PATH)
+    channels = read(CHANNELS_PATH)
+    for token in ['SERVICE_BOOKING', 'postServiceBookingNotification', 'RTC_SERVICE_BOOKINGS_CHANNEL']:
+        assert token not in fcm, token
+    assert 'RTC_SERVICE_BOOKINGS_CHANNEL' not in channels
+    assert 'Service bookings' not in channels
+    assert 'serviceBookings' not in channels
+
+
+def test_service_centre_notify_edge_endpoint_is_explicitly_retired():
+    source = read(NOTIFY_EDGE_PATH)
+    assert 'service_centre_notification_context' not in source
+    assert 'status: 410' in source or 'new Response' in source and '410' in source
+    assert 'SERVICE_CENTRE_RETIRED' in source
 
 
 def test_service_centre_runtime_tests_and_di_bindings_are_permanently_removed():
