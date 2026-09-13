@@ -5,9 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
@@ -26,12 +25,12 @@ import za.org.rtc.community.ui.theme.RtcSpacing
 fun AccountHubScreen(
     session: RtcSession,
     onOpenSettings: () -> Unit,
+    onOpenMessages: () -> Unit,
     onOpenSupport: () -> Unit,
-    onOpenProviderProfile: () -> Unit,
     onOpenMarketplaceBusiness: (() -> Unit)? = null,
 ) {
     RtcScreenScaffold {
-        item { RtcSectionHeader("Account", "Identity, provider tools, marketplace, support and settings.") }
+        item { RtcSectionHeader("Account", "Identity, messages, marketplace, support and settings.") }
         item {
             RtcCard {
                 Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.small)) {
@@ -60,10 +59,10 @@ fun AccountHubScreen(
         }
         item {
             AccountHubAction(
-                title = "Provider profile",
-                description = "Become a provider or manage your Service Centre provider profile.",
-                icon = { Icon(Icons.Filled.Build, contentDescription = null) },
-                onClick = onOpenProviderProfile,
+                title = "Messages",
+                description = "Open resident messages and support conversations.",
+                icon = { Icon(Icons.Filled.MailOutline, contentDescription = null) },
+                onClick = onOpenMessages,
             )
         }
         item {
@@ -81,14 +80,6 @@ fun AccountHubScreen(
                 icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
                 onClick = onOpenSettings,
             )
-        }
-        item {
-            RtcCard {
-                Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
-                    Icon(Icons.Filled.Person, contentDescription = null)
-                    Text("Provider status and account identity remain attached to this same resident account.")
-                }
-            }
         }
     }
 }
