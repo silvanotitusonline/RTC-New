@@ -297,16 +297,61 @@ class RtcRepository @Inject constructor(
 
     suspend fun restoreSupabaseSession(): Result<Boolean> = runCatching {
         supabase.auth.awaitInitialization()
-        if (supabase.auth.currentUserOrNull() != null) {
-            supabase.auth.startAutoRefreshForCurrentSession()
-            hydrateSupabaseSession()
-            recordPrivacyAnalyticsAppActivity()
-            enqueueUploadRecovery()
-            return@runCatching true
+        val user = supabase.auth.currentUserOrNull()
+        if (user == null) {
+            database.cachedSessionDao().logoutAll()
+            clearAccountScopedSessionState()
+            return@runCatching false
         }
+
+        supabase.auth.startAutoRefreshForCurrentSession()
+        val cachedProfile = database.cachedUserProfileDao().getProfile(user.id)
+        val email = user.email ?: cachedProfile?.email.orEmpty()
+        val fallbackDisplayName = user.userMetadata?.get("full_name")?.jsonPrimitive?.contentOrNull
+            ?.takeIf(String::isNotBlank)
+            ?: email.substringBefore("@").takeIf(String::isNotBlank)
+            ?: "Resident"
+        val handleSeed = email.substringBefore("@")
+            .lowercase()
+            .replace(Regex("[^a-z0-9_]"), "")
+            .ifBlank { "resident" }
+        val cachedInterests = cachedProfile?.interestsJson
+            ?.split(",")
+            ?.map(String::trim)
+            ?.filter(String::isNotBlank)
+            .orEmpty()
+        val current = _session.value
+
+        _session.value = RtcSession(
+            id = user.id,
+            displayName = cachedProfile?.displayName?.takeIf(String::isNotBlank) ?: fallbackDisplayName,
+            handle = "@$handleSeed",
+            role = UserRole.RESIDENT_A,
+            onboardingComplete = true,
+            bio = cachedProfile?.bio.orEmpty(),
+            interests = cachedInterests,
+            readingMode = current.readingMode,
+            darkMode = current.darkMode,
+            dynamicColor = current.dynamicColor,
+            supportNotifications = current.supportNotifications,
+            communityNotifications = current.communityNotifications,
+            authority = SessionAuthority.SUPABASE_AUTH,
+            authenticatedEmail = user.email,
+            administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
+            avatarUrl = cachedProfile?.avatarUrl,
+        )
         database.cachedSessionDao().logoutAll()
-        clearAccountScopedSessionState()
-        return@runCatching false
+        database.cachedSessionDao().upsertSession(
+            CachedSessionEntity(
+                userId = user.id,
+                email = email,
+                isLoggedIn = true,
+                sessionJson = "",
+                updatedAtEpochMillis = System.currentTimeMillis(),
+            )
+        )
+        enqueueUploadRecovery()
+        true
     }
 
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
@@ -1440,50 +1485,12 @@ class RtcRepository @Inject constructor(
     }
 
     suspend fun createPost(text: String, mediaUris: List<Uri> = emptyList()): Result<String> {
-        val cleanText = text.trim()
-        val postId = "post_${UUID.randomUUID()}"
-        val mediaItems = mediaUris.mapIndexed { index, uri ->
-            za.org.rtc.community.core.MediaItem(
-                id = "media_${UUID.randomUUID()}",
-                targetType = za.org.rtc.community.core.MediaTargetType.COMMUNITY_POST,
-                targetId = postId,
-                storagePath = uri.toString(),
-                kind = za.org.rtc.community.core.MediaKind.IMAGE,
-                mimeType = "image/jpeg",
-                byteSize = 1024L,
-                position = index,
-                caption = "Attached image",
-                signedUrl = uri.toString(),
-            )
+        val result = productionUxRepository.createCommunityPost(text.trim(), mediaUris)
+        if (result.isSuccess) {
+            runCatching { discardDraft(DraftArea.COMMUNITY) }
+            runCatching { refreshLiveContent() }
         }
-
-        val newPost = za.org.rtc.community.core.CommunityPost(
-            id = postId,
-            author = _session.value.displayName.ifBlank { "You (Community Member)" },
-            handle = _session.value.handle.ifBlank { "@resident" },
-            content = cleanText,
-            category = "Community Updates",
-            createdAt = java.time.Instant.now().toString(),
-            reactions = 0,
-            comments = 0,
-            viewerHasLiked = false,
-            trendingScore = 50,
-            isFollowedTopic = true,
-            hasMedia = mediaItems.isNotEmpty(),
-            media = mediaItems,
-            isOfficial = _session.value.role in setOf(UserRole.SYSTEM_ADMIN, UserRole.CONTENT_EDITOR, UserRole.CASE_STAFF),
-            authorId = _session.value.id,
-            authorAvatarUrl = _session.value.avatarUrl,
-        )
-
-        database.cachedPostDao().insertPost(newPost.toCachedEntity())
-
-        _posts.value = listOf(newPost) + _posts.value.filterNot { it.id == newPost.id }
-        discardDraft(DraftArea.COMMUNITY)
-
-        runCatching { productionUxRepository.createCommunityPost(text, mediaUris) }
-        refreshLiveContent()
-        return Result.success(postId)
+        return result
     }
 
     suspend fun submitSupportRequest(title: String, detail: String): Result<String> {

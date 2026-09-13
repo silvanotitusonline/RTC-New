@@ -24,10 +24,18 @@ def test_room_session_cache_never_grants_supabase_auth_authority():
 
     # The Auth plugin owns persisted access/refresh tokens. Room may cache UX/profile data,
     # but a database row must never resurrect authentication after SDK storage is absent,
-    # revoked, cleared, or invalid.
+    # revoked, cleared, or invalid. A local SUPABASE_AUTH projection is allowed only after
+    # the initialized SDK itself has returned a non-null current user, and it must fail closed
+    # to resident privilege until server role hydration runs.
+    user_lookup = restore.index("val user = supabase.auth.currentUserOrNull()")
+    missing_sdk_user = restore.index("if (user == null)")
+    authority_projection = restore.index("authority = SessionAuthority.SUPABASE_AUTH")
+
+    assert user_lookup < missing_sdk_user < authority_projection
     assert "database.cachedSessionDao().getActiveSession()" not in restore
     assert "resolveLocalRestoredRole" not in restore
-    assert "authority = SessionAuthority.SUPABASE_AUTH" not in restore
+    assert "role = UserRole.RESIDENT_A" in restore
+    assert "cachedProfile?.role" not in restore
     assert "CachedUserProfileEntity" not in restore
 
 
