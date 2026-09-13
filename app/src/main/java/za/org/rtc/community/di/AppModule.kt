@@ -20,6 +20,7 @@ import za.org.rtc.community.data.local.CachedPostDao
 import za.org.rtc.community.data.local.CachedReportDao
 import za.org.rtc.community.data.local.CachedSessionDao
 import za.org.rtc.community.data.local.CachedUserProfileDao
+import za.org.rtc.community.data.local.VerifiedPublicReportDao
 import za.org.rtc.community.data.local.RtcDatabase
 import za.org.rtc.community.data.local.LocalDraftDao
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_1_2
@@ -28,6 +29,7 @@ import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_3_4
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_4_5
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_5_6
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_6_7
+import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_7_8
 import javax.inject.Singleton
 import za.org.rtc.community.feature.community.CommunityRepository
 import za.org.rtc.community.feature.community.SupabaseCommunityRepository
@@ -70,6 +72,7 @@ object AppModule {
                 RTC_DATABASE_MIGRATION_4_5,
                 RTC_DATABASE_MIGRATION_5_6,
                 RTC_DATABASE_MIGRATION_6_7,
+                RTC_DATABASE_MIGRATION_7_8,
             )
             .fallbackToDestructiveMigration(true)
             .build()
@@ -79,6 +82,9 @@ object AppModule {
 
     @Provides
     fun provideCachedReportDao(database: RtcDatabase): CachedReportDao = database.cachedReportDao()
+
+    @Provides
+    fun provideVerifiedPublicReportDao(database: RtcDatabase): VerifiedPublicReportDao = database.verifiedPublicReportDao()
 
     @Provides
     fun provideCachedAppStateDao(database: RtcDatabase): CachedAppStateDao = database.cachedAppStateDao()
