@@ -59,7 +59,7 @@ def test_source_baseline_reconciles_obsolete_alert_retry_and_dispatch_path():
     assert 'net.http_post' not in text
 
 
-def test_community_sharing_uses_only_custom_post_uri_and_protected_load_path():
+def test_community_sharing_uses_custom_post_uri_and_public_read_path():
     manifest = (ROOT / 'app/src/main/AndroidManifest.xml').read_text()
     app = (ROOT / 'app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt').read_text()
     scoped_vm = (ROOT / 'app/src/main/java/za/org/rtc/community/feature/community/CommunityViewModel.kt').read_text()
@@ -73,7 +73,8 @@ def test_community_sharing_uses_only_custom_post_uri_and_protected_load_path():
     assert 'signedUrl' not in share and 'author' not in share and 'content' not in share
     assert 'handleCommunityPostIntent(intent)' in MAIN
     assert 'openCommunityPostFromDeepLink' in VM
-    assert 'pendingCommunityPostId?.takeIf { session.authority == SessionAuthority.SUPABASE_AUTH }' in app
+    assert 'pendingCommunityPostId?.takeIf { session.authority == SessionAuthority.SUPABASE_AUTH }' not in app
+    assert 'pendingCommunityPostId?.let { postId ->' in app
     assert 'navController.navigateOverlay(communityPostRoute(postId))' in app
     assert 'communityViewModel.loadPostDetail(postId)' in COMMUNITY_DETAIL
     assert 'repository.loadPost(postId)' in scoped_vm
