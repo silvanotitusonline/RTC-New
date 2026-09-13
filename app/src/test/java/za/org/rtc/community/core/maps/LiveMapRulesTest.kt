@@ -43,4 +43,11 @@ class LiveMapRulesTest {
         assertEquals(0.0, geographicSeparationMeters(GeoPoint(-28.3, 23.0), GeoPoint(-28.3, 23.0)), 0.01)
         assertTrue(geographicSeparationMeters(GeoPoint(0.0, 0.0), GeoPoint(0.0, 180.0)).isFinite())
     }
+
+    @Test fun serviceErrorsDistinguishSignInRouteAndRateLimitsWithoutRawProviderMessages() {
+        assertTrue(mapServiceErrorMessage(401).contains("sign-in"))
+        assertTrue(mapServiceErrorMessage(404).contains("No route"))
+        assertTrue(mapServiceErrorMessage(429).contains("limited"))
+        assertTrue(mapServiceErrorMessage(503).contains("unavailable"))
+    }
 }

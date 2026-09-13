@@ -32,6 +32,10 @@ inaccessible to someone controlling the device.
   provider base locations remain private.
 - Civic map uses the existing sanitized `public_latitude`/`public_longitude` fields.
   It does not read owner/staff-only exact location details.
+- The report composer can select a searched place or current position, retain it with
+  the draft, or return to manual entry. Submission sends the actual coordinates to
+  the canonical report RPC and waits for its server-issued ID; an RPC failure cannot
+  produce a fabricated verified report. Nullable SQL arguments are sent explicitly.
 - Foreground location accepts precise or approximate permission, rejects stale fixes,
   stops on background, and clears location/search/route state when the account changes.
 - Search and reverse geocoding use live TomTom results. Routing supports driving,
@@ -65,6 +69,12 @@ Direct live checks with the supplied keys returned HTTP 200 for Postmasburg sear
 driving-route calculation and native map tile retrieval. Vault access checks confirmed
 the keys exist and anonymous/resident direct reads are denied. Full application build,
 deployed endpoint and device verification results are recorded in the integration PR.
+
+The deployed endpoint also passed authenticated configuration, search, reverse-geocode,
+driving, walking and cycling checks. Anonymous access returned 401, invalid coordinates
+returned 400, and direct resident access to the credential RPC returned 403. No response
+included the server-side key. Device rendering remains a separate acceptance check;
+this execution environment has no Android emulator or ADB device.
 
 Primary documentation:
 

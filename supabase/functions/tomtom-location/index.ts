@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.99.2";
-import { authenticateCaller, enforceRateLimit, publicError, readJsonObject, SecurityError, type EdgeAdminClient } from "../_shared/auth.ts";
+import { authenticateCaller, enforceRateLimit, publicError, SecurityError, type EdgeAdminClient } from "../_shared/auth.ts";
 import { LocationError, queryTomTom } from "./provider.ts";
 
 const json = (status: number, data: unknown) => new Response(JSON.stringify(data), {
@@ -13,13 +13,38 @@ export type LocationDependencies = {
   fetcher?: typeof fetch;
 };
 
+async function readLocationInput(request: Request): Promise<Record<string, unknown>> {
+  const maximum = 4_096;
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (!Number.isFinite(declared) || declared < 0 || declared > maximum) throw new SecurityError("INVALID_REQUEST");
+  const reader = request.body?.getReader();
+  if (!reader) throw new SecurityError("INVALID_REQUEST");
+  const bytes = new Uint8Array(maximum);
+  let length = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (length + value.byteLength > maximum) {
+        await reader.cancel(); throw new SecurityError("INVALID_REQUEST");
+      }
+      bytes.set(value, length); length += value.byteLength;
+    }
+  } finally { reader.releaseLock(); }
+  try {
+    const value = JSON.parse(new TextDecoder().decode(bytes.subarray(0, length)));
+    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error();
+    return value;
+  } catch { throw new SecurityError("INVALID_REQUEST"); }
+}
+
 export function createLocationHandler(deps: LocationDependencies) {
   return async (request: Request): Promise<Response> => {
     if (request.method !== "POST") return json(405, { error: "POST is required.", errorCode: "METHOD_NOT_ALLOWED" });
     try {
       const caller = await deps.authenticate(request);
       await deps.rateLimit(caller.userId);
-      const input = await readJsonObject(request, 4_096);
+      const input = await readLocationInput(request);
       if (!["config", "route", "search", "reverse"].includes(String(input.action))) throw new SecurityError("INVALID_REQUEST");
       const keys = await deps.credentials();
       if (input.action === "config") {

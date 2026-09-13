@@ -103,9 +103,19 @@ export async function queryTomTom(
       signal: AbortSignal.timeout(12_000), redirect: "error", headers: { Accept: "application/json" },
     });
   } catch { throw upstream(); }
+  if (response.status === 429) {
+    await response.body?.cancel();
+    throw new LocationError(429, "MAP_RATE_LIMITED", "Map requests are busy. Try again shortly.");
+  }
+  if (response.status === 401 || response.status === 403) {
+    await response.body?.cancel();
+    throw new LocationError(503, "MAP_NOT_CONFIGURED", "The map service needs configuration. Please contact support.");
+  }
+  if (action === "route" && response.status === 404) {
+    await response.body?.cancel();
+    throw new LocationError(404, "NO_ROUTE", "No route is available for these locations and travel mode.");
+  }
   const body = await readBounded(response);
-  if (response.status === 429) throw new LocationError(429, "MAP_RATE_LIMITED", "Map requests are busy. Try again shortly.");
-  if (response.status === 401 || response.status === 403) throw new LocationError(503, "MAP_NOT_CONFIGURED", "The map service needs configuration. Please contact support.");
   if (!response.ok) {
     const description = string(body.errorText) + string(object(body.detailedError)?.message) + string(object(body.error)?.description);
     if (action === "route" && (response.status === 404 || /NO_ROUTE_FOUND|no route|cannot be routed/i.test(description))) {
@@ -134,10 +144,16 @@ export async function queryTomTom(
     };
   }
   if (action === "reverse") {
-    return { results: list(body.addresses).slice(0, 8).map(raw => {
+    if (!Array.isArray(body.addresses)) throw upstream();
+    return { results: body.addresses.slice(0, 8).map(raw => {
       const item = object(raw); const address = object(item?.address);
-      const values = string(item?.position).split(",").map(Number);
-      const position = item?.position && typeof item.position === "object" ? upstreamPoint(item.position) : point({ latitude: values[0], longitude: values[1] });
+      let position: Point;
+      if (item?.position && typeof item.position === "object") position = upstreamPoint(item.position);
+      else {
+        const values = string(item?.position).split(",");
+        if (values.length !== 2 || values.some(value => !value.trim())) throw upstream();
+        position = upstreamPoint({ latitude: Number(values[0]), longitude: Number(values[1]) });
+      }
       const label = string(address?.freeformAddress);
       return { id: `${position.latitude},${position.longitude}`, title: label, address: label, position };
     }) };

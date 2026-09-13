@@ -68,6 +68,7 @@ fun LiveMapPanel(
     onOpenMarker: (String) -> Unit,
     modifier: Modifier = Modifier,
     initialSelectedMarkerId: String? = null,
+    onChooseLocation: ((GeoPoint) -> Unit)? = null,
     viewModel: LiveMapViewModel = hiltViewModel(key = rememberSaveable { "rtc-live-map-${UUID.randomUUID()}" }),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -101,7 +102,7 @@ fun LiveMapPanel(
         modifier = modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Live map", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+        Text(if (onChooseLocation == null) "Live map" else "Choose location", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
         if (state.accountId == null) {
             Text("Sign in to view live maps and directions.")
             return@Column
@@ -170,12 +171,22 @@ fun LiveMapPanel(
             OutlinedButton(onClick = {
                 if (hasLocationPermission()) viewModel.retryLocation()
                 else requestLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-            }, modifier = Modifier.weight(1f)) { Text("Use my location") }
+            }, modifier = Modifier.weight(1f)) { Text(if (onChooseLocation == null) "Use my location" else "Find my location") }
             TextButton(onClick = {
                 val intent = if (hasLocationPermission()) Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
                     else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
                 runCatching { context.startActivity(intent) }
             }, modifier = Modifier.widthIn(min = 48.dp)) { Text(if (hasLocationPermission()) "Settings" else "Permissions") }
+        }
+        onChooseLocation?.let { choose ->
+            Button(
+                onClick = {
+                    val latest = viewModel.state.value
+                    if (latest.accountId == state.accountId) latest.userLocation?.takeIf { it.isValid }?.let(choose)
+                },
+                enabled = state.userLocation?.isValid == true,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Use current location") }
         }
         if (state.userLocation != null) {
             TextButton(onClick = viewModel::identifyCurrentLocation, enabled = !state.addressLoading) {
@@ -200,6 +211,18 @@ fun LiveMapPanel(
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(selected.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     if (selected.subtitle.isNotBlank()) Text(selected.subtitle, style = MaterialTheme.typography.bodyMedium)
+                    onChooseLocation?.let { choose ->
+                        Button(
+                            onClick = {
+                                val latest = viewModel.state.value
+                                if (latest.accountId == state.accountId) latest.selectedMarker
+                                    ?.takeIf { it.id == selected.id && it.position.isValid }
+                                    ?.position?.let(choose)
+                            },
+                            enabled = selected.position.isValid,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Use selected location") }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("car" to "Drive", "pedestrian" to "Walk", "bicycle" to "Cycle").forEach { (mode, label) ->
                             FilterChip(selected = state.travelMode == mode, onClick = { viewModel.setTravelMode(mode) }, label = { Text(label) })

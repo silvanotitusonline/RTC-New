@@ -102,3 +102,23 @@ Deno.test("rate limit prevents credential retrieval and request dispatch", async
   const response = await handler(new Request("https://rtc.test", { method: "POST", body: '{"action":"config"}' }));
   equal(response.status, 429); equal(credentialsRead, false);
 });
+
+Deno.test("chunked input is cancelled before credential retrieval at 4 KiB", async () => {
+  let cancelled = false; let credentialsRead = false;
+  const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(4097)); }, cancel() { cancelled = true; } });
+  const handler = createLocationHandler({ authenticate: async () => ({ userId: "resident" }), rateLimit: async () => {}, credentials: async () => { credentialsRead = true; return {}; } });
+  const response = await handler(new Request("https://rtc.test", { method: "POST", body }));
+  equal(response.status, 400); equal(cancelled, true); equal(credentialsRead, false);
+});
+
+Deno.test("HTML and empty upstream errors retain actionable status", async () => {
+  for (const [status, expected] of [[429,429],[403,503],[401,503],[404,404]]) {
+    await rejects(() => queryTomTom({ action: "route", origin, destination }, "key", { fetcher: async () => new Response("<html>Unavailable</html>", { status }) }), expected);
+  }
+});
+
+Deno.test("malformed reverse coordinates cannot fabricate a zero location", async () => {
+  for (const body of [{}, { addresses: [{ position: "," }] }, { addresses: [{ position: "12,13,14" }] }, { addresses: [{ position: "NaN,1" }] }]) {
+    await rejects(() => queryTomTom({ action: "reverse", position: origin }, "key", { fetcher: async () => json(body) }), 502);
+  }
+});

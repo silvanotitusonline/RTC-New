@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
+import za.org.rtc.community.core.maps.GeoPoint
 import za.org.rtc.community.feature.publicreports.domain.PublicReportDraft
 import za.org.rtc.community.feature.publicreports.domain.PublicReportIdentityMode
 import za.org.rtc.community.feature.publicreports.domain.PublicReportLocationMode
@@ -40,6 +41,46 @@ class PublicReportComposerStateTest {
         val first = PublicReportComposerState(clientRequestId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
         val copied = first.copy(title = "Water leaking near clinic")
         assertEquals(first.clientRequestId, copied.clientRequestId)
+    }
+
+    @Test
+    fun mapDraftPreservesSelectedCoordinatesAndResidentWrittenLocationText() {
+        val point = GeoPoint(-28.3271234, 23.0721234)
+        val draft = PublicReportComposerState(
+            clientRequestId = "draft-a",
+            publicLocationLabel = "Clinic entrance",
+            exactAddress = "Private staff access gate",
+            selectedLocation = point,
+        ).toReportDraft()
+        assertEquals(PublicReportLocationMode.MAP, draft.locationMode)
+        assertEquals(point.latitude, draft.latitude!!, 0.0)
+        assertEquals(point.longitude, draft.longitude!!, 0.0)
+        assertEquals("Clinic entrance", draft.publicLocationLabel)
+        assertEquals("Private staff access gate", draft.exactAddress)
+    }
+
+    @Test
+    fun removingMapSelectionReturnsToManualWithoutOverwritingTypedLandmarks() {
+        val selected = PublicReportComposerState(
+            clientRequestId = "draft-a",
+            publicLocationLabel = "Clinic entrance",
+            exactAddress = "Private access gate",
+            selectedLocation = GeoPoint(-28.327, 23.072),
+        )
+        val draft = selected.copy(selectedLocation = null).toReportDraft()
+        assertEquals(PublicReportLocationMode.MANUAL, draft.locationMode)
+        assertNull(draft.latitude)
+        assertNull(draft.longitude)
+        assertEquals("Clinic entrance", draft.publicLocationLabel)
+        assertEquals("Private access gate", draft.exactAddress)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun invalidMapCoordinatesCannotBecomeAnApiDraft() {
+        PublicReportComposerState(
+            clientRequestId = "draft-a",
+            selectedLocation = GeoPoint(Double.NaN, 23.072),
+        ).toReportDraft()
     }
 
     private fun sampleDraft(
