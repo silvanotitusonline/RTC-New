@@ -21,10 +21,20 @@ if (project.file("google-services.json").isFile) {
 val releaseRequested = gradle.startParameter.taskNames.any { taskName ->
     taskName.contains("Release", ignoreCase = true)
 }
+val phoneBetaRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("PhoneBeta", ignoreCase = true)
+}
+val productionConnectedBuildRequested = releaseRequested || phoneBetaRequested
 
 if (releaseRequested) {
     require(project.file("google-services.json").isFile) {
         "Release builds require app/google-services.json with a Firebase Android client for " +
+            "za.org.rtc.community, restored locally or from GOOGLE_SERVICES_JSON_BASE64 in CI."
+    }
+}
+if (phoneBetaRequested) {
+    require(project.file("google-services.json").isFile) {
+        "PhoneBeta builds require app/google-services.json with the Firebase Android client for " +
             "za.org.rtc.community, restored locally or from GOOGLE_SERVICES_JSON_BASE64 in CI."
     }
 }
@@ -84,9 +94,9 @@ fun releaseRuntimeValue(key: String, environmentName: String): String {
     val value = providers.environmentVariable(environmentName).orNull?.takeIf { it.isNotBlank() }
         ?: providers.gradleProperty(key).orNull?.takeIf { it.isNotBlank() }
         ?: releaseRuntimeProperties.getProperty(key)?.takeIf { it.isNotBlank() }
-    if (releaseRequested) {
+    if (productionConnectedBuildRequested) {
         require(!value.isNullOrBlank()) {
-            "Release builds require the production runtime property '$key' via " +
+            "Production-connected builds require the runtime property '$key' via " +
                 "release.runtime.properties, Gradle properties, or $environmentName."
         }
     }
@@ -141,6 +151,34 @@ android {
                 "SUPABASE_PUBLISHABLE_KEY",
                 quotedBuildConfigValue(debugRuntimeValue("supabase.nonproduction.publishableKey")),
             )
+        }
+        create("phoneBeta") {
+            // Physical-device beta: real production services with the standard Android debug
+            // signing identity. This intentionally avoids the permanent release keystore while
+            // preserving the exact production applicationId required by Firebase/Google OAuth.
+            isDebuggable = true
+            signingConfig = signingConfigs.getByName("debug")
+            versionNameSuffix = "-phonebeta"
+            buildConfigField(
+                "String",
+                "SUPABASE_URL",
+                quotedBuildConfigValue(
+                    releaseRuntimeValue("supabase.production.url", "RTC_PROD_SUPABASE_URL"),
+                ),
+            )
+            buildConfigField(
+                "String",
+                "SUPABASE_PUBLISHABLE_KEY",
+                quotedBuildConfigValue(
+                    releaseRuntimeValue(
+                        "supabase.production.publishableKey",
+                        "RTC_PROD_SUPABASE_PUBLISHABLE_KEY",
+                    ),
+                ),
+            )
+            isMinifyEnabled = false
+            isShrinkResources = false
+            matchingFallbacks += listOf("debug")
         }
         release {
             buildConfigField(
