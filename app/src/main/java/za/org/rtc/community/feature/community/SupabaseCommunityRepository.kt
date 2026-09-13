@@ -115,7 +115,10 @@ class SupabaseCommunityRepository @Inject constructor(
             cachedPostDao.insertPosts(remotePosts.map { it.toCachedEntity() })
             buildCommunityFeedPage(posts = remotePosts, visibleLimit = visibleLimit)
         } else {
-            val finalPosts = cachedPostDao.getAllPosts().map { it.toCommunityPost() }
+            val finalPosts = postsAfterCommunityCursor(
+                posts = cachedPostDao.getAllPosts().map { it.toCommunityPost() },
+                cursor = cursor,
+            )
             buildCommunityFeedPage(posts = finalPosts, visibleLimit = visibleLimit)
         }
     }
