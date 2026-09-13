@@ -1,50 +1,26 @@
 package za.org.rtc.community.ui.navigation
 
 import android.content.Context
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import za.org.rtc.community.app.RtcViewModel
-import za.org.rtc.community.ui.animation.LocalReducedMotion
-import za.org.rtc.community.ui.animation.RtcMotionPatterns
-import za.org.rtc.community.core.DraftArea
-import za.org.rtc.community.core.HomeLayout
-import za.org.rtc.community.core.NoticeStatus
-import za.org.rtc.community.core.RtcSession
-import za.org.rtc.community.core.SessionAuthority
-import za.org.rtc.community.core.UserRole
+import za.org.rtc.community.core.*
 import za.org.rtc.community.feature.account.AccountScreen
 import za.org.rtc.community.feature.account.NotificationsScreen
-import za.org.rtc.community.feature.administration.AccessManagementScreen
-import za.org.rtc.community.feature.administration.AdminActivityScreen
-import za.org.rtc.community.feature.administration.AdminWorkspace
-import za.org.rtc.community.feature.administration.AdministratorMfaVerificationScreen
-import za.org.rtc.community.feature.administration.AdministratorPrivacyAnalyticsScreen
-import za.org.rtc.community.feature.administration.AiAssistantScreen
-import za.org.rtc.community.feature.administration.ContentManagementScreen
-import za.org.rtc.community.feature.administration.ModerationDashboard
-import za.org.rtc.community.feature.administration.MyWorkProfileScreen
-import za.org.rtc.community.feature.administration.OperationalControlsScreen
-import za.org.rtc.community.feature.administration.SystemHealthScreen
+import za.org.rtc.community.feature.administration.*
 import za.org.rtc.community.feature.administration.branding.BrandExperienceScreen
 import za.org.rtc.community.feature.alerts.CommunityAlertDetailScreen
 import za.org.rtc.community.feature.alerts.CommunityAlertsScreen
@@ -52,24 +28,16 @@ import za.org.rtc.community.feature.alerts.StaffCommunityAlertsScreen
 import za.org.rtc.community.feature.community.CommunityPostDetailScreen
 import za.org.rtc.community.feature.community.CommunityScreen
 import za.org.rtc.community.feature.communityhub.CommunityHubScreen
-import za.org.rtc.community.feature.explore.DirectoryRecordDetailScreen
-import za.org.rtc.community.feature.explore.ExploreDirectoryScreen
-import za.org.rtc.community.feature.explore.ExploreScreen
-import za.org.rtc.community.feature.explore.NoticeDetailScreen
-import za.org.rtc.community.feature.explore.SearchResultDetailScreen
-import za.org.rtc.community.feature.explore.SearchScreen
-import za.org.rtc.community.feature.home.HomeScreen
+import za.org.rtc.community.feature.explore.*
 import za.org.rtc.community.feature.home.HomePublicReportViewModel
+import za.org.rtc.community.feature.home.HomeScreen
 import za.org.rtc.community.feature.publicreports.domain.PublicReportScope
-import za.org.rtc.community.feature.marketplace.presentation.*
 import za.org.rtc.community.feature.support.HelpCentreScreen
 import za.org.rtc.community.feature.support.SupportCaseDetailScreen
 import za.org.rtc.community.feature.support.SupportScreen
-import za.org.rtc.community.navigation.RtcRoute
-import za.org.rtc.community.navigation.CommunitySection
-import za.org.rtc.community.navigation.navigateOverlay
-import za.org.rtc.community.navigation.navigatePrimary
-import za.org.rtc.community.navigation.returnToSafeWorkspace
+import za.org.rtc.community.navigation.*
+import za.org.rtc.community.ui.animation.LocalReducedMotion
+import za.org.rtc.community.ui.animation.RtcMotionPatterns
 import za.org.rtc.community.ui.home.HomeRouteActions
 import za.org.rtc.community.ui.home.HomeRouteContract
 import za.org.rtc.community.ui.home.HomeRouteState
@@ -101,13 +69,10 @@ internal fun RtcCommunityNavGraph(
     val publicSearchResults by viewModel.publicSearchResults.collectAsStateWithLifecycle()
     val isLiveContentLoading by viewModel.isLiveContentLoading.collectAsStateWithLifecycle()
     val communityActionUi by viewModel.communityActionUi.collectAsStateWithLifecycle()
-
     val reducedMotion = LocalReducedMotion.current
 
     SharedTransitionLayout(modifier = modifier) {
-        CompositionLocalProvider(
-            LocalSharedTransitionScope provides this
-        ) {
+        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
             NavHost(
                 modifier = Modifier,
                 navController = navController,
@@ -201,7 +166,7 @@ internal fun RtcCommunityNavGraph(
                                 onSaveDraft = { viewModel.saveDraft(DraftArea.COMMUNITY, body = it) },
                                 onDiscardDraft = { viewModel.discardDraft(DraftArea.COMMUNITY) },
                                 onOpenPost = { post -> navController.navigateOverlay(communityPostRoute(post.id)) },
-                                onSharePost = { sharedPost -> shareCommunityPost(context, sharedPost.id) },
+                                onSharePost = { post -> shareCommunityPost(context, post.id) },
                                 openComposerOnEntry = openCommunityComposer,
                             )
                         },
@@ -223,167 +188,13 @@ internal fun RtcCommunityNavGraph(
                             onSaveDraft = { viewModel.saveDraft(DraftArea.COMMUNITY, body = it) },
                             onDiscardDraft = { viewModel.discardDraft(DraftArea.COMMUNITY) },
                             onOpenPost = { post -> navController.navigateOverlay(communityPostRoute(post.id)) },
-                            onSharePost = { sharedPost -> shareCommunityPost(context, sharedPost.id) },
+                            onSharePost = { post -> shareCommunityPost(context, post.id) },
                         )
                     }
                 }
-                composable(RtcRoute.MARKETPLACE_HOME) {
-                    MarketplaceHomeRoute(
-                        onNavigate = { navController.navigateOverlay(it) },
-                        onSwitchToServices = { navController.navigateOverlay(RtcRoute.SERVICES) },
-                    )
-                }
+                marketplaceNavBindings(navController, session)
                 publicReportRoutes(navController, session)
                 residentModernisationBindings(navController, session)
-                composable(RtcRoute.MARKETPLACE_SEARCH) { MarketplaceSearchRoute(onNavigate = { navController.navigateOverlay(it) }) }
-                composable(RtcRoute.MARKETPLACE_MAP) {
-                    MarketplaceMapRoute(
-                        onBack = { navController.popBackStack() },
-                        onNavigate = { route -> navController.navigateOverlay(route) },
-                    )
-                }
-                composable(
-                    route = RtcRoute.MARKETPLACE_BUSINESS,
-                    arguments = listOf(navArgument("businessIdOrSlug") { type = NavType.StringType }),
-                ) { entry ->
-                    MarketplaceDetailRoute(
-                        id = entry.arguments?.getString("businessIdOrSlug").orEmpty(),
-                        onNavigate = { navController.navigateOverlay(it) },
-                    )
-                }
-                composable(
-                    route = RtcRoute.MARKETPLACE_REVIEWS,
-                    arguments = listOf(navArgument("businessId") { type = NavType.StringType }),
-                ) { entry ->
-                    MarketplaceReviewsRoute(
-                        businessId = entry.arguments?.getString("businessId").orEmpty(),
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable(
-                    route = RtcRoute.MARKETPLACE_DIRECTIONS,
-                    arguments = listOf(
-                        navArgument("businessId") { type = NavType.StringType },
-                        navArgument("locationId") { type = NavType.StringType },
-                    ),
-                ) { entry ->
-                    MarketplaceDirectionsRoute(
-                        businessId = entry.arguments?.getString("businessId").orEmpty(),
-                        locationId = entry.arguments?.getString("locationId").orEmpty(),
-                        onBack = { navController.popBackStack() },
-                        onNavigate = { navController.navigateOverlay(it) },
-                    )
-                }
-                composable(
-                    route = RtcRoute.MARKETPLACE_NAVIGATION,
-                    arguments = listOf(navArgument("locationId") { type = NavType.StringType }),
-                ) {
-                    MarketplaceMapRoute(onBack = { navController.popBackStack() })
-                }
-                composable(RtcRoute.MARKETPLACE_MY_BUSINESSES) {
-                    MarketplaceOwnerRoute(onNavigate = { navController.navigateOverlay(it) })
-                }
-                composable(RtcRoute.MARKETPLACE_SAVED) {
-                    MarketplaceSavedRoute(onNavigate = { route -> navController.navigateOverlay(route) })
-                }
-                composable(RtcRoute.MARKETPLACE_INVITATIONS) { MarketplaceInvitationsRoute() }
-                composable(RtcRoute.MARKETPLACE_MY_REVIEWS) { MarketplaceMyReviewsRoute() }
-                composable(RtcRoute.MARKETPLACE_BUSINESS_NEW) {
-                    MarketplaceOwnerWizardRoute(
-                        businessId = null,
-                        onNavigate = { navController.navigateOverlay(it) },
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable(
-                    route = RtcRoute.MARKETPLACE_BUSINESS_EDIT,
-                    arguments = listOf(navArgument("businessId") { type = NavType.StringType }),
-                ) { entry ->
-                    MarketplaceOwnerWizardRoute(
-                        businessId = entry.arguments?.getString("businessId"),
-                        onNavigate = { navController.navigateOverlay(it) },
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable(
-                    route = RtcRoute.MARKETPLACE_BUSINESS_PREVIEW,
-                    arguments = listOf(navArgument("businessId") { type = NavType.StringType }),
-                ) { entry ->
-                    MarketplaceOwnerPreviewRoute(entry.arguments?.getString("businessId").orEmpty())
-                }
-                composable(
-                    route = RtcRoute.MARKETPLACE_BUSINESS_STATUS,
-                    arguments = listOf(navArgument("businessId") { type = NavType.StringType }),
-                ) { entry ->
-                    MarketplaceStatusRoute(entry.arguments?.getString("businessId").orEmpty())
-                }
-                composable(RtcRoute.ADMIN_MARKETPLACE) {
-                    ProtectedRoute(
-                        RtcRoute.ADMIN_MARKETPLACE,
-                        session,
-                        onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) },
-                    ) {
-                        MarketplaceAdminRoute(onNavigate = { navController.navigateOverlay(it) })
-                    }
-                }
-                composable(
-                    route = RtcRoute.ADMIN_MARKETPLACE_BUSINESS,
-                    arguments = listOf(navArgument("submissionId") { type = NavType.StringType }),
-                ) { entry ->
-                    ProtectedRoute(
-                        RtcRoute.ADMIN_MARKETPLACE_BUSINESS,
-                        session,
-                        onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) },
-                    ) {
-                        MarketplaceAdminSubmissionRoute(
-                            submissionId = entry.arguments?.getString("submissionId").orEmpty(),
-                            canModerateLifecycle = session.role == UserRole.SYSTEM_ADMIN,
-                            onBack = { navController.popBackStack() },
-                        )
-                    }
-                }
-                composable(RtcRoute.ADMIN_MARKETPLACE_REVIEWS) {
-                    ProtectedRoute(
-                        RtcRoute.ADMIN_MARKETPLACE_REVIEWS,
-                        session,
-                        onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) },
-                    ) {
-                        MarketplaceAdminReviewsRoute(
-                            onBack = { navController.popBackStack() },
-                            onNavigate = { route -> navController.navigateOverlay(route) },
-                        )
-                    }
-                }
-                composable(RtcRoute.ADMIN_MARKETPLACE_CATEGORIES) {
-                    ProtectedRoute(
-                        RtcRoute.ADMIN_MARKETPLACE_CATEGORIES,
-                        session,
-                        onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) },
-                    ) {
-                        MarketplaceAdminCategoriesRoute(onBack = { navController.popBackStack() })
-                    }
-                }
-                composable(RtcRoute.ADMIN_MARKETPLACE_FEATURED) {
-                    ProtectedRoute(
-                        RtcRoute.ADMIN_MARKETPLACE_FEATURED,
-                        session,
-                        onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) },
-                    ) {
-                        MarketplaceAdminFeaturedRoute(
-                            onBack = { navController.popBackStack() },
-                            onNavigate = { route -> navController.navigateOverlay(route) },
-                        )
-                    }
-                }
-                composable(RtcRoute.ADMIN_MARKETPLACE_ANALYTICS) {
-                    ProtectedRoute(
-                        RtcRoute.ADMIN_MARKETPLACE_ANALYTICS,
-                        session,
-                        onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) },
-                    ) {
-                        MarketplaceAdminAnalyticsRoute(onBack = { navController.popBackStack() })
-                    }
-                }
                 composable(RtcRoute.EXPLORE) {
                     ExploreScreen(
                         projects = projectsPage.items,
@@ -400,9 +211,9 @@ internal fun RtcCommunityNavGraph(
                 composable(
                     route = "explore_directory/{directory}",
                     arguments = listOf(navArgument("directory") { type = NavType.StringType }),
-                ) { directoryEntry ->
+                ) { entry ->
                     ExploreDirectoryScreen(
-                        directory = directoryEntry.arguments?.getString("directory").orEmpty(),
+                        directory = entry.arguments?.getString("directory").orEmpty(),
                         notices = notices,
                         projects = projectsPage.items,
                         centres = centresPage.items,
@@ -429,12 +240,9 @@ internal fun RtcCommunityNavGraph(
                 composable(
                     route = "community_post/{postId}",
                     arguments = listOf(navArgument("postId") { type = NavType.StringType }),
-                ) { postEntry ->
+                ) { entry ->
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
-                        val postId = postEntry.arguments?.getString("postId").orEmpty()
-                        LaunchedEffect(postId) {
-                            if (postId.isNotBlank()) viewModel.loadCommunityPostDetail(postId)
-                        }
+                        val postId = entry.arguments?.getString("postId").orEmpty()
                         CommunityPostDetailScreen(
                             postId = postId,
                             session = session,
@@ -442,7 +250,7 @@ internal fun RtcCommunityNavGraph(
                             guidelinesAccepted = communityGuidelinesAccepted,
                             onAcceptGuidelines = viewModel::acceptCommunityGuidelines,
                             onDismissCommunityMessage = viewModel::dismissCommunityActionUi,
-                            onSharePost = { sharedPost -> shareCommunityPost(context, sharedPost.id) },
+                            onSharePost = { post -> shareCommunityPost(context, post.id) },
                             onReportPost = viewModel::reportCommunityPost,
                             commentDraft = drafts.firstOrNull { it.area == DraftArea.COMMUNITY_COMMENT && it.title == postId },
                             onSaveCommentDraft = { body -> viewModel.saveDraft(DraftArea.COMMUNITY_COMMENT, title = postId, body = body) },
@@ -456,9 +264,9 @@ internal fun RtcCommunityNavGraph(
                         navArgument("type") { type = NavType.StringType },
                         navArgument("id") { type = NavType.StringType },
                     ),
-                ) { detailEntry ->
-                    val type = detailEntry.arguments?.getString("type").orEmpty()
-                    val id = detailEntry.arguments?.getString("id").orEmpty()
+                ) { entry ->
+                    val type = entry.arguments?.getString("type").orEmpty()
+                    val id = entry.arguments?.getString("id").orEmpty()
                     DirectoryRecordDetailScreen(
                         type = type,
                         project = projectsPage.items.firstOrNull { type == "PROJECT" && it.id == id },
@@ -469,8 +277,8 @@ internal fun RtcCommunityNavGraph(
                 composable(
                     route = "notice/{id}",
                     arguments = listOf(navArgument("id") { type = NavType.StringType }),
-                ) { noticeEntry ->
-                    val id = noticeEntry.arguments?.getString("id").orEmpty()
+                ) { entry ->
+                    val id = entry.arguments?.getString("id").orEmpty()
                     NoticeDetailScreen(notices.firstOrNull { it.id == id && it.status == NoticeStatus.PUBLISHED })
                 }
                 composable(RtcRoute.SUPPORT) {
@@ -489,8 +297,8 @@ internal fun RtcCommunityNavGraph(
                 composable(
                     route = RtcRoute.SUPPORT_CASE_DETAIL,
                     arguments = listOf(navArgument("caseId") { type = NavType.StringType }),
-                ) { caseEntry ->
-                    val caseId = caseEntry.arguments?.getString("caseId").orEmpty()
+                ) { entry ->
+                    val caseId = entry.arguments?.getString("caseId").orEmpty()
                     val selectedCase = cases.firstOrNull { it.id == caseId }
                     LaunchedEffect(caseId) {
                         if (caseId.isNotBlank()) viewModel.loadSupportCaseMessages(caseId)
@@ -531,8 +339,8 @@ internal fun RtcCommunityNavGraph(
                 composable(
                     route = RtcRoute.ALERT_DETAIL,
                     arguments = listOf(navArgument("alertId") { type = NavType.StringType }),
-                ) { alertEntry ->
-                    val alertId = alertEntry.arguments?.getString("alertId").orEmpty()
+                ) { entry ->
+                    val alertId = entry.arguments?.getString("alertId").orEmpty()
                     LaunchedEffect(alertId) {
                         if (alertId.isNotBlank()) viewModel.loadCommunityAlertDetail(alertId)
                     }
@@ -567,7 +375,7 @@ internal fun RtcCommunityNavGraph(
                         AdminWorkspace(
                             viewModel = viewModel,
                             onOpenAi = { navController.navigateOverlay(RtcRoute.AI) },
-                            onOpenTool = { toolRoute -> navController.navigateOverlay(toolRoute) },
+                            onOpenTool = { route -> navController.navigateOverlay(route) },
                             draft = drafts.firstOrNull { it.area in setOf(DraftArea.STAFF_CONTENT, DraftArea.STAFF_MODERATION) },
                             onDiscardDraft = { viewModel.discardDraft(it.area) },
                             pendingSyncCount = pendingSyncCount,
