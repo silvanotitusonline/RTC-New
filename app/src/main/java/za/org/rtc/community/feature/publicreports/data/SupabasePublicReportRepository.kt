@@ -16,6 +16,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import za.org.rtc.community.data.local.VerifiedPublicReportDao
+import za.org.rtc.community.data.local.VerifiedPublicReportEntity
+import za.org.rtc.community.feature.publicreports.domain.PublicReport
 import za.org.rtc.community.feature.publicreports.domain.PublicReportAdminRow
 import za.org.rtc.community.feature.publicreports.domain.PublicReportCategory
 import za.org.rtc.community.feature.publicreports.domain.PublicReportComment
@@ -23,6 +26,7 @@ import za.org.rtc.community.feature.publicreports.domain.PublicReportDashboard
 import za.org.rtc.community.feature.publicreports.domain.PublicReportDraft
 import za.org.rtc.community.feature.publicreports.domain.PublicReportEvidenceUpload
 import za.org.rtc.community.feature.publicreports.domain.PublicReportFilters
+import za.org.rtc.community.feature.publicreports.domain.PublicReportIdentityMode
 import za.org.rtc.community.feature.publicreports.domain.PublicReportPage
 import za.org.rtc.community.feature.publicreports.domain.PublicReportPrivateDetails
 import za.org.rtc.community.feature.publicreports.domain.PublicReportRepository
@@ -37,6 +41,7 @@ import za.org.rtc.community.feature.publicreports.domain.PublicReportVoteResult
 @Singleton
 class SupabasePublicReportRepository @Inject constructor(
     private val supabase: SupabaseClient,
+    private val verifiedCache: VerifiedPublicReportDao,
 ) : PublicReportRepository {
 
     override suspend fun categories(): Result<List<PublicReportCategory>> = authoritativeResult {
@@ -49,29 +54,59 @@ class SupabasePublicReportRepository @Inject constructor(
         cursorCreatedAt: Instant?,
         cursorId: String?,
         limit: Int,
-    ): Result<PublicReportPage> = authoritativeResult {
+    ): Result<PublicReportPage> {
         val bounded = limit.coerceIn(1, PublicReportValidation.PAGE_MAX)
-        val items = decodeObjects(
-            supabase.postgrest.rpc(
-                PublicReportRpcContract.VERIFIED_PAGE,
-                pageParameters(filters, cursorCreatedAt, cursorId, bounded),
-            ),
-        ).map(PublicReportJsonMappers::report)
-        PublicReportPage(
-            items = items,
-            nextCreatedAt = items.lastOrNull()?.createdAt,
-            nextId = items.lastOrNull()?.id,
-            endReached = items.size < bounded,
-        )
+        return try {
+            val items = decodeObjects(
+                supabase.postgrest.rpc(
+                    PublicReportRpcContract.VERIFIED_PAGE,
+                    pageParameters(filters, cursorCreatedAt, cursorId, bounded),
+                ),
+            ).map(PublicReportJsonMappers::report)
+            cacheVerifiedReports(items)
+            Result.success(
+                PublicReportPage(
+                    items = items,
+                    nextCreatedAt = items.lastOrNull()?.createdAt,
+                    nextId = items.lastOrNull()?.id,
+                    endReached = items.size < bounded,
+                ),
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            val cached = if (cursorCreatedAt == null && cursorId == null && filters.cacheCompatible) {
+                verifiedCache.latest((bounded * 3).coerceAtMost(100))
+                    .map(VerifiedPublicReportEntity::toDomain)
+                    .filter { it.matches(filters) }
+                    .take(bounded)
+            } else {
+                emptyList()
+            }
+            if (cached.isNotEmpty()) {
+                Result.success(PublicReportPage(cached, null, null, endReached = true))
+            } else {
+                Result.failure(PublicReportFailure.from(failure))
+            }
+        }
     }
 
-    override suspend fun get(reportId: String): Result<za.org.rtc.community.feature.publicreports.domain.PublicReport?> = authoritativeResult {
-        decodeObjects(
-            supabase.postgrest.rpc(
-                PublicReportRpcContract.GET,
-                buildJsonObject { put("p_report_id", reportId) },
-            ),
-        ).firstOrNull()?.let(PublicReportJsonMappers::report)
+    override suspend fun get(reportId: String): Result<PublicReport?> {
+        return try {
+            val report = decodeObjects(
+                supabase.postgrest.rpc(
+                    PublicReportRpcContract.GET,
+                    buildJsonObject { put("p_report_id", reportId) },
+                ),
+            ).firstOrNull()?.let(PublicReportJsonMappers::report)
+            report?.takeIf { it.verified }?.let { verifiedCache.upsert(it.toCacheEntity()) }
+            Result.success(report)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            verifiedCache.byId(reportId)?.toDomain()?.let { Result.success(it) }
+                ?: Result.failure(PublicReportFailure.from(failure))
+        }
     }
 
     override suspend fun timeline(reportId: String): Result<List<PublicReportTimelineEntry>> = authoritativeResult {
@@ -271,6 +306,84 @@ class SupabasePublicReportRepository @Inject constructor(
         Unit
     }.recoverCatching { error -> throw PublicReportFailure.from(error) }
 
+    private suspend fun cacheVerifiedReports(reports: List<PublicReport>) {
+        val verified = reports.filter(PublicReport::verified)
+        if (verified.isEmpty()) return
+        verifiedCache.upsertAll(verified.map(PublicReport::toCacheEntity))
+        verifiedCache.deleteOlderThan(System.currentTimeMillis() - CACHE_RETENTION_MILLIS)
+    }
+
+    private fun PublicReport.toCacheEntity() = VerifiedPublicReportEntity(
+        id = id,
+        title = title,
+        description = description,
+        startedAt = startedAt?.toString(),
+        categoryId = categoryId,
+        categorySlug = categorySlug,
+        categoryLabel = categoryLabel,
+        urgency = urgency.name,
+        status = status.name,
+        identityMode = identityMode.name,
+        publicLocationLabel = publicLocationLabel,
+        authorDisplayName = authorDisplayName,
+        verificationReason = verificationReason,
+        duplicateOf = duplicateOf,
+        thumbsUpCount = thumbsUpCount,
+        thumbsDownCount = thumbsDownCount,
+        commentCount = commentCount,
+        evidenceCount = evidenceCount,
+        currentUserVote = currentUserVote,
+        createdAt = createdAt.toString(),
+        updatedAt = updatedAt.toString(),
+        publicLatitude = publicLatitude,
+        publicLongitude = publicLongitude,
+        cachedAtEpochMillis = System.currentTimeMillis(),
+    )
+
+    private fun VerifiedPublicReportEntity.toDomain() = PublicReport(
+        id = id,
+        title = title,
+        description = description,
+        startedAt = startedAt?.let(Instant::parse),
+        categoryId = categoryId,
+        categorySlug = categorySlug,
+        categoryLabel = categoryLabel,
+        urgency = enumValueOrDefault(urgency, PublicReportUrgency.UNKNOWN),
+        status = enumValueOrDefault(status, PublicReportStatus.UNKNOWN),
+        identityMode = enumValueOrDefault(identityMode, PublicReportIdentityMode.UNKNOWN),
+        publicLocationLabel = publicLocationLabel,
+        authorDisplayName = authorDisplayName,
+        verified = true,
+        verificationReason = verificationReason,
+        duplicateOf = duplicateOf,
+        thumbsUpCount = thumbsUpCount,
+        thumbsDownCount = thumbsDownCount,
+        commentCount = commentCount,
+        evidenceCount = evidenceCount,
+        currentUserVote = currentUserVote,
+        createdAt = Instant.parse(createdAt),
+        updatedAt = Instant.parse(updatedAt),
+        publicLatitude = publicLatitude,
+        publicLongitude = publicLongitude,
+    )
+
+    private inline fun <reified T : Enum<T>> enumValueOrDefault(value: String, fallback: T): T =
+        enumValues<T>().firstOrNull { it.name == value } ?: fallback
+
+    private val PublicReportFilters.cacheCompatible: Boolean
+        get() = searchQuery.isBlank() && quickFilterTag.isNullOrBlank() && sort == PublicReportSort.LATEST
+
+    private fun PublicReport.matches(filters: PublicReportFilters): Boolean {
+        if (filters.urgency?.takeIf { it != PublicReportUrgency.UNKNOWN }?.let { urgency != it } == true) return false
+        if (filters.categorySlug?.takeIf { it.isNotBlank() }?.let { categorySlug != it } == true) return false
+        return when (filters.effectiveScope) {
+            PublicReportScope.VERIFIED -> verified
+            PublicReportScope.ACTIVE -> status in ACTIVE_STATUSES
+            PublicReportScope.RESOLVED -> status == PublicReportStatus.COMPLETED
+            PublicReportScope.UNRESOLVED -> status != PublicReportStatus.COMPLETED
+        }
+    }
+
     private suspend fun <T> authoritativeResult(block: suspend () -> T): Result<T> = try {
         Result.success(block())
     } catch (cancelled: CancellationException) {
@@ -311,6 +424,12 @@ class SupabasePublicReportRepository @Inject constructor(
 
     companion object {
         const val EVIDENCE_BUCKET = PublicReportRpcContract.EVIDENCE_BUCKET
+        private const val CACHE_RETENTION_MILLIS = 7L * 24L * 60L * 60L * 1000L
+        private val ACTIVE_STATUSES = setOf(
+            PublicReportStatus.SUBMITTED,
+            PublicReportStatus.ACKNOWLEDGED,
+            PublicReportStatus.IN_PROGRESS,
+        )
     }
 }
 
