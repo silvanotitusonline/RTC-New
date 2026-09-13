@@ -21,6 +21,17 @@ import za.org.rtc.community.core.*
 import za.org.rtc.community.feature.account.AccountScreen
 import za.org.rtc.community.feature.account.NotificationsScreen
 import za.org.rtc.community.feature.administration.*
+import za.org.rtc.community.feature.administration.AccessManagementScreen
+import za.org.rtc.community.feature.administration.AdminActivityScreen
+import za.org.rtc.community.feature.administration.AdminWorkspace
+import za.org.rtc.community.feature.administration.AiAssistantScreen
+import za.org.rtc.community.feature.administration.AdministratorMfaVerificationScreen
+import za.org.rtc.community.feature.administration.AdministratorPrivacyAnalyticsScreen
+import za.org.rtc.community.feature.administration.ContentManagementScreen
+import za.org.rtc.community.feature.administration.ModerationDashboard
+import za.org.rtc.community.feature.administration.MyWorkProfileScreen
+import za.org.rtc.community.feature.administration.OperationalControlsScreen
+import za.org.rtc.community.feature.administration.SystemHealthScreen
 import za.org.rtc.community.feature.administration.branding.BrandExperienceScreen
 import za.org.rtc.community.feature.alerts.CommunityAlertDetailScreen
 import za.org.rtc.community.feature.alerts.CommunityAlertsScreen
@@ -29,6 +40,12 @@ import za.org.rtc.community.feature.community.CommunityPostDetailScreen
 import za.org.rtc.community.feature.community.CommunityScreen
 import za.org.rtc.community.feature.communityhub.CommunityHubScreen
 import za.org.rtc.community.feature.explore.*
+import za.org.rtc.community.feature.explore.DirectoryRecordDetailScreen
+import za.org.rtc.community.feature.explore.ExploreDirectoryScreen
+import za.org.rtc.community.feature.explore.ExploreScreen
+import za.org.rtc.community.feature.explore.NoticeDetailScreen
+import za.org.rtc.community.feature.explore.SearchResultDetailScreen
+import za.org.rtc.community.feature.explore.SearchScreen
 import za.org.rtc.community.feature.home.HomePublicReportViewModel
 import za.org.rtc.community.feature.home.HomeScreen
 import za.org.rtc.community.feature.publicreports.domain.PublicReportScope
@@ -166,7 +183,7 @@ internal fun RtcCommunityNavGraph(
                                 onSaveDraft = { viewModel.saveDraft(DraftArea.COMMUNITY, body = it) },
                                 onDiscardDraft = { viewModel.discardDraft(DraftArea.COMMUNITY) },
                                 onOpenPost = { post -> navController.navigateOverlay(communityPostRoute(post.id)) },
-                                onSharePost = { post -> shareCommunityPost(context, post.id) },
+                                onSharePost = { sharedPost -> shareCommunityPost(context, sharedPost.id) },
                                 openComposerOnEntry = openCommunityComposer,
                             )
                         },
@@ -188,7 +205,7 @@ internal fun RtcCommunityNavGraph(
                             onSaveDraft = { viewModel.saveDraft(DraftArea.COMMUNITY, body = it) },
                             onDiscardDraft = { viewModel.discardDraft(DraftArea.COMMUNITY) },
                             onOpenPost = { post -> navController.navigateOverlay(communityPostRoute(post.id)) },
-                            onSharePost = { post -> shareCommunityPost(context, post.id) },
+                            onSharePost = { sharedPost -> shareCommunityPost(context, sharedPost.id) },
                         )
                     }
                 }
@@ -250,7 +267,7 @@ internal fun RtcCommunityNavGraph(
                             guidelinesAccepted = communityGuidelinesAccepted,
                             onAcceptGuidelines = viewModel::acceptCommunityGuidelines,
                             onDismissCommunityMessage = viewModel::dismissCommunityActionUi,
-                            onSharePost = { post -> shareCommunityPost(context, post.id) },
+                            onSharePost = { sharedPost -> shareCommunityPost(context, sharedPost.id) },
                             onReportPost = viewModel::reportCommunityPost,
                             commentDraft = drafts.firstOrNull { it.area == DraftArea.COMMUNITY_COMMENT && it.title == postId },
                             onSaveCommentDraft = { body -> viewModel.saveDraft(DraftArea.COMMUNITY_COMMENT, title = postId, body = body) },
