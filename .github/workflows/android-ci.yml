@@ -2,7 +2,7 @@ name: Android Production Verification
 
 on:
   push:
-    branches: [ main, production, develop ]
+    branches: [ main, production, develop, 'integration/**' ]
   pull_request:
   workflow_dispatch:
 
