@@ -33,7 +33,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceBusinessDetail
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceRating
@@ -109,18 +108,6 @@ internal fun MarketplaceBusinessDetailContent(
                     horizontalArrangement = Arrangement.spacedBy(RtcSpacing.controlGap),
                     verticalArrangement = Arrangement.spacedBy(RtcSpacing.controlGap),
                 ) {
-                    Button(
-                        onClick = {
-                            onNavigate(
-                                RtcRoute.serviceCentreRequest(
-                                    providerId = detail.card.id,
-                                    businessId = detail.card.id,
-                                    offeringId = detail.offerings.firstOrNull()?.id,
-                                ),
-                            )
-                        },
-                        modifier = Modifier.height(RtcSize.minimumTouchTarget),
-                    ) { Text(MarketplaceRequestBookingLabel) }
                     OutlinedButton(
                         onClick = {
                             val next = !isBookmarked
@@ -198,18 +185,6 @@ internal fun MarketplaceBusinessDetailContent(
                         Text(offering.title, fontWeight = FontWeight.Bold)
                         offering.description.takeIf(String::isNotBlank)?.let { Text(it) }
                         Text(offering.priceLabel, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                        Button(
-                            onClick = {
-                                onNavigate(
-                                    RtcRoute.serviceCentreRequest(
-                                        providerId = detail.card.id,
-                                        businessId = detail.card.id,
-                                        offeringId = offering.id,
-                                    ),
-                                )
-                            },
-                            modifier = Modifier.height(RtcSize.minimumTouchTarget),
-                        ) { Text(MarketplaceRequestBookingLabel) }
                     }
                 }
             }
