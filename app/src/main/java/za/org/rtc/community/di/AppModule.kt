@@ -38,10 +38,6 @@ import za.org.rtc.community.feature.marketplace.domain.MarketplaceOwnerRepositor
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceReviewRepository
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceLocationRepository
 import za.org.rtc.community.core.location.MarketplaceLocationProvider
-import za.org.rtc.community.feature.servicecentre.data.remote.SupabaseServiceCentreRepository
-import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBookingRepository
-import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreDiscoveryRepository
-import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreProviderRepository
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -123,16 +119,4 @@ object AppModule {
     @Provides
     @Singleton
     fun provideMarketplaceAdminRepository(repository: SupabaseMarketplaceRepository): MarketplaceAdminRepository = repository
-
-    @Provides
-    @Singleton
-    fun provideServiceCentreDiscoveryRepository(repository: SupabaseServiceCentreRepository): ServiceCentreDiscoveryRepository = repository
-
-    @Provides
-    @Singleton
-    fun provideServiceCentreProviderRepository(repository: SupabaseServiceCentreRepository): ServiceCentreProviderRepository = repository
-
-    @Provides
-    @Singleton
-    fun provideServiceCentreBookingRepository(repository: SupabaseServiceCentreRepository): ServiceCentreBookingRepository = repository
 }
