@@ -5,9 +5,10 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[2]
 MAIN_ACTIVITY = (ROOT / 'app/src/main/java/za/org/rtc/community/MainActivity.kt').read_text()
 APP_ROOT = (ROOT / 'app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt').read_text()
+RESIDENT_ENTRY_HOST = (ROOT / 'app/src/main/java/za/org/rtc/community/feature/account/PublicWelcomeGuestHost.kt').read_text()
 NAV_GRAPH = (ROOT / 'app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityNavGraph.kt').read_text()
 NAV_CHROME = (ROOT / 'app/src/main/java/za/org/rtc/community/ui/navigation/RtcNavigationChrome.kt').read_text()
-MAIN = "\n".join([MAIN_ACTIVITY, APP_ROOT, NAV_GRAPH, NAV_CHROME])
+MAIN = "\n".join([MAIN_ACTIVITY, APP_ROOT, RESIDENT_ENTRY_HOST, NAV_GRAPH, NAV_CHROME])
 VM = (ROOT / 'app/src/main/java/za/org/rtc/community/app/RtcViewModel.kt').read_text()
 REPO = (ROOT / 'app/src/main/java/za/org/rtc/community/data/RtcRepository.kt').read_text()
 PROD = (ROOT / 'app/src/main/java/za/org/rtc/community/supabase/ProductionUxRepository.kt').read_text()
