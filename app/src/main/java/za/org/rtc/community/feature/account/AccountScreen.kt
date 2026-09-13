@@ -9,10 +9,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
@@ -28,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import za.org.rtc.community.app.RtcViewModel
+import za.org.rtc.community.navigation.RtcRoute
 import za.org.rtc.community.ui.components.ResidentPullToRefresh
 import za.org.rtc.community.ui.components.RtcCard
 import za.org.rtc.community.ui.components.RtcScreenScaffold
@@ -54,7 +54,7 @@ internal fun AccountScreen(
 
     ResidentPullToRefresh(isRefreshing = isRefreshing, onRefresh = onRefresh) {
         RtcScreenScaffold {
-            item { RtcSectionHeader("Account", "Identity, provider tools, marketplace and support.") }
+            item { RtcSectionHeader("Account", "Identity, messages, marketplace, settings and support.") }
             item {
                 RtcCard {
                     Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.small)) {
@@ -81,23 +81,23 @@ internal fun AccountScreen(
                     title = "Marketplace & Business Hub",
                     description = "Manage, edit, or register your local business profiles, team invitations, photos and services.",
                     icon = { Icon(Icons.Filled.Storefront, contentDescription = null) },
-                    onClick = { onMarketplace("account/marketplace/my-businesses") },
+                    onClick = { onMarketplace(RtcRoute.MARKETPLACE_MY_BUSINESSES) },
                 )
             }
             item {
                 AccountRow(
-                    title = "Provider profile",
-                    description = "Become a provider or manage your Service Centre provider profile.",
-                    icon = { Icon(Icons.Filled.Build, contentDescription = null) },
-                    onClick = { onMarketplace("account/marketplace/my-businesses") },
+                    title = "Messages",
+                    description = "Open your resident inbox directly on the Messages tab.",
+                    icon = { Icon(Icons.Filled.MailOutline, contentDescription = null) },
+                    onClick = { onMarketplace(RtcRoute.ACCOUNT_MESSAGES) },
                 )
             }
             item {
                 AccountRow(
                     title = "Settings",
-                    description = "Profile, privacy, security, notifications, accessibility and account controls.",
+                    description = "Privacy, security, notifications, accessibility and account controls.",
                     icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                    onClick = onHelp,
+                    onClick = { onMarketplace(RtcRoute.ACCOUNT_SETTINGS) },
                 )
             }
             item {
@@ -107,14 +107,6 @@ internal fun AccountScreen(
                     icon = { Icon(Icons.Filled.HelpOutline, contentDescription = null) },
                     onClick = onHelp,
                 )
-            }
-            item {
-                RtcCard {
-                    Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
-                        Icon(Icons.Filled.Person, contentDescription = null)
-                        Text("Provider status and account identity remain attached to this same resident account.")
-                    }
-                }
             }
         }
     }
