@@ -18,6 +18,7 @@ EXTRACTED_FILES = [
     "feature/administration/branding/BrandExperienceScreen.kt",
     "feature/administration/branding/BrandExperienceSections.kt",
     "feature/alerts/CommunityAlertsScreens.kt",
+    "feature/community/CommunityCommentComponents.kt",
     "feature/community/CommunityFeedScreen.kt",
     "feature/community/CommunityMedia.kt",
     "feature/community/CommunityPostCard.kt",
