@@ -115,8 +115,8 @@ def test_reference_driven_makeover_uses_transparent_rtc_brand_and_shared_palette
     assert 'val RtcInk = Color(0xFF0C1013)' in theme
     assert 'val RtcMint = Color(0xFF2EC27E)' in theme
     assert 'val RtcCivicGold = Color(0xFFD4AF37)' in theme
-    assert '@drawable/rtc_community_logo_transparent' in splash
-    assert '@drawable/rtc_community_logo_transparent' in splash_background
+    assert '@drawable/rtc_splash_logo' in splash
+    assert '@drawable/rtc_splash_logo' in splash_background
     assert logo.exists() and logo.stat().st_size > 0
     assert 'fun RtcBrandLockup(' in BRAND_LOCKUP
     assert 'R.drawable.rtc_logo_mark_transparent' in BRAND_LOCKUP

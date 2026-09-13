@@ -132,7 +132,11 @@ assert '[functions.daily-post-scheduler]' in supabase_config
 assert 'verify_jwt = false' in supabase_config.split('[functions.daily-post-scheduler]', 1)[1]
 assert 'enforceRateLimit' in language_fn
 assert 'geminiTranslation' in language_fn
-assert 'texttospeech.googleapis.com' in language_fn
+providers = (ROOT / 'supabase/functions/daily-post-language/providers.ts').read_text()
+assert 'texttospeech.googleapis.com' in providers
+assert 'get_firebase_fcm_service_account' in providers
+assert 'validate_only: true' in scheduler_fn
+assert 'verifyDailyPostSchedulerCaller(req, admin)' in scheduler_fn
 assert 'daily_post_translations' in language_fn
 
 # Multilingual onboarding persists a locale choice instead of hard-coding one language.

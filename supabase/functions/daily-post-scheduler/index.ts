@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { GoogleAuth } from "npm:google-auth-library";
 import { boundedText, writeAudit, type EdgeAdminClient } from "../_shared/auth.ts";
+import { checkLanguageProviders } from "./readiness.ts";
 
 const URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SECRET_KEY") ?? "";
@@ -62,7 +63,8 @@ async function sendDevice(
   const fp = await fingerprint(device.fcm_token);
   const existing = await admin.from("notification_delivery_attempts")
     .select("id,state").eq("source_type", "DAILY_POST_JOB").eq("source_id", job.job_id).eq("token_fingerprint", fp).maybeSingle();
-  if (existing.data?.state === "ACCEPTED" || existing.data?.state === "PERMANENT_FAILURE") return;
+  if (existing.error) throw new Error("ATTEMPT_LOOKUP_FAILED");
+  if (existing.data?.state === "ACCEPTED" || existing.data?.state === "PERMANENT_FAILURE") return false;
   const attempt = await admin.from("notification_delivery_attempts").upsert({
     source_type: "DAILY_POST_JOB", source_id: job.job_id, device_registration_id: device.id,
     token_fingerprint: fp, state: "PENDING",
@@ -86,13 +88,14 @@ async function sendDevice(
     } }),
   });
   if (response.ok) {
-    await admin.from("notification_delivery_attempts").update({ state: "ACCEPTED", accepted_at: new Date().toISOString(), last_http_status: response.status, attempt_count: (attempt.data.attempt_count ?? 0) + 1 }).eq("id", attempt.data.id);
-    return;
+    const saved = await admin.from("notification_delivery_attempts").update({ state: "ACCEPTED", accepted_at: new Date().toISOString(), last_http_status: response.status, attempt_count: (attempt.data.attempt_count ?? 0) + 1 }).eq("id", attempt.data.id);
+    if (saved.error) throw new Error("ATTEMPT_PERSISTENCE_FAILED");
+    return true;
   }
   let payload: any = {};
   try { payload = await response.json(); } catch { /* no-op */ }
-  const code = String(payload?.error?.status ?? `HTTP_${response.status}`);
-  const stale = response.status === 404 || response.status === 410 || code === "UNREGISTERED";
+  const code = String(payload?.error?.details?.find((entry: any) => typeof entry?.errorCode === "string")?.errorCode ?? payload?.error?.status ?? `HTTP_${response.status}`);
+  const stale = code === "UNREGISTERED";
   await admin.from("notification_delivery_attempts").update({
     state: stale ? "PERMANENT_FAILURE" : "RETRY_PENDING",
     permanently_failed_at: stale ? new Date().toISOString() : null,
@@ -101,6 +104,7 @@ async function sendDevice(
   }).eq("id", attempt.data.id);
   if (stale) await admin.from("device_registrations").delete().eq("id", device.id);
   if (!stale) throw new Error(`FCM_RETRY:${code}`);
+  return false;
 }
 
 Deno.serve(async (req: Request) => {
@@ -109,6 +113,38 @@ Deno.serve(async (req: Request) => {
   const admin = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } }) as unknown as EdgeAdminClient;
   try {
     await verifyDailyPostSchedulerCaller(req, admin);
+    // Explicit, server-only diagnostic mode: validate FCM requests without
+    // delivery and exercise the actual translation, TTS, and audio-storage path.
+    const body = await req.text();
+    if (new TextEncoder().encode(body).byteLength > 1024) return json(400, { error: "Request too large." });
+    const input = body.trim() ? JSON.parse(body) : {};
+    if (input?.action === "check") {
+      const devices = await allDevices(admin);
+      let push: Record<string, unknown>;
+      try {
+        const auth = await accessToken(admin);
+        let valid = 0;
+        const failures: string[] = [];
+        for (const device of devices) {
+          const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(auth.project)}/messages:send`, {
+            method: "POST", headers: { Authorization: `Bearer ${auth.token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ validate_only: true, message: { token: device.fcm_token, data: { type: "RTC_READINESS_CHECK" } } }),
+          });
+          if (response.ok) valid++;
+          else {
+            const failure = await response.json().catch(() => ({}));
+            const reason = failure?.error?.details?.find((entry: any) => typeof entry?.errorCode === "string")?.errorCode;
+            const safeReason = typeof reason === "string" && /^[A-Z_]{1,64}$/.test(reason) ? reason : "UNAVAILABLE";
+            failures.push(`HTTP_${response.status}_${safeReason}`);
+          }
+        }
+        push = { status: devices.length > 0 && valid === devices.length ? "passed" : "blocked", mode: "validate_only", registeredDevices: devices.length, validatedDevices: valid, failures, deliveryConfirmed: false };
+      } catch {
+        push = { status: "blocked", code: "FCM_CREDENTIALS_OR_API_UNAVAILABLE", deliveryConfirmed: false };
+      }
+      const languages = await checkLanguageProviders(admin);
+      return json(200, { checkedAt: new Date().toISOString(), push, ...languages });
+    }
     const claimed = await admin.rpc("daily_post_claim_due_jobs_v1", { p_limit: MAX_JOBS });
     if (claimed.error) throw new Error("JOB_CLAIM_FAILED");
     const jobs = Array.isArray(claimed.data) ? claimed.data : [];
@@ -124,11 +160,10 @@ Deno.serve(async (req: Request) => {
             const auth = await accessToken(admin);
             const errors: string[] = [];
             await pool(devices, async (device) => {
-              try { await sendDevice(admin, auth.token, auth.project, job, post, device); }
+              try { if (await sendDevice(admin, auth.token, auth.project, job, post, device)) pushed++; }
               catch (error) { errors.push(error instanceof Error ? error.message : "FCM_FAILED"); }
             });
             if (errors.length > 0) throw new Error(`FCM_PARTIAL_FAILURE:${errors.length}`);
-            pushed += devices.length;
           }
         }
         await admin.rpc("daily_post_complete_job_v1", { p_job_id: job.job_id, p_success: true, p_error: null });

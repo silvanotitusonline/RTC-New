@@ -103,8 +103,8 @@ def test_reference_onboarding_uses_supplied_splash_logo_and_real_full_page_auth_
         configuration,
         re.S,
     ).group(1)
-    assert '@drawable/rtc_community_logo_transparent' in (ROOT / 'app/src/main/res/values/themes.xml').read_text()
-    assert '@drawable/rtc_community_logo_transparent' in (ROOT / 'app/src/main/res/drawable/rtc_splash_background.xml').read_text()
+    assert '@drawable/rtc_splash_logo' in (ROOT / 'app/src/main/res/values/themes.xml').read_text()
+    assert '@drawable/rtc_splash_logo' in (ROOT / 'app/src/main/res/drawable/rtc_splash_background.xml').read_text()
     assert 'R.drawable.rtc_community_logo_transparent' not in brand
     assert 'R.drawable.rtc_logo_mark_transparent' in brand
     assert 'import za.org.rtc.community.feature.account.PublicWelcomeScreen' in MAIN

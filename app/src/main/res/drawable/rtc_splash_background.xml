@@ -6,6 +6,8 @@
         </shape>
     </item>
     <item
-        android:drawable="@drawable/rtc_community_logo_transparent"
-        android:gravity="center" />
+        android:drawable="@drawable/rtc_splash_logo"
+        android:gravity="center"
+        android:width="288dp"
+        android:height="288dp" />
 </layer-list>
