@@ -475,7 +475,7 @@ class RtcRepository @Inject constructor(
     suspend fun verifySystemAdministratorTotp(factorId: String?, code: String): Result<Unit> = runCatching {
         require(_session.value.authority == SessionAuthority.SUPABASE_AUTH) { "Use a verified Supabase session to verify MFA." }
         require(_session.value.role == UserRole.SYSTEM_ADMIN) { "TOTP verification is reserved for System Administrators." }
-        require(code.trim().length in 6..8 && code.trim().all(Char::isDigit)) { "Enter the current code from your authenticator app and try again." }
+        require(code.trim().length in 6..8 && code.trim().all(Char::isDigit)) { "Enter the current code from your authenticator app." }
         val activeFactorId = factorId ?: supabase.auth.mfa.retrieveFactorsForCurrentUser()
             .firstOrNull { it.isVerified }
             ?.id
@@ -942,6 +942,7 @@ class RtcRepository @Inject constructor(
                 p.copy(viewerHasLiked = newLikedState, reactions = newReactionsCount)
             } else p
         }
+
         _communityPostDetail.value?.let { detail ->
             if (detail.id == postId) {
                 _communityPostDetail.value = detail.copy(
