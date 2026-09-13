@@ -198,9 +198,9 @@ def test_community_upload_recovery_is_scoped_to_runtime_owner_and_authenticated_
     assert "suspend fun pendingForOwner" in database
     assert "suspend fun forDraftForOwner" in database
     assert "suspend fun deleteDraftForOwner" in database
-    assert "val currentUser = supabase.auth.currentUserOrNull() ?: return Result.failure()" in worker
-    assert "val ownerId = draftOwnerKeyForAuthenticatedUser(currentUser.id)" in worker
-    assert "pendingForOwner(ownerId)" in worker
+    assert "CASE WHEN :ownerUserId LIKE 'staff:%' THEN substr(:ownerUserId, 7) ELSE :ownerUserId END" in database
+    assert "val ownerUserId = production.currentAuthenticatedUserIdOrNull() ?: return Result.success()" in worker
+    assert "pendingForOwner(ownerUserId)" in worker
     assert "ownerUserId = authorId" in PRODUCTION_REPOSITORY
     assert "forDraftForOwner(draftId, ownerUserId)" in PRODUCTION_REPOSITORY
     assert "deleteDraftForOwner(draftId, ownerUserId)" in PRODUCTION_REPOSITORY
