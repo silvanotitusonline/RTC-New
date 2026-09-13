@@ -128,6 +128,12 @@ internal fun RtcCommunityApp(
         return
     }
 
+    LaunchedEffect(session.authority, residentEntryGranted) {
+        if (session.authority == SessionAuthority.SUPABASE_AUTH && residentEntryGranted) {
+            residentEntryViewModel.returnToWelcome()
+        }
+    }
+
     if (session.role == UserRole.ANONYMOUS_PUBLIC && !residentEntryGranted) {
         PublicWelcomeGuestHost(
             language = applicationLanguage,
