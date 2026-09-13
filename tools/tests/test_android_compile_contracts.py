@@ -190,14 +190,16 @@ def test_community_upload_recovery_is_scoped_to_the_authenticated_owner():
 
     assert '@ColumnInfo(name = "owner_user_id") val ownerUserId: String? = null' in database
     assert "LocalDraftEntity::class" in database and "UploadOutboxEntity::class" in database
-    assert "version = 7" in database
+    assert "version = 8" in database
     assert "RTC_DATABASE_MIGRATION_1_2" in database
     assert "RTC_DATABASE_MIGRATION_2_3" in database
+    assert "RTC_DATABASE_MIGRATION_7_8" in database
     assert "ALTER TABLE community_upload_outbox ADD COLUMN owner_user_id TEXT" in database
     assert "suspend fun pendingForOwner" in database
     assert "suspend fun forDraftForOwner" in database
     assert "suspend fun deleteDraftForOwner" in database
     assert "RTC_DATABASE_MIGRATION_1_2" in app_module and "RTC_DATABASE_MIGRATION_2_3" in app_module
+    assert "RTC_DATABASE_MIGRATION_7_8" in app_module
     assert "currentAuthenticatedUserIdOrNull() ?: return Result.success()" in worker
     assert "pendingForOwner(ownerUserId)" in worker
     assert "ownerUserId = authorId" in PRODUCTION_REPOSITORY
