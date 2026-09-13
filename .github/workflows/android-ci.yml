@@ -120,6 +120,43 @@ jobs:
             app/build/reports/lint-results-debug.html
             app/build/reports/tests/testDebugUnitTest/**
 
+      - name: Assemble production-connected phone beta when complete client configuration exists
+        env:
+          RTC_PROD_SUPABASE_URL: ${{ secrets.RTC_PROD_SUPABASE_URL }}
+          RTC_PROD_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.RTC_PROD_SUPABASE_PUBLISHABLE_KEY }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        shell: bash
+        run: |
+          required=(
+            RTC_PROD_SUPABASE_URL
+            RTC_PROD_SUPABASE_PUBLISHABLE_KEY
+            GOOGLE_SERVICES_JSON_BASE64
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::notice::Phone-beta build skipped because the complete client configuration is not configured: ${missing[*]}"
+            exit 0
+          fi
+          if [ ! -s app/google-services.json ]; then
+            echo "::error::Phone-beta Firebase client configuration was not restored."
+            exit 1
+          fi
+
+          gradle --no-daemon --stacktrace assemblePhoneBeta
+
+      - name: Upload production-connected phone beta artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtc-community-phone-beta
+          if-no-files-found: ignore
+          path: app/build/outputs/apk/phoneBeta/*.apk
+
       - name: Assemble release candidate when complete configuration exists
         env:
           RTC_PROD_SUPABASE_URL: ${{ secrets.RTC_PROD_SUPABASE_URL }}
