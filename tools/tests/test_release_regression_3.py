@@ -123,20 +123,24 @@ def test_notification_permission_launch_is_guarded_at_the_api_33_action_boundary
     assert 'notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)' in notification_dialog
 
 
-def test_home_quick_access_uses_truthful_directory_deep_links():
-    home = _function_body(HOME_SCREEN, 'HomeScreen', ['LiveDashboardMetrics', 'QuickAccessSection'])
-    quick_access = _function_body(HOME_COMPONENTS, 'QuickAccessSection', ['ContinueDraftCard'])
-    assert 'QuickAccessSection(' in HOME_SCREEN
-    assert 'onOpenDirectory = onOpenDirectory' in home
-    assert 'onOpenDirectory("projects")' in quick_access
-    assert 'onOpenDirectory("centres")' in quick_access
-    assert 'Text("Help")' in quick_access
-    assert 'Text("Customise")' not in quick_access
+def test_home_daily_post_snapshot_replaces_obsolete_quick_access_without_fake_directory_links():
+    home = _function_body(HOME_SCREEN, 'HomeScreen', ['DailyPostSnapshotSection'])
+    assert 'upperHomeItems' in home
+    assert 'HomeSection.WELCOME' in home
+    assert 'HomeSection.COMMUNITY_SNAPSHOT' in home
+    assert 'HomeSection.QUICK_ACCESS' in home
+    assert 'renderItems.take(quickAccessIndex)' in home
+    assert 'DailyPostSnapshotSection(' in HOME_SCREEN
+    assert 'item(key = "home_daily_post_snapshot")' in HOME_SCREEN
+    assert 'onOpenPost = { postId -> openDailyPost(context, postId) }' in HOME_SCREEN
+    assert 'onViewAll = { actions.onNavigate(MainDestination.EXPLORE) }' in HOME_SCREEN
+    assert 'onOpenDirectory("projects")' not in home
+    assert 'onOpenDirectory("centres")' not in home
 
 
-def test_home_renderer_uses_only_compiled_validated_sections_and_default_fallback():
+def test_home_renderer_validates_configuration_and_limits_runtime_to_compiled_snapshot_sections():
     configuration = (ROOT / 'app/src/main/java/za/org/rtc/community/core/UiConfiguration.kt').read_text()
-    home = _function_body(HOME_SCREEN, 'HomeScreen', ['LiveDashboardMetrics', 'QuickAccessSection'])
+    home = _function_body(HOME_SCREEN, 'HomeScreen', ['DailyPostSnapshotSection'])
     rendering = (ROOT / 'app/src/main/java/za/org/rtc/community/ui/config/HomeRendering.kt').read_text()
     assert 'enum class HomeSection' in configuration
     for section in ['WELCOME', 'COMMUNITY_SNAPSHOT', 'QUICK_ACCESS', 'CONTINUE_DRAFT', 'PENDING_SYNC', 'NEXT_STEPS', 'LATEST_UPDATES', 'HELP']:
@@ -148,7 +152,9 @@ def test_home_renderer_uses_only_compiled_validated_sections_and_default_fallbac
     assert 'layout = HomeLayout.default()' in MAIN
     assert 'HomeLayout.validatedOrDefault(layout)' in home
     assert 'resolvedLayout.renderItems()' in home
-    assert 'renderItems.forEach { renderItem ->' in home
+    assert 'upperHomeItems' in home
+    assert 'HomeSection.WELCOME' in home
+    assert 'HomeSection.COMMUNITY_SNAPSHOT' in home
     assert 'sealed interface HomeRenderItem' in rendering
     assert 'data class Section(val section: HomeSection) : HomeRenderItem' in rendering
     assert 'data class Image(val widget: HomeImageWidget) : HomeRenderItem' in rendering
@@ -158,9 +164,6 @@ def test_home_renderer_uses_only_compiled_validated_sections_and_default_fallbac
     assert 'widget?.anchorSection == section' in rendering
     assert 'HomeImagePlacement.BEFORE' in rendering
     assert 'HomeImagePlacement.AFTER' in rendering
-    assert 'is HomeRenderItem.Section -> when (val section = renderItem.section)' in home
-    assert 'is HomeRenderItem.Image -> item(key = "home_image_${renderItem.widget.assetId}")' in home
-    assert 'HomeSection.HELP -> item(key = "home_help")' in home
     non_executable_renderer = (home + rendering).lower()
     for forbidden in ['external_url', 'javascript:', 'android.content.intent', 'android.net.uri']:
         assert forbidden not in non_executable_renderer
