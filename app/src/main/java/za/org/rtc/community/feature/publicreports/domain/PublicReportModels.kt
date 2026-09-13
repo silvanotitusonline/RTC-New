@@ -137,16 +137,16 @@ val PublicReport.assignedDepartment: String
     }
 
 data class PublicReportDashboard(
-    val openReports: Long = 48L,
-    val inProgressReports: Long = 72L,
-    val resolvedReports: Long = 120L,
-    val verifiedReports: Long = 240L,
-    val activeReports: Long = 120L,
-    val unresolvedReports: Long = 120L,
+    val openReports: Long = 0L,
+    val inProgressReports: Long = 0L,
+    val resolvedReports: Long = 0L,
+    val verifiedReports: Long = 0L,
+    val activeReports: Long = 0L,
+    val unresolvedReports: Long = 0L,
 ) {
     val totalReports: Long
         get() = (openReports + inProgressReports + resolvedReports).let { count ->
-            if (count > 0) count else verifiedReports.coerceAtLeast(1L)
+            if (count > 0) count else verifiedReports.coerceAtLeast(0L)
         }
 
     val openPercentage: Int
