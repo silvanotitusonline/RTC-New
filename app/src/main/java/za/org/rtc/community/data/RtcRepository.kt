@@ -297,16 +297,61 @@ class RtcRepository @Inject constructor(
 
     suspend fun restoreSupabaseSession(): Result<Boolean> = runCatching {
         supabase.auth.awaitInitialization()
-        if (supabase.auth.currentUserOrNull() != null) {
-            supabase.auth.startAutoRefreshForCurrentSession()
-            hydrateSupabaseSession()
-            recordPrivacyAnalyticsAppActivity()
-            enqueueUploadRecovery()
-            return@runCatching true
+        val user = supabase.auth.currentUserOrNull()
+        if (user == null) {
+            database.cachedSessionDao().logoutAll()
+            clearAccountScopedSessionState()
+            return@runCatching false
         }
+
+        supabase.auth.startAutoRefreshForCurrentSession()
+        val cachedProfile = database.cachedUserProfileDao().getProfile(user.id)
+        val email = user.email ?: cachedProfile?.email.orEmpty()
+        val fallbackDisplayName = user.userMetadata?.get("full_name")?.jsonPrimitive?.contentOrNull
+            ?.takeIf(String::isNotBlank)
+            ?: email.substringBefore("@").takeIf(String::isNotBlank)
+            ?: "Resident"
+        val handleSeed = email.substringBefore("@")
+            .lowercase()
+            .replace(Regex("[^a-z0-9_]"), "")
+            .ifBlank { "resident" }
+        val cachedInterests = cachedProfile?.interestsJson
+            ?.split(",")
+            ?.map(String::trim)
+            ?.filter(String::isNotBlank)
+            .orEmpty()
+        val current = _session.value
+
+        _session.value = RtcSession(
+            id = user.id,
+            displayName = cachedProfile?.displayName?.takeIf(String::isNotBlank) ?: fallbackDisplayName,
+            handle = "@$handleSeed",
+            role = UserRole.RESIDENT_A,
+            onboardingComplete = true,
+            bio = cachedProfile?.bio.orEmpty(),
+            interests = cachedInterests,
+            readingMode = current.readingMode,
+            darkMode = current.darkMode,
+            dynamicColor = current.dynamicColor,
+            supportNotifications = current.supportNotifications,
+            communityNotifications = current.communityNotifications,
+            authority = SessionAuthority.SUPABASE_AUTH,
+            authenticatedEmail = user.email,
+            administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
+            avatarUrl = cachedProfile?.avatarUrl,
+        )
         database.cachedSessionDao().logoutAll()
-        clearAccountScopedSessionState()
-        return@runCatching false
+        database.cachedSessionDao().upsertSession(
+            CachedSessionEntity(
+                userId = user.id,
+                email = email,
+                isLoggedIn = true,
+                sessionJson = "",
+                updatedAtEpochMillis = System.currentTimeMillis(),
+            )
+        )
+        enqueueUploadRecovery()
+        true
     }
 
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
@@ -430,7 +475,7 @@ class RtcRepository @Inject constructor(
     suspend fun verifySystemAdministratorTotp(factorId: String?, code: String): Result<Unit> = runCatching {
         require(_session.value.authority == SessionAuthority.SUPABASE_AUTH) { "Use a verified Supabase session to verify MFA." }
         require(_session.value.role == UserRole.SYSTEM_ADMIN) { "TOTP verification is reserved for System Administrators." }
-        require(code.trim().length in 6..8 && code.trim().all(Char::isDigit)) { "Enter the current code from your authenticator app." }
+        require(code.trim().length in 6..8 && code.trim().all(Char::isDigit)) { "Enter the current code from your authenticator app and try again." }
         val activeFactorId = factorId ?: supabase.auth.mfa.retrieveFactorsForCurrentUser()
             .firstOrNull { it.isVerified }
             ?.id
@@ -897,7 +942,6 @@ class RtcRepository @Inject constructor(
                 p.copy(viewerHasLiked = newLikedState, reactions = newReactionsCount)
             } else p
         }
-
         _communityPostDetail.value?.let { detail ->
             if (detail.id == postId) {
                 _communityPostDetail.value = detail.copy(
