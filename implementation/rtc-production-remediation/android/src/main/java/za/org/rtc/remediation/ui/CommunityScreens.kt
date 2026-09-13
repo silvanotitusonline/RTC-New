@@ -140,7 +140,7 @@ fun OutboxCard(item: OutboxItem, imageLoader: ImageLoader, onRetry: () -> Unit) 
             val status = when (item.state) {
                 "SENDING", "IN_FLIGHT", "SYNCING" -> "Sending"
                 "FAILED", "TERMINAL", "FAILED_PERMANENT" -> "Needs attention"
-                "AUTH_REQUIRED", "WAITING_AUTH" -> "Sign in to send"
+                "NEEDS_AUTH", "AUTH_REQUIRED", "WAITING_AUTH" -> "Sign in to send"
                 else -> "Queued locally"
             }
             Text("${if (item.kind == "REPORT") "Report" else "Update"} · $status", style = MaterialTheme.typography.titleSmall)
@@ -150,7 +150,7 @@ fun OutboxCard(item: OutboxItem, imageLoader: ImageLoader, onRetry: () -> Unit) 
             }
             if (item.createdAt.isNotBlank()) Text("Saved on this device · ${PresentationRules.timestamp(item.createdAt)}", style = MaterialTheme.typography.labelSmall)
             item.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (item.state !in setOf("SENDING", "IN_FLIGHT", "SYNCING")) TextButton(onClick = onRetry) { Text("Retry delivery") }
+            if (item.state == "FAILED") TextButton(onClick = onRetry) { Text("Retry delivery") }
         }
     }
 }

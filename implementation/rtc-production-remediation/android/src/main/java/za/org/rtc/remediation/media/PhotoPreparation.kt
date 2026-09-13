@@ -31,8 +31,8 @@ class PhotoPreparation(private val context: Context) {
             } ?: error("This photo could not be opened. Choose it again.")
             val options = BitmapFactory.Options().apply { inJustDecodeBounds=true }
             BitmapFactory.decodeFile(target.path,options)
-            require(options.outWidth>0 && options.outHeight>0 && options.outWidth.toLong()*options.outHeight<=40_000_000) {
-                "Choose a valid image up to 40 megapixels."
+            require(options.outWidth>0 && options.outHeight>0 && options.outWidth.toLong()*options.outHeight<=25_000_000) {
+                "Choose a valid image up to 25 megapixels."
             }
             require(options.outMimeType in setOf("image/jpeg","image/png","image/webp")) {
                 "Choose a JPEG, PNG or WebP photo."
