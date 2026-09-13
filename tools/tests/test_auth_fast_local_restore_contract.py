@@ -22,10 +22,11 @@ def test_restore_gate_is_not_bounded_by_arbitrary_two_point_five_second_timeout(
 
 def test_repository_restore_is_local_after_supabase_auth_initialization():
     repository = REPOSITORY.read_text()
-    restore = _body(repository, "suspend fun restoreSupabaseSession", "suspend fun signInWithEmail")
+    restore = _body(repository, "suspend fun restoreSupabaseSession", "private suspend fun establishLocalSdkSession")
 
     assert "supabase.auth.awaitInitialization()" in restore
     assert "supabase.auth.currentUserOrNull()" in restore
+    assert "establishLocalSdkSession(" in restore
     assert "hydrateSupabaseSession()" not in restore
     assert "recordPrivacyAnalyticsAppActivity()" not in restore
     assert "productionUxRepository" not in restore
@@ -33,13 +34,23 @@ def test_repository_restore_is_local_after_supabase_auth_initialization():
 
 def test_locally_restored_sdk_identity_fails_closed_to_resident_until_server_hydration():
     repository = REPOSITORY.read_text()
-    restore = _body(repository, "suspend fun restoreSupabaseSession", "suspend fun signInWithEmail")
+    restore = _body(repository, "suspend fun restoreSupabaseSession", "private suspend fun establishLocalSdkSession")
+    local_session = _body(repository, "private suspend fun establishLocalSdkSession", "suspend fun signInWithEmail")
 
-    assert "database.cachedUserProfileDao().getProfile(user.id)" in restore
-    assert "role = UserRole.RESIDENT_A" in restore
-    assert "authority = SessionAuthority.SUPABASE_AUTH" in restore
-    assert "administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED" in restore
-    assert "resolveLocalRestoredRole" not in restore
+    # Only a non-null identity obtained from the initialized Supabase SDK may reach this helper.
+    user_lookup = restore.index("val user = supabase.auth.currentUserOrNull()")
+    missing_user = restore.index("if (user == null)")
+    local_restore = restore.index("establishLocalSdkSession(")
+    assert user_lookup < missing_user < local_restore
+
+    # Cached profile fields are UX-only. Privilege remains resident until server hydration.
+    assert "database.cachedUserProfileDao().getProfile(userId)" in local_session
+    assert "role = UserRole.RESIDENT_A" in local_session
+    assert "authority = SessionAuthority.SUPABASE_AUTH" in local_session
+    assert "administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED" in local_session
+    assert "resolveLocalRestoredRole" not in local_session
+    assert "productionUxRepository" not in local_session
+    assert "hydrateSupabaseSession()" not in local_session
 
 
 def test_network_hydration_still_runs_after_local_restore_before_staff_initialization():
