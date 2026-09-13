@@ -1,13 +1,23 @@
 package za.org.rtc.community
 
+import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
+import kotlinx.coroutines.flow.emptyFlow
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import za.org.rtc.community.app.CommunityActionUiState
 import za.org.rtc.community.core.CommunityComment
 import za.org.rtc.community.core.CommunityPost
+import za.org.rtc.community.core.CommunityRealtimeNotification
 import za.org.rtc.community.core.HomeLayout
 import za.org.rtc.community.core.MainDestination
 import za.org.rtc.community.core.ThemePreference
@@ -18,8 +28,8 @@ import za.org.rtc.community.feature.community.CommunityRepository
 import za.org.rtc.community.feature.community.CommunityScreen
 import za.org.rtc.community.feature.community.CommunityViewModel
 import za.org.rtc.community.feature.explore.ExploreScreen
-import za.org.rtc.community.feature.home.HomeScreen
 import za.org.rtc.community.feature.home.HomePublicReportState
+import za.org.rtc.community.feature.home.HomeScreen
 import za.org.rtc.community.feature.support.SupportScreen
 import za.org.rtc.community.ui.components.RtcResidentBottomNavigation
 import za.org.rtc.community.ui.components.RtcResidentNavItem
@@ -103,6 +113,7 @@ class ResidentSurfaceSmokeTest {
 
     @Test
     fun exploreSurfaceRendersWithLocalState() {
+        var openedDirectory: String? = null
         composeRule.setContent {
             RtcCommunityTheme(ThemePreference.LIGHT) {
                 ExploreScreen(
@@ -112,12 +123,38 @@ class ResidentSurfaceSmokeTest {
                     events = emptyList(),
                     isRefreshing = false,
                     onRefresh = {},
-                    onOpenDirectory = {},
+                    onOpenDirectory = { openedDirectory = it },
                     onToggleRsvp = {},
+                    reports = emptyList(),
+                    // Exercise Explore navigation without constructing the production feed owner.
+                    dailyPostContent = { Text("Local publication preview") },
                 )
             }
         }
         composeRule.onNodeWithText("Explore").assertIsDisplayed()
+        val dailyPostTab = composeRule.onNode(hasText("The Daily Post") and hasClickAction())
+        val updatesTab = composeRule.onNode(hasText("Community Updates") and hasClickAction())
+        dailyPostTab.assertIsSelected()
+        composeRule.onNodeWithText("Local publication preview").assertIsDisplayed()
+
+        updatesTab.performClick().assertIsSelected()
+        composeRule.onNodeWithText("Local publication preview").assertDoesNotExist()
+        val updatesList = composeRule.onNode(hasScrollToNodeAction())
+        updatesList.performScrollToNode(hasText("Civic map"))
+        composeRule.onNodeWithText("Civic map").assertIsDisplayed()
+        listOf(
+            "Community Notices" to "notices",
+            "Projects" to "projects",
+            "Opportunities" to "opportunities",
+        ).forEach { (label, directory) ->
+            updatesList.performScrollToNode(hasText(label))
+            composeRule.onNodeWithText(label).assertIsDisplayed().performClick()
+            composeRule.runOnIdle { assertEquals(directory, openedDirectory) }
+        }
+
+        dailyPostTab.performClick().assertIsSelected()
+        composeRule.onNodeWithText("Local publication preview").assertIsDisplayed()
+        composeRule.onNodeWithText("Community Notices").assertDoesNotExist()
     }
 
     @Test
@@ -182,6 +219,25 @@ class ResidentSurfaceSmokeTest {
         override suspend fun toggleReaction(postId: String, emoji: String): Result<CommunityLikeOutcome> =
             Result.success(CommunityLikeOutcome(liked = true, reactionCount = 1))
 
+        override suspend fun repostPost(postId: String): Result<Pair<Boolean, Int>> = Result.success(false to 0)
+
+        override suspend fun toggleBookmark(postId: String): Result<Pair<Boolean, Int>> = Result.success(false to 0)
+
+        override suspend fun searchPosts(
+            query: String,
+            lastRank: Float?,
+            lastId: String?,
+            limit: Int,
+        ): Result<List<CommunityPost>> = Result.success(emptyList())
+
+        override suspend fun getHashtagAutocomplete(prefix: String): Result<List<String>> = Result.success(emptyList())
+
+        override suspend fun getMentionAutocomplete(prefix: String): Result<List<String>> = Result.success(emptyList())
+
         override suspend fun refreshMediaUrl(mediaId: String): Result<String?> = Result.success(null)
+
+        override fun observeNotificationEvents(userId: String) = emptyFlow<CommunityRealtimeNotification>()
+
+        override fun observeCommunityFeedRealtime() = emptyFlow<String>()
     }
 }

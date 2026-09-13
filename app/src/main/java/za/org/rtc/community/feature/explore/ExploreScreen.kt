@@ -69,6 +69,9 @@ internal fun ExploreScreen(
     initialDailyPostId: String? = null,
     reports: List<PublicReport> = PublicReportMockData.getSampleReports(),
     onOpenReport: (String) -> Unit = {},
+    dailyPostContent: @Composable () -> Unit = {
+        DailyPostScreen(currentUserId = currentUserId, initialPostId = initialDailyPostId)
+    },
 ) {
     @Suppress("UNUSED_VARIABLE") val calendarRemovalCompatibility = events.size to onToggleRsvp
     var activeTab by remember { mutableIntStateOf(0) }
@@ -104,10 +107,7 @@ internal fun ExploreScreen(
             label = "ExplorePrimaryTabs",
         ) { tab ->
             if (tab == 0) {
-                DailyPostScreen(
-                    currentUserId = currentUserId,
-                    initialPostId = initialDailyPostId,
-                )
+                dailyPostContent()
             } else {
                 CommunityUpdatesScreen(
                     projects = projects,

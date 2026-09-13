@@ -247,7 +247,6 @@ class RtcRepository @Inject constructor(
             }
         }
     }
-
     private val _dashboardMetrics = MutableStateFlow(DashboardMetrics())
     val dashboardMetrics: StateFlow<DashboardMetrics> = _dashboardMetrics.asStateFlow()
     private val _projectsPage = MutableStateFlow(DirectoryPage<ProjectRecord>(canLoadMore = false))
@@ -297,6 +296,7 @@ class RtcRepository @Inject constructor(
     val editorialNotices: StateFlow<List<EditorialNoticeRecord>> = _editorialNotices.asStateFlow()
 
     suspend fun restoreSupabaseSession(): Result<Boolean> = runCatching {
+        supabase.auth.awaitInitialization()
         if (supabase.auth.currentUserOrNull() != null) {
             supabase.auth.startAutoRefreshForCurrentSession()
             hydrateSupabaseSession()
@@ -304,28 +304,9 @@ class RtcRepository @Inject constructor(
             enqueueUploadRecovery()
             return@runCatching true
         }
-        val cached = database.cachedSessionDao().getActiveSession()
-        if (cached != null) {
-            val existingProfile = database.cachedUserProfileDao().getProfileByEmail(cached.email)
-            val restoredRole = resolveLocalRestoredRole(cached.email, existingProfile?.role)
-            _session.value = RtcSession(
-                id = cached.userId,
-                displayName = existingProfile?.displayName
-                    ?: cached.email.substringBefore("@").replaceFirstChar { it.uppercase() },
-                role = restoredRole,
-                authority = SessionAuthority.SUPABASE_AUTH,
-                authenticatedEmail = cached.email,
-                handle = "@${cached.email.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
-                avatarUrl = existingProfile?.avatarUrl,
-                bio = existingProfile?.bio.orEmpty(),
-                interests = existingProfile?.interestsJson?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
-                onboardingComplete = true,
-                administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
-            )
-            refreshLiveContent()
-            return@runCatching true
-        }
-        false
+        database.cachedSessionDao().logoutAll()
+        clearAccountScopedSessionState()
+        return@runCatching false
     }
 
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
@@ -388,55 +369,15 @@ class RtcRepository @Inject constructor(
         val cleanDisplayName = displayName.trim()
         require(cleanDisplayName.isNotEmpty()) { "Enter your name to create an account." }
         requireStrongPassword(password)
-        
-        runCatching {
-            supabase.auth.signUpWith(Email, "rtc://community") {
-                this.email = cleanEmail
-                this.password = password
-                data = buildJsonObject { put("full_name", cleanDisplayName) }
-            }
+
+        // Supabase remains authoritative for account creation. With email confirmation enabled,
+        // a successful sign-up is confirmation-pending and must not manufacture a local
+        // authenticated session before Supabase establishes one on a later sign-in.
+        supabase.auth.signUpWith(Email, "rtc://community") {
+            this.email = cleanEmail
+            this.password = password
+            data = buildJsonObject { put("full_name", cleanDisplayName) }
         }
-
-        val userId = "user_${UUID.nameUUIDFromBytes(cleanEmail.toByteArray())}"
-        val targetRole = UserRole.RESIDENT_A
-
-        database.cachedUserProfileDao().insertProfile(
-            CachedUserProfileEntity(
-                userId = userId,
-                email = cleanEmail,
-                displayName = cleanDisplayName,
-                bio = "",
-                interestsJson = "",
-                avatarUrl = null,
-                role = targetRole.name,
-                updatedAtEpochMillis = System.currentTimeMillis(),
-            )
-        )
-
-        _session.value = RtcSession(
-            id = userId,
-            displayName = cleanDisplayName,
-            role = targetRole,
-            authority = SessionAuthority.SUPABASE_AUTH,
-            authenticatedEmail = cleanEmail,
-            handle = "@${cleanEmail.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
-            onboardingComplete = true,
-            administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
-        )
-
-        database.cachedSessionDao().upsertSession(
-            CachedSessionEntity(
-                userId = userId,
-                email = cleanEmail,
-                isLoggedIn = true,
-                sessionJson = "",
-                updatedAtEpochMillis = System.currentTimeMillis()
-            )
-        )
-
-        recordPrivacyAnalyticsAppActivity()
-        refreshLiveContent()
-        enqueueUploadRecovery()
     }
 
     /** The result is intentionally generic so email address ownership is not disclosed. */
@@ -1037,7 +978,6 @@ class RtcRepository @Inject constructor(
     fun clearAdminPrivacyAccountLookup() {
         _adminAnalyticsAccountProfile.value = null
     }
-
     /**
      * Loads only the signed-in staff member's authorised Operations Hub data. The server remains
      * authoritative for role, current-session, MFA, and item ownership checks.
@@ -1289,7 +1229,6 @@ class RtcRepository @Inject constructor(
             _communityPostDetail.value?.id?.let { loadCommunityPostDetail(it) }
         }
     }
-
     suspend fun deleteProfilePhoto(): Result<Unit> {
         val user = _session.value
         if (user.authority == SessionAuthority.DEVELOPMENT_ADAPTER) {
@@ -1436,7 +1375,6 @@ class RtcRepository @Inject constructor(
         }
         _session.value = _session.value.copy(communityNotifications = persisted)
     }
-
     suspend fun createCommunityAlert(
         category: CommunityAlertCategory,
         title: String,

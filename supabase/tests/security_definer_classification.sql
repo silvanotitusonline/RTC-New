@@ -32,6 +32,25 @@ set local search_path = extensions, public, pg_catalog;
 
 select plan(12);
 
+-- The observed pre-hardening surface at 0ffd35f contained 198 signatures.
+-- After reviewing its additions, twelve internal/bypass-capable definers are removed
+-- from client authority. Reconstructing that exact old set pins the retained set
+-- without blessing arbitrary additions or requiring a live-production catalogue.
+create temporary table retired_client_definers(signature text primary key) on commit drop;
+insert into retired_client_definers values
+  ('private.validate_mfa_status()'),
+  ('public.calculate_trust_score()'),
+  ('public.route_civic_report_to_dept(p_category_id uuid)'),
+  ('public.fan_out_community_post()'),
+  ('public.broadcast_notification_event()'),
+  ('public.daily_post_comment_count_sync()'),
+  ('public.daily_post_require_editor()'),
+  ('public.enforce_auth_signup_rate_limit()'),
+  ('public.check_auth_rate_limit(p_identifier text, p_event_name text, p_max_requests integer, p_window_seconds integer)'),
+  ('public.notify_realtime(p_channel text, p_event text, p_payload jsonb)'),
+  ('public.get_cached_feed(p_cursor uuid, p_limit integer)'),
+  ('public.get_avatar_url(p_user_id uuid, p_force_refresh boolean)');
+
 create temporary table resident_security_definer_registry on commit drop as
 with exposed_definers as (
   select
@@ -85,6 +104,16 @@ with exposed_definers as (
     (162::bigint, '9e419d099be445182a8514f5e045b144'::text),
     (170::bigint, 'bbf47cab25e2ff0e4c20a5917c8358dc'::text),
     (169::bigint, '42f7bc4ca9978dfe129a65cd0e6ded86'::text)
+
+  union all
+  select r.exposed_count, r.exposed_fingerprint
+  from reviewed_set r
+  where r.exposed_count = 186
+    and not exists (select 1 from normalized n join retired_client_definers d using(signature))
+    and (select md5(string_agg(signature, E'\n' order by signature)) from (
+      select signature from normalized
+      union all select signature from retired_client_definers
+    ) reviewed_previous_set) = '656f031a7e278433a69ed6d037d26c1e'
 )
 select
   n.function_oid,
@@ -126,6 +155,10 @@ select diag(
 )
 from registry_stats;
 
+-- Emit exact signatures for review when drift fails closed.
+select diag(signature) from resident_security_definer_registry
+where disposition = 'UNREVIEWED' order by signature;
+
 with registry_stats as (
   select
     count(*)::bigint as exposed_count,
@@ -133,7 +166,7 @@ with registry_stats as (
   from resident_security_definer_registry
 )
 select ok(
-  exposed_count in (182::bigint, 142::bigint, 149::bigint, 152::bigint, 159::bigint, 162::bigint, 170::bigint, 169::bigint),
+  exposed_count in (182::bigint, 142::bigint, 149::bigint, 152::bigint, 159::bigint, 162::bigint, 170::bigint, 169::bigint, 186::bigint),
   'authenticated SECURITY DEFINER count matches a reviewed surface'
 )
 from registry_stats;
@@ -159,7 +192,10 @@ select ok(
   or
   (exposed_count = 170::bigint and exposed_fingerprint = 'bbf47cab25e2ff0e4c20a5917c8358dc'::text)
   or
-  (exposed_count = 169::bigint and exposed_fingerprint = '42f7bc4ca9978dfe129a65cd0e6ded86'::text),
+  (exposed_count = 169::bigint and exposed_fingerprint = '42f7bc4ca9978dfe129a65cd0e6ded86'::text)
+  or (exposed_count = 186::bigint and not exists (
+    select 1 from resident_security_definer_registry where disposition = 'UNREVIEWED'
+  )),
   'authenticated SECURITY DEFINER fingerprint matches its reviewed surface'
 )
 from registry_stats;
