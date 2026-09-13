@@ -23,3 +23,6 @@ def test_community_feed_pagination_is_cursor_only():
     assert "range(0," not in load_feed_page, (
         "loadFeedPage must not discard CommunityCursor through an offset/range fallback"
     )
+    assert "postsAfterCommunityCursor" in load_feed_page, (
+        "cached feed fallback must apply the same composite cursor boundary before building a page"
+    )
