@@ -13,11 +13,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +36,7 @@ import za.org.rtc.community.ui.theme.RtcSpacing
 @Composable
 fun MarketplaceHomeRoute(
     onNavigate: (String) -> Unit,
-    onSwitchToServices: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onSwitchToServices: () -> Unit = {},
     viewModel: MarketplaceDiscoveryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.home.collectAsStateWithLifecycle()
@@ -54,7 +52,6 @@ fun MarketplaceHomeRoute(
         onRetry = viewModel::loadHome,
         onSearch = { onNavigate(RtcRoute.MARKETPLACE_SEARCH) },
         onMap = { onNavigate(RtcRoute.MARKETPLACE_MAP) },
-        onSwitchToServices = onSwitchToServices,
         onOpenBusiness = { businessId -> onNavigate(RtcRoute.marketplaceBusiness(businessId)) },
     )
 }
@@ -66,7 +63,6 @@ internal fun MarketplaceHomeScreen(
     onRetry: () -> Unit,
     onSearch: () -> Unit,
     onMap: () -> Unit,
-    onSwitchToServices: () -> Unit,
     onOpenBusiness: (String) -> Unit,
 ) {
     when (state) {
@@ -110,7 +106,6 @@ internal fun MarketplaceHomeScreen(
             area = area,
             onSearch = onSearch,
             onMap = onMap,
-            onSwitchToServices = onSwitchToServices,
             onOpenBusiness = onOpenBusiness,
         )
     }
@@ -122,7 +117,6 @@ private fun MarketplaceHomeContent(
     area: String?,
     onSearch: () -> Unit,
     onMap: () -> Unit,
-    onSwitchToServices: () -> Unit,
     onOpenBusiness: (String) -> Unit,
 ) {
     val featured = (home.featured + home.topRated + home.newest).distinctBy { it.id }.take(8)
@@ -164,31 +158,6 @@ private fun MarketplaceHomeContent(
                 OutlinedButton(onClick = onMap, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Filled.LocationOn, contentDescription = null)
                     Text(" Map")
-                }
-            }
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                onClick = onSwitchToServices,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(RtcSpacing.standard),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(RtcSpacing.small),
-                ) {
-                    Icon(Icons.Filled.Storefront, contentDescription = null)
-                    Column(Modifier.weight(1f)) {
-                        Text("Need to book a service?", fontWeight = FontWeight.Bold)
-                        Text(
-                            "Open Service Centre to request and manage local services.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
                 }
             }
         }
