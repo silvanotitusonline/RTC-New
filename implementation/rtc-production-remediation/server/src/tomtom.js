@@ -8,7 +8,6 @@ export function createTomTom(apiKey, fetchImpl = fetch) {
     try {
       const response = await fetchImpl(url, { signal: AbortSignal.timeout(8000), redirect: 'error' });
       if (response.status === 429) throw new HttpError(503, 'LOCATION_RATE_LIMITED', 'The map service is busy. Try again shortly.');
-      if (!response.ok) throw new HttpError(502, 'LOCATION_UPSTREAM_ERROR', 'The map service could not complete this request.');
       const chunks = [];
       let length = 0;
       for await (const chunk of response.body) {
@@ -16,7 +15,14 @@ export function createTomTom(apiKey, fetchImpl = fetch) {
         if (length > 1024 * 1024) throw new Error('UPSTREAM_TOO_LARGE');
         chunks.push(chunk);
       }
-      return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if (!response.ok) {
+        if (data.detailedError?.code === 'NO_ROUTE_FOUND') {
+          throw new HttpError(404, 'NO_ROUTE', 'No road route is available between these locations.');
+        }
+        throw new HttpError(502, 'LOCATION_UPSTREAM_ERROR', 'The map service could not complete this request.');
+      }
+      return data;
     } catch (error) {
       if (error instanceof HttpError) throw error;
       throw new HttpError(502, 'LOCATION_UNAVAILABLE', 'Live location data is temporarily unavailable.');

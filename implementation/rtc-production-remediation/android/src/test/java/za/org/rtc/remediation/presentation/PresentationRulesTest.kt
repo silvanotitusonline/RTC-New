@@ -2,6 +2,8 @@ package za.org.rtc.remediation.presentation
 
 import java.time.Instant
 import java.time.ZoneId
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -44,7 +46,7 @@ class PresentationRulesTest {
         assertEquals("Distance unavailable", PresentationRules.distance(-1))
         assertEquals("0 m", PresentationRules.distance(0))
         assertEquals("750 m", PresentationRules.distance(750))
-        assertEquals("1.5 km", PresentationRules.distance(1_500))
+        assertEquals("1${DecimalFormatSymbols.getInstance(Locale.forLanguageTag("en-ZA")).decimalSeparator}5 km", PresentationRules.distance(1_500))
     }
 
     @Test fun `price uses rand and integer cents without float drift`() {
@@ -68,6 +70,20 @@ class PresentationRulesTest {
         assertNotNull(PresentationRules.bookingError(BookingInput("provider", "invalid", ""), now))
         assertNotNull(PresentationRules.bookingError(BookingInput("provider", now.minusSeconds(1).toString(), ""), now))
         assertNull(PresentationRules.bookingError(BookingInput("provider", now.plusSeconds(3600).toString(), ""), now))
+    }
+
+    @Test fun `booking typing preserves spaces and retains key for unchanged normalized payload`() {
+        val draft = BookingState(providerId = "provider", notes = "Bring")
+        val edited = draft.applyDraft(draft.copy(notes = "Bring "))
+        assertEquals("Bring ", edited.notes)
+        assertEquals(draft.idempotencyKey, edited.idempotencyKey)
+    }
+
+    @Test fun `changing booking payload starts a distinct idempotent operation`() {
+        val draft = BookingState(providerId = "provider", notes = "Bring tools")
+        val edited = draft.applyDraft(draft.copy(notes = "Bring replacement parts"))
+        assertFalse(draft.idempotencyKey == edited.idempotencyKey)
+        assertEquals("Bring replacement parts", edited.notes)
     }
 
     private fun report(id: String, status: String) = Report(

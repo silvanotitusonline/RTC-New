@@ -217,12 +217,12 @@ class RtcRepository(
             require(source.isFile && source.parentFile==File(context.filesDir,"rtc-outbox-media").canonicalFile)
             require(source.length() in 1..10L*1024*1024)
             require(prepared.mimeType in setOf("image/jpeg","image/png","image/webp"))
-            source.copyTo(File(queueDirectory,"$id.upload"),overwrite=false)
+            source.copyTo(File(queueDirectory,"$id-${UUID.randomUUID()}.upload"),overwrite=false)
         }
         try {
             dao.enqueue(OutboxEntity(id,owner,"POST",rtcJson.encodeToString(PostInput(text)),copy?.absolutePath,image?.mimeType,createdAt=Instant.now().toString()))
         } catch(error: Throwable) {
-            withContext(NonCancellable) { if(dao.findOutbox(id,owner)==null) copy?.delete() }
+            withContext(NonCancellable) { if(dao.findOutbox(id,owner)?.imagePath!=copy?.absolutePath) copy?.delete() }
             throw error
         }
         scheduler().enqueue(owner)

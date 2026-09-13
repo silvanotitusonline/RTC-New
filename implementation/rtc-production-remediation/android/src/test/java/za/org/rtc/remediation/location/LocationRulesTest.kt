@@ -1,5 +1,7 @@
 package za.org.rtc.remediation.location
 
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -16,7 +18,7 @@ class LocationRulesTest {
 
     @Test fun distanceHasUnitAndDoesNotExposeRawFloat() {
         assertEquals("350 m", formatRoadDistance(350))
-        assertEquals("3.5 km", formatRoadDistance(3_500))
+        assertEquals("3${DecimalFormatSymbols.getInstance(Locale.forLanguageTag("en-ZA")).decimalSeparator}5 km", formatRoadDistance(3_500))
         assertEquals("0 m", formatRoadDistance(0)) // Only a real zero route may display zero.
     }
 

@@ -49,7 +49,8 @@ Terminate TLS at a trusted reverse proxy/load balancer. Set a request size limit
 11 MiB and enforce pre-authentication/IP request limits there. The API applies
 PostgreSQL-backed per-user limits after authentication (180 requests/minute, 30
 writes/minute, 30 map requests/minute) and at most four in-flight image uploads per
-instance. It enforces request/body/file/pixel limits and upstream/database timeouts.
+instance. It enforces request/body/file/pixel limits and upstream/database timeouts. HTTP headers are limited to 16 KiB/64 entries;
+header arrival is limited to 15 seconds and requests to 30 seconds.
 Enable `PG_TLS=true` and an appropriate `PG_CA_FILE` for remote database connections.
 The service does not trust arbitrary proxy headers or derive image URLs from Host.
 

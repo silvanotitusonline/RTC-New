@@ -244,6 +244,10 @@ data class BookingState(
 ) {
     val input: BookingInput get() = BookingInput(providerId, startsAt.trim(), notes.trim())
     val canSubmit: Boolean get() = !submitting && booking == null && PresentationRules.bookingError(input, Instant.now()) == null
+
+    internal fun applyDraft(candidate: BookingState): BookingState = if (candidate.input != input)
+        candidate.copy(idempotencyKey = UUID.randomUUID().toString(), booking = null, error = null)
+    else candidate // Preserve typed spaces without creating a different server operation.
 }
 
 /** The key survives retries and process restoration. Editing the payload starts a new operation. */
@@ -260,9 +264,7 @@ class BookingViewModel(private val saved: SavedStateHandle, private val reposito
         val old = state.value
         val candidate = change(old)
         if (candidate == old) return
-        val next = if (candidate.input != old.input)
-            candidate.copy(idempotencyKey = UUID.randomUUID().toString(), booking = null, error = null)
-        else candidate // Keep ordinary typing spaces without creating a different server operation.
+        val next = old.applyDraft(candidate)
         saved["booking.provider"] = next.providerId
         saved["booking.startsAt"] = next.startsAt
         saved["booking.notes"] = next.notes

@@ -255,6 +255,7 @@ test('TomTom proxy returns route/search values and validates coordinates before 
 test('TomTom unavailable, no route, rate limit and malformed upstream are explicit errors without fake values', async () => {
   await assert.rejects(createTomTom('').route({}), { code: 'LOCATION_CONFIGURATION_REQUIRED' });
   await assert.rejects(createTomTom('key', async () => Response.json({ routes: [] })).route({}), { code: 'NO_ROUTE' });
+  await assert.rejects(createTomTom('key', async () => Response.json({ detailedError: { code: 'NO_ROUTE_FOUND' } }, { status: 400 })).route({}), { code: 'NO_ROUTE' });
   await assert.rejects(createTomTom('key', async () => new Response('', { status: 429 })).route({}), { code: 'LOCATION_RATE_LIMITED' });
   await assert.rejects(createTomTom('key', async () => Response.json({ routes: [{ summary: { lengthInMeters: -1 } }] })).route({}), { code: 'LOCATION_INVALID_RESPONSE' });
   await assert.rejects(createTomTom('key', async () => { throw new Error('timeout secret-key'); }).route({}), (error) => error.code === 'LOCATION_UNAVAILABLE' && !error.message.includes('secret-key'));
