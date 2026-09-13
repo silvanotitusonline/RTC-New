@@ -11,6 +11,9 @@ ACCOUNT_BOOKINGS = ROOT / "app/src/main/java/za/org/rtc/community/feature/accoun
 SERVICE_CENTRE_MAIN = ROOT / "app/src/main/java/za/org/rtc/community/feature/servicecentre"
 SERVICE_CENTRE_TEST = ROOT / "app/src/test/java/za/org/rtc/community/feature/servicecentre"
 
+# This contract intentionally remains independent of evolving Daily Post/Home feature contracts.
+# PR CI merges it with the latest integration baseline and therefore verifies coexistence too.
+
 
 def test_account_settings_and_messages_have_dedicated_destinations():
     assert 'const val ACCOUNT_SETTINGS = "account/settings"' in NAV
