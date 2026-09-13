@@ -92,10 +92,14 @@ fun quotedBuildConfigValue(value: String): String =
 android {
     namespace = "za.org.rtc.community"
     compileSdk = 36
+    ndkVersion = "26.3.11579264"
 
     defaultConfig {
         applicationId = "za.org.rtc.community"
         minSdk = 26
+        // The native Standard renderer supports OpenGL ES 3.0 and these 64-bit ABIs.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        missingDimensionStrategy("tomtom-sdk-version", "complete")
         targetSdk = 36
         versionCode = 31
         versionName = "1.0.6-beta.1"
@@ -231,6 +235,10 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services)
     implementation(libs.play.services.auth)
+    implementation(libs.play.services.location)
+    implementation(libs.tomtom.init)
+    implementation(libs.tomtom.map.compose)
+    implementation(libs.tomtom.telemetry)
     implementation(libs.googleid)
 
     testImplementation(libs.junit)

@@ -1,0 +1,28 @@
+name: TomTom Live Integration Verification
+
+on:
+  push:
+    branches: [ implementation/tomtom-live ]
+  pull_request:
+    paths:
+      - 'supabase/functions/tomtom-location/**'
+      - 'supabase/migrations/*tomtom*.sql'
+      - 'supabase/tests/tomtom_security_test.sql'
+      - '.github/workflows/tomtom-verification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check protected location endpoint
+        run: deno check --config supabase/functions/tomtom-location/deno.json supabase/functions/tomtom-location/index.ts
+      - name: Verify mapping behavior and authorization
+        run: deno test --config supabase/functions/tomtom-location/deno.json supabase/functions/tomtom-location/location_test.ts supabase/functions/_shared/auth_test.ts

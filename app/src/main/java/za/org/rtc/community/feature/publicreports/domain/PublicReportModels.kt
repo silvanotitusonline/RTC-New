@@ -97,6 +97,9 @@ data class PublicReport(
     val currentUserVote: Int,
     val createdAt: Instant,
     val updatedAt: Instant,
+    /** Rounded public projection supplied by civic RPCs; never exact reporter coordinates. */
+    val publicLatitude: Double? = null,
+    val publicLongitude: Double? = null,
 )
 
 data class PublicReportComment(

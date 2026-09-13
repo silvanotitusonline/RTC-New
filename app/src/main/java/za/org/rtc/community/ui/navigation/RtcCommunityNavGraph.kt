@@ -274,7 +274,17 @@ internal fun RtcCommunityNavGraph(
         composable(route = RtcRoute.MARKETPLACE_REVIEWS, arguments = listOf(navArgument("businessId") { type = NavType.StringType })) { entry ->
             MarketplaceReviewsRoute(businessId = entry.arguments?.getString("businessId").orEmpty(), onBack = { navController.popBackStack() })
         }
-        composable(route = RtcRoute.MARKETPLACE_DIRECTIONS, arguments = listOf(navArgument("businessId") { type = NavType.StringType }, navArgument("locationId") { type = NavType.StringType })) { MarketplaceMapRoute(onBack = { navController.popBackStack() }) }
+        composable(
+            route = RtcRoute.MARKETPLACE_DIRECTIONS,
+            arguments = listOf(navArgument("businessId") { type = NavType.StringType }, navArgument("locationId") { type = NavType.StringType }),
+        ) { entry ->
+            za.org.rtc.community.feature.marketplace.presentation.MarketplaceDirectionsRoute(
+                businessId = entry.arguments?.getString("businessId").orEmpty(),
+                locationId = entry.arguments?.getString("locationId").orEmpty(),
+                onBack = { navController.popBackStack() },
+                onNavigate = { navController.navigateOverlay(it) },
+            )
+        }
         composable(route = RtcRoute.MARKETPLACE_NAVIGATION, arguments = listOf(navArgument("locationId") { type = NavType.StringType })) { MarketplaceMapRoute(onBack = { navController.popBackStack() }) }
         composable(RtcRoute.MARKETPLACE_MY_BUSINESSES) { MarketplaceOwnerRoute(onNavigate = { navController.navigateOverlay(it) }) }
         composable(RtcRoute.MARKETPLACE_SAVED) { MarketplaceSavedRoute(onNavigate = { route -> navController.navigateOverlay(route) }) }
