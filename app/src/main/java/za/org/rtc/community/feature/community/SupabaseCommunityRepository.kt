@@ -107,15 +107,7 @@ class SupabaseCommunityRepository @Inject constructor(
                     rows.map { row -> async { row.toCommunityPost() } }.awaitAll()
                 }
             }.getOrElse {
-                // Range query fallback using Supabase range
-                val rows = supabase.from("community_post_feed")
-                    .select {
-                        order(column = "created_at", order = Order.DESCENDING)
-                        range(0, (serverLimit - 1).toLong())
-                    }.decodeList<CommunityFeedRow>()
-                coroutineScope {
-                    rows.map { row -> async { row.toCommunityPost() } }.awaitAll()
-                }
+                emptyList()
             }
         }
 
