@@ -18,8 +18,6 @@ studio_ui = read("app/src/main/java/za/org/rtc/community/feature/dailypost/prese
 main_activity = read("app/src/main/java/za/org/rtc/community/MainActivity.kt")
 fcm_service = read("app/src/main/java/za/org/rtc/community/app/RtcFirebaseMessagingService.kt")
 home_screen = read("app/src/main/java/za/org/rtc/community/feature/home/HomeScreen.kt")
-home_contract = read("app/src/main/java/za/org/rtc/community/ui/home/HomeRouteContract.kt")
-nav_graph = read("app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityNavGraph.kt")
 security = read("supabase/migrations/20260912011000_daily_post_security_and_workflows.sql")
 storage = read("supabase/migrations/20260912010500_daily_post_storage.sql")
 storage_security = read("supabase/migrations/20260912011500_daily_post_storage_security.sql")
@@ -42,13 +40,16 @@ assert 'Text("Projects and Opportunities"' in explore
 assert 'InteractiveMunicipalCanvasMap(' in explore
 
 # Home uses the same live Daily Post feed and replaces the former lower-half utility stack.
-assert 'HomeDailyPostSnapshotState' in home_contract
-assert 'onOpenDailyPost' in home_contract
+assert 'DailyPostViewModel' in home_screen
+assert 'hiltViewModel' in home_screen
 assert 'DailyPostSnapshotSection(' in home_screen
 assert '.take(2)' in home_screen
+assert 'dailyPostViewModel.refresh()' in home_screen
 assert 'The Daily Post' in home_screen
 assert 'Read full story' in home_screen
 assert 'View all Daily Post' in home_screen
+assert 'MainActivity.ACTION_OPEN_DAILY_POST' in home_screen
+assert 'MainActivity.EXTRA_DAILY_POST_ID' in home_screen
 for removed_home_surface in (
     'QuickAccessSection(',
     'ContinueDraftCard(',
@@ -58,10 +59,6 @@ for removed_home_surface in (
     'Text("Help & FAQs")',
 ):
     assert removed_home_surface not in home_screen, removed_home_surface
-assert 'DailyPostViewModel' in nav_graph
-assert 'homeDailyPostViewModel' in nav_graph
-assert 'homeDailyPostViewModel.refresh()' in nav_graph
-assert 'RtcRoute.dailyPost(' in nav_graph
 
 # Calendar is no longer a navigable application feature.
 assert 'const val EVENTS =' not in routes
