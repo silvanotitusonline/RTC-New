@@ -47,6 +47,7 @@ import za.org.rtc.community.ui.components.parallaxHeader
 import za.org.rtc.community.ui.components.parallaxScrollItem
 import za.org.rtc.community.ui.config.HomeImageWidgetCard
 import za.org.rtc.community.ui.config.HomeRenderItem
+import za.org.rtc.community.ui.config.retainedForDailyPostSnapshot
 import za.org.rtc.community.ui.config.renderItems
 import za.org.rtc.community.ui.home.HomeRouteContract
 import za.org.rtc.community.ui.theme.RtcHomeDashboard
@@ -64,23 +65,7 @@ internal fun HomeScreen(contract: HomeRouteContract) {
     val dailyPostState by dailyPostViewModel.state.collectAsStateWithLifecycle()
     val resolvedLayout = remember(layout) { HomeLayout.validatedOrDefault(layout) }
     val renderItems = remember(resolvedLayout) { resolvedLayout.renderItems() }
-    val upperHomeItems = remember(renderItems) {
-        val quickAccessIndex = renderItems.indexOfFirst { item ->
-            item is HomeRenderItem.Section && item.section == HomeSection.QUICK_ACCESS
-        }
-        val itemsBeforeFormerLowerHalf = if (quickAccessIndex >= 0) {
-            renderItems.take(quickAccessIndex)
-        } else {
-            renderItems
-        }
-        itemsBeforeFormerLowerHalf.filter { item ->
-            item is HomeRenderItem.Image ||
-                item is HomeRenderItem.Section && item.section in setOf(
-                    HomeSection.WELCOME,
-                    HomeSection.COMMUNITY_SNAPSHOT,
-                )
-        }
-    }
+    val upperHomeItems = remember(renderItems) { renderItems.retainedForDailyPostSnapshot() }
     val listState = rememberLazyListState()
 
     ResidentPullToRefresh(
