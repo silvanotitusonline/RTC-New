@@ -22,6 +22,13 @@ val releaseRequested = gradle.startParameter.taskNames.any { taskName ->
     taskName.contains("Release", ignoreCase = true)
 }
 
+if (releaseRequested) {
+    require(project.file("google-services.json").isFile) {
+        "Release builds require app/google-services.json with a Firebase Android client for " +
+            "za.org.rtc.community, restored locally or from GOOGLE_SERVICES_JSON_BASE64 in CI."
+    }
+}
+
 val releaseSigningProperties = Properties().apply {
     val signingPropertiesFile = rootProject.file("signing.properties")
     if (signingPropertiesFile.isFile) signingPropertiesFile.inputStream().use(::load)
