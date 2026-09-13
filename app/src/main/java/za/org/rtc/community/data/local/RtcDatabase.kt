@@ -105,6 +105,53 @@ interface CachedReportDao {
     suspend fun deleteReport(id: String)
 }
 
+/** Public, rounded projections of reports that were verified by the server. */
+@Entity(tableName = "verified_public_report_cache")
+data class VerifiedPublicReportEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val description: String,
+    val startedAt: String?,
+    val categoryId: String,
+    val categorySlug: String,
+    val categoryLabel: String,
+    val urgency: String,
+    val status: String,
+    val identityMode: String,
+    val publicLocationLabel: String,
+    val authorDisplayName: String,
+    val verificationReason: String?,
+    val duplicateOf: String?,
+    val thumbsUpCount: Int,
+    val thumbsDownCount: Int,
+    val commentCount: Int,
+    val evidenceCount: Int,
+    val currentUserVote: Int,
+    val createdAt: String,
+    val updatedAt: String,
+    val publicLatitude: Double?,
+    val publicLongitude: Double?,
+    val cachedAtEpochMillis: Long,
+)
+
+@Dao
+interface VerifiedPublicReportDao {
+    @Query("SELECT * FROM verified_public_report_cache ORDER BY createdAt DESC, id DESC LIMIT :limit")
+    suspend fun latest(limit: Int): List<VerifiedPublicReportEntity>
+
+    @Query("SELECT * FROM verified_public_report_cache WHERE id = :id LIMIT 1")
+    suspend fun byId(id: String): VerifiedPublicReportEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(reports: List<VerifiedPublicReportEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(report: VerifiedPublicReportEntity)
+
+    @Query("DELETE FROM verified_public_report_cache WHERE cachedAtEpochMillis < :cutoffEpochMillis")
+    suspend fun deleteOlderThan(cutoffEpochMillis: Long)
+}
+
 @Entity(tableName = "cached_app_state")
 data class CachedAppStateEntity(
     @PrimaryKey val stateKey: String,
@@ -412,24 +459,62 @@ val RTC_DATABASE_MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+val RTC_DATABASE_MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS verified_public_report_cache (
+                id TEXT NOT NULL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                startedAt TEXT,
+                categoryId TEXT NOT NULL,
+                categorySlug TEXT NOT NULL,
+                categoryLabel TEXT NOT NULL,
+                urgency TEXT NOT NULL,
+                status TEXT NOT NULL,
+                identityMode TEXT NOT NULL,
+                publicLocationLabel TEXT NOT NULL,
+                authorDisplayName TEXT NOT NULL,
+                verificationReason TEXT,
+                duplicateOf TEXT,
+                thumbsUpCount INTEGER NOT NULL,
+                thumbsDownCount INTEGER NOT NULL,
+                commentCount INTEGER NOT NULL,
+                evidenceCount INTEGER NOT NULL,
+                currentUserVote INTEGER NOT NULL,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                publicLatitude REAL,
+                publicLongitude REAL,
+                cachedAtEpochMillis INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS verified_public_report_cache_order ON verified_public_report_cache(createdAt DESC, id DESC)")
+    }
+}
+
 @Database(
     entities = [
         LocalDraftEntity::class,
         UploadOutboxEntity::class,
         CachedReportEntity::class,
+        VerifiedPublicReportEntity::class,
         CachedAppStateEntity::class,
         CachedSessionEntity::class,
         CachedPostEntity::class,
         CachedCommentEntity::class,
         CachedUserProfileEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class RtcDatabase : RoomDatabase() {
     abstract fun localDraftDao(): LocalDraftDao
     abstract fun uploadOutboxDao(): UploadOutboxDao
     abstract fun cachedReportDao(): CachedReportDao
+    abstract fun verifiedPublicReportDao(): VerifiedPublicReportDao
     abstract fun cachedAppStateDao(): CachedAppStateDao
     abstract fun cachedSessionDao(): CachedSessionDao
     abstract fun cachedPostDao(): CachedPostDao
