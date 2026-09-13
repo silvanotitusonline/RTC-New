@@ -66,7 +66,12 @@ interface UploadOutboxDao {
     @Query("SELECT * FROM community_upload_outbox ORDER BY position")
     fun observeAll(): Flow<List<UploadOutboxEntity>>
 
-    @Query("SELECT COUNT(*) FROM community_upload_outbox WHERE owner_user_id = :ownerUserId AND state IN ('PENDING','PREPARING','UPLOADING','RETRY')")
+    /**
+     * Upload outbox ownership is the authenticated Supabase user UUID. Older runtime draft state
+     * used a `staff:<uuid>` namespace, so normalize that caller key here until those draft keys are
+     * retired. This preserves account isolation without making persisted uploads unreachable.
+     */
+    @Query("SELECT COUNT(*) FROM community_upload_outbox WHERE owner_user_id = CASE WHEN :ownerUserId LIKE 'staff:%' THEN substr(:ownerUserId, 7) ELSE :ownerUserId END AND state IN ('PENDING','PREPARING','UPLOADING','RETRY')")
     fun observePendingCountForOwner(ownerUserId: String): Flow<Int>
 
     @Query("SELECT * FROM community_upload_outbox WHERE owner_user_id = :ownerUserId AND state IN ('PENDING','RETRY') ORDER BY updatedAtEpochMillis LIMIT :limit")
