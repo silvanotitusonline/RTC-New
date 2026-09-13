@@ -5,6 +5,7 @@ on:
     branches:
       - integration/truth-boundary-consistency
       - integration/anonymous-resident-runtime
+      - audit/anonymous-runtime-contract-cleanup
   workflow_dispatch:
 
 permissions:
@@ -76,8 +77,7 @@ jobs:
       - name: Verify anonymous resident trust contracts
         run: python3 -m pytest -q tools/tests/test_anonymous_resident_runtime.py tools/tests/test_truth_boundary_consistency.py
 
-      - name: Record legacy source-contract state without blocking compile verification
-        continue-on-error: true
+      - name: Verify full source contracts
         run: python3 tools/tests/run_contract_tests.py
 
       - name: Run shared Edge authorization tests
