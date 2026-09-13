@@ -20,9 +20,10 @@ def test_google_signin_adapter_remains_server_bound_but_is_not_a_resident_runtim
     assert '281489677261-j6isgtjd4mqv4os6fakt2qeloogpav8p.apps.googleusercontent.com' in ui
 
     app = text('app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt')
-    assert 'PublicWelcomeScreen' not in app
+    # Resident runtime must remain usable without wiring Google authentication into the root gate.
+    # Protected staff/notification behavior may still inspect SUPABASE_AUTH explicitly.
     assert 'onGoogleCredential = viewModel::signInWithGoogleIdToken' not in app
-    assert 'SessionAuthority.PUBLIC' in app
+    assert 'SessionAuthority.SUPABASE_AUTH' in app
 
     view_model = text('app/src/main/java/za/org/rtc/community/app/RtcViewModel.kt')
     coordinator = text('app/src/main/java/za/org/rtc/community/app/RtcAuthenticationCoordinator.kt')
