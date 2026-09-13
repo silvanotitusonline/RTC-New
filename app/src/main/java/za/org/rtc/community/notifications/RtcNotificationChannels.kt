@@ -7,7 +7,6 @@ import android.os.Build
 
 const val RTC_SAFETY_ALERTS_CHANNEL = "rtc_safety_alerts"
 const val RTC_COMMUNITY_UPDATES_CHANNEL = "rtc_community_updates"
-const val RTC_SERVICE_BOOKINGS_CHANNEL = "rtc_service_bookings"
 
 fun createRtcNotificationChannels(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -27,12 +26,5 @@ fun createRtcNotificationChannels(context: Context) {
     ).apply {
         description = "RTC Community notices, support and community updates."
     }
-    val serviceBookings = NotificationChannel(
-        RTC_SERVICE_BOOKINGS_CHANNEL,
-        "Service bookings",
-        NotificationManager.IMPORTANCE_DEFAULT,
-    ).apply {
-        description = "Updates about your RTC Service Centre bookings and booking chat."
-    }
-    manager.createNotificationChannels(listOf(safety, community, serviceBookings))
+    manager.createNotificationChannels(listOf(safety, community))
 }
