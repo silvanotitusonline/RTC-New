@@ -32,7 +32,11 @@ def test_home_snapshot_is_sourced_from_public_report_repository():
 
 
 def test_global_search_is_backend_authoritative_and_fixture_provider_is_empty():
-    assert 'postgrest.rpc("public_search"' in PRODUCTION_UX
+    assert "supabase.postgrest.rpc(" in PRODUCTION_UX
+    assert '"search_public_directory"' in PRODUCTION_UX
+    assert 'put("p_query", query.trim())' in PRODUCTION_UX
+    assert 'put("p_limit", pageSize)' in PRODUCTION_UX
+    assert 'put("p_offset", offset)' in PRODUCTION_UX
     assert "getSamplePublicSearchResults(query: String): List<PublicSearchResult> = emptyList()" in RTC_MOCKS
     assert 'PublicSearchResult("PROJECT"' not in RTC_MOCKS
     assert 'PublicSearchResult("CENTRE"' not in RTC_MOCKS
