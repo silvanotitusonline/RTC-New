@@ -6,6 +6,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import za.org.rtc.community.core.RtcSession
+import za.org.rtc.community.feature.account.AccountSettingsRoute
 import za.org.rtc.community.feature.dailypost.presentation.AdminDailyPostStudioScreen
 import za.org.rtc.community.feature.dailypost.presentation.DailyPostScreen
 import za.org.rtc.community.feature.inbox.presentation.ResidentInboxScreen
@@ -15,7 +16,7 @@ import za.org.rtc.community.navigation.navigateOverlay
 import za.org.rtc.community.navigation.returnToSafeWorkspace
 
 /**
- * Resident modernisation bindings after removal of the legacy Events Calendar.
+ * Resident modernisation bindings after removal of legacy resident-only feature surfaces.
  */
 internal fun NavGraphBuilder.residentModernisationBindings(
     navController: NavHostController,
@@ -26,6 +27,12 @@ internal fun NavGraphBuilder.residentModernisationBindings(
         arguments = listOf(navArgument("tab") { type = NavType.StringType; defaultValue = "updates" }),
     ) {
         ResidentInboxScreen(onOpenRoute = { navController.navigateOverlay(it) })
+    }
+    composable(RtcRoute.ACCOUNT_SETTINGS) {
+        AccountSettingsRoute(
+            onOpenNotifications = { navController.navigateOverlay(RtcRoute.NOTIFICATIONS) },
+            onOpenMarketplaceRoute = { route -> navController.navigateOverlay(route) },
+        )
     }
     composable(RtcRoute.SERVICES) {
         MarketHubScreen(onNavigate = { navController.navigateOverlay(it) })
