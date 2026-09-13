@@ -111,6 +111,9 @@ def test_reference_driven_makeover_uses_transparent_rtc_brand_and_shared_palette
     theme = (ROOT / 'app/src/main/java/za/org/rtc/community/ui/theme/Theme.kt').read_text()
     splash = (ROOT / 'app/src/main/res/values/themes.xml').read_text()
     splash_background = (ROOT / 'app/src/main/res/drawable/rtc_splash_background.xml').read_text()
+    guest_host = (
+        ROOT / 'app/src/main/java/za/org/rtc/community/feature/account/PublicWelcomeGuestHost.kt'
+    ).read_text()
     logo = ROOT / 'app/src/main/res/drawable-nodpi/rtc_logo_mark_transparent.png'
     assert 'val RtcInk = Color(0xFF0C1013)' in theme
     assert 'val RtcMint = Color(0xFF2EC27E)' in theme
@@ -120,8 +123,9 @@ def test_reference_driven_makeover_uses_transparent_rtc_brand_and_shared_palette
     assert logo.exists() and logo.stat().st_size > 0
     assert 'fun RtcBrandLockup(' in BRAND_LOCKUP
     assert 'R.drawable.rtc_logo_mark_transparent' in BRAND_LOCKUP
-    assert 'import za.org.rtc.community.feature.account.PublicWelcomeScreen' in MAIN
-    assert 'PublicWelcomeScreen(' in MAIN
+    assert 'import za.org.rtc.community.feature.account.PublicWelcomeGuestHost' in MAIN
+    assert 'PublicWelcomeGuestHost(' in MAIN
+    assert 'PublicWelcomeScreen(' in guest_host
     supplied_splash_logo = ROOT / 'app/src/main/res/drawable-nodpi/rtc_community_logo_transparent.png'
     assert supplied_splash_logo.exists() and supplied_splash_logo.stat().st_size > 0
     with Image.open(supplied_splash_logo) as splash_logo:

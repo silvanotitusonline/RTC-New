@@ -40,6 +40,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         val dynamicColor = booleanPreferencesKey("dynamic_color")
         val reading = booleanPreferencesKey("simplified_reading")
         val onboardingLanguage = stringPreferencesKey("onboarding_language")
+        val residentEntryGranted = booleanPreferencesKey("resident_entry_granted")
         val globalUiConfiguration = stringPreferencesKey("global_ui_configuration")
         val globalUiConfigurationVersion = stringPreferencesKey("global_ui_configuration_version")
         val rememberedEmail = stringPreferencesKey("remembered_email")
@@ -90,6 +91,14 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         values[Keys.onboardingLanguage].takeIf { it in SUPPORTED_ONBOARDING_LANGUAGES } ?: "en"
     }
 
+    /**
+     * Local UX preference only. This never upgrades the Supabase session, role or authority.
+     * It records that the resident explicitly chose to enter the public read-only experience.
+     */
+    val residentEntryGranted: Flow<Boolean> = context.rtcPreferences.data.map { values ->
+        values[Keys.residentEntryGranted] ?: false
+    }
+
     val cachedGlobalUiConfiguration: Flow<CachedGlobalUiConfiguration> = context.rtcPreferences.data.map { values ->
         CachedGlobalUiConfiguration(
             versionId = values[Keys.globalUiConfigurationVersion],
@@ -104,6 +113,10 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
     suspend fun setOnboardingLanguage(language: String) {
         require(language in SUPPORTED_ONBOARDING_LANGUAGES) { "Unsupported onboarding language." }
         context.rtcPreferences.edit { it[Keys.onboardingLanguage] = language }
+    }
+
+    suspend fun setResidentEntryGranted(granted: Boolean) {
+        context.rtcPreferences.edit { values -> values[Keys.residentEntryGranted] = granted }
     }
 
     suspend fun setCommunityGuidelinesAccepted(userId: String, accepted: Boolean) {
