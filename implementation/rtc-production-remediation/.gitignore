@@ -1,0 +1,9 @@
+server/node_modules/
+server/.env
+server/uploads/
+server/coverage/
+android/.gradle/
+android/build/
+android/tomtom/build/
+android/local.properties
+android/.kotlin/

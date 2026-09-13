@@ -1,0 +1,27 @@
+{
+  "name": "rtc-production-remediation-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "start": "node --env-file=.env src/index.js",
+    "migrate": "node --env-file=.env scripts/migrate.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "check": "node --check src/app.js && node --check src/database.js && node --check src/auth.js && node --check src/media.js && node --check src/tomtom.js"
+  },
+  "dependencies": {
+    "express": "5.2.1",
+    "helmet": "8.3.0",
+    "jose": "6.2.12",
+    "multer": "2.3.0",
+    "pg": "8.23.0",
+    "sharp": "0.35.4",
+    "zod": "4.6.4"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
+}
