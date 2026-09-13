@@ -1,6 +1,11 @@
 package za.org.rtc.community.feature.publicreports.presentation
 
 import android.net.Uri
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.SessionStatus
+import kotlinx.coroutines.Job
+import za.org.rtc.community.core.maps.GeoPoint
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,6 +13,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -49,6 +55,8 @@ data class PublicReportComposerState(
     val identityMode: PublicReportIdentityMode = PublicReportIdentityMode.NAMED,
     val publicLocationLabel: String = "",
     val exactAddress: String = "",
+    val selectedLocation: GeoPoint? = null,
+    val draftAccountId: String? = null,
     val evidence: List<StagedEvidence> = emptyList(),
     val cannotProvideEvidence: Boolean = false,
     val noEvidenceReason: String = "",
@@ -57,18 +65,45 @@ data class PublicReportComposerState(
     val submitting: Boolean = false,
     val submittedReportId: String? = null,
     val message: String? = null,
-    val mapUnavailableNotice: String = "A map picker is not configured. Enter a landmark or address manually.",
 ) {
     val showCriticalNotice: Boolean get() = urgency == PublicReportUrgency.CRITICAL
+}
+
+/** The public label is always resident-authored; map search never overwrites either address field. */
+internal fun PublicReportComposerState.toReportDraft(): PublicReportDraft {
+    require(selectedLocation == null || selectedLocation.isValid) { "Choose a valid report location." }
+    return PublicReportDraft(
+        clientRequestId = clientRequestId,
+        title = title,
+        description = description,
+        startedAt = if (startedUnknown) null else startedAt,
+        categoryId = categoryId.orEmpty(),
+        urgency = urgency,
+        identityMode = identityMode,
+        locationMode = if (selectedLocation != null) PublicReportLocationMode.MAP else PublicReportLocationMode.MANUAL,
+        publicLocationLabel = publicLocationLabel,
+        latitude = selectedLocation?.latitude,
+        longitude = selectedLocation?.longitude,
+        exactAddress = exactAddress,
+        noEvidenceReason = noEvidenceReason.takeIf { cannotProvideEvidence },
+        contactPermission = false,
+        guidelinesVersion = guidelinesVersion,
+    )
 }
 
 @HiltViewModel
 class PublicReportComposerViewModel @Inject constructor(
     private val repository: PublicReportRepository,
     private val mediaPreparation: MediaPreparation,
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
+    private val supabase: SupabaseClient,
 ) : ViewModel() {
     private val requestKey = "public_report_client_request_id"
+    private val latitudeKey = "public_report_draft_latitude"
+    private val longitudeKey = "public_report_draft_longitude"
+    private val ownerKey = "public_report_draft_owner"
+    private var draftOwner = savedStateHandle.get<String>(ownerKey)
+    private var submitJob: Job? = null
     private val retainedId = savedStateHandle.get<String>(requestKey) ?: UUID.randomUUID().toString().also {
         savedStateHandle[requestKey] = it
     }
@@ -88,10 +123,68 @@ class PublicReportComposerViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            supabase.auth.sessionStatus.collect { status ->
+                when (status) {
+                    is SessionStatus.Authenticated -> bindDraftAccount(supabase.auth.currentUserOrNull()?.id)
+                    is SessionStatus.NotAuthenticated -> bindDraftAccount(null)
+                    // Wait for restoration; a temporary refresh failure must not erase a saved draft.
+                    else -> Unit
+                }
+            }
+        }
+        viewModelScope.launch {
             repository.categories().onSuccess { categories ->
                 _state.update { it.copy(categories = categories.filter { category -> category.isActive }) }
             }
         }
+    }
+
+    private fun bindDraftAccount(owner: String?) {
+        if (draftOwner != owner) {
+            submitJob?.cancel()
+            clearSavedLocation()
+            if (draftOwner != null) {
+                cleanupStaged(_state.value)
+                val nextId = UUID.randomUUID().toString()
+                savedStateHandle[requestKey] = nextId
+                _state.value = PublicReportComposerState(
+                    clientRequestId = nextId,
+                    categories = _state.value.categories,
+                    guidelinesVersion = _state.value.guidelinesVersion,
+                )
+            }
+            draftOwner = owner
+            savedStateHandle[ownerKey] = owner
+        }
+        val latitude = savedStateHandle.get<Double>(latitudeKey)
+        val longitude = savedStateHandle.get<Double>(longitudeKey)
+        val restored = if (owner != null && latitude != null && longitude != null) {
+            GeoPoint(latitude, longitude).takeIf { it.isValid }
+        } else null
+        _state.update { it.copy(draftAccountId = owner, selectedLocation = restored) }
+    }
+
+    fun setMapLocation(point: GeoPoint) {
+        val current = _state.value
+        if (current.submitting || current.draftAccountId == null || current.draftAccountId != supabase.auth.currentUserOrNull()?.id) return
+        if (!point.isValid) {
+            _state.update { it.copy(message = "Choose a valid report location.") }
+            return
+        }
+        savedStateHandle[latitudeKey] = point.latitude
+        savedStateHandle[longitudeKey] = point.longitude
+        _state.update { it.copy(selectedLocation = point) }
+    }
+
+    fun clearMapLocation() {
+        if (_state.value.submitting) return
+        clearSavedLocation()
+        _state.update { it.copy(selectedLocation = null) }
+    }
+
+    private fun clearSavedLocation() {
+        savedStateHandle.remove<Double>(latitudeKey)
+        savedStateHandle.remove<Double>(longitudeKey)
     }
 
     fun setTitle(value: String) = _state.update { it.copy(title = value.take(PublicReportValidation.TITLE_MAX)) }
@@ -109,6 +202,7 @@ class PublicReportComposerViewModel @Inject constructor(
     fun consumeSubmittedId() = _state.update { it.copy(submittedReportId = null) }
 
     fun addEvidence(uri: Uri) {
+        val ownerAtStart = _state.value.draftAccountId
         if (_state.value.evidence.size >= PublicReportValidation.EVIDENCE_MAX) {
             _state.update { it.copy(message = "Attach at most ${PublicReportValidation.EVIDENCE_MAX} files.") }
             return
@@ -116,6 +210,10 @@ class PublicReportComposerViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { mediaPreparation.prepare(uri) }
                 .onSuccess { prepared ->
+                    if (ownerAtStart != _state.value.draftAccountId) {
+                        prepared.file.delete()
+                        return@onSuccess
+                    }
                     val kind = if (prepared.kind.name == "VIDEO") PublicReportMediaKind.VIDEO else PublicReportMediaKind.IMAGE
                     PublicReportValidation.evidenceMime(prepared.mimeType, kind)?.let { message ->
                         prepared.file.delete(); _state.update { it.copy(message = message) }; return@onSuccess
@@ -154,23 +252,11 @@ class PublicReportComposerViewModel @Inject constructor(
     fun submit() {
         val current = _state.value
         if (current.submitting || current.submittedReportId != null) return
-        val draft = PublicReportDraft(
-            clientRequestId = current.clientRequestId,
-            title = current.title,
-            description = current.description,
-            startedAt = if (current.startedUnknown) null else current.startedAt,
-            categoryId = current.categoryId.orEmpty(),
-            urgency = current.urgency,
-            identityMode = current.identityMode,
-            locationMode = PublicReportLocationMode.MANUAL,
-            publicLocationLabel = current.publicLocationLabel,
-            latitude = null,
-            longitude = null,
-            exactAddress = current.exactAddress,
-            noEvidenceReason = current.noEvidenceReason.takeIf { current.cannotProvideEvidence },
-            contactPermission = false,
-            guidelinesVersion = current.guidelinesVersion,
-        )
+        if (current.draftAccountId == null || current.draftAccountId != supabase.auth.currentUserOrNull()?.id) {
+            _state.update { it.copy(message = "Sign in before submitting this report.") }
+            return
+        }
+        val draft = current.toReportDraft()
         val error = PublicReportValidation.draft(
             draft = draft,
             evidenceCount = current.evidence.size,
@@ -182,20 +268,29 @@ class PublicReportComposerViewModel @Inject constructor(
             return
         }
         _state.update { it.copy(submitting = true, message = null) }
-        viewModelScope.launch {
+        submitJob = viewModelScope.launch {
             repository.create(draft)
                 .onSuccess { reportId ->
+                    if (draftOwner != current.draftAccountId) return@onSuccess
                     val uploadError = uploadEvidence(reportId, current)
                     cleanupStaged(current)
+                    if (draftOwner != current.draftAccountId) return@onSuccess
+                    clearSavedLocation()
+                    val nextId = UUID.randomUUID().toString()
+                    savedStateHandle[requestKey] = nextId
                     _state.update {
-                        it.copy(
-                            submitting = false,
+                        PublicReportComposerState(
+                            clientRequestId = nextId,
+                            draftAccountId = draftOwner,
+                            categories = it.categories,
+                            guidelinesVersion = it.guidelinesVersion,
                             submittedReportId = reportId,
                             message = uploadError,
                         )
                     }
                 }
                 .onFailure { failure ->
+                    if (draftOwner != current.draftAccountId) return@onFailure
                     _state.update {
                         it.copy(
                             submitting = false,
@@ -209,6 +304,7 @@ class PublicReportComposerViewModel @Inject constructor(
     private suspend fun uploadEvidence(reportId: String, current: PublicReportComposerState): String? {
         if (current.evidence.isEmpty()) return null
         val ownerId = repository.currentUserId().getOrElse { return it.message }
+        if (ownerId != current.draftAccountId) return "Sign in to the report account before uploading evidence."
         current.evidence.forEachIndexed { index, item ->
             val file = item.stagedPath?.let { java.io.File(it) } ?: return "Evidence could not be read."
             val storagePath = "$ownerId/${current.clientRequestId}/${item.id}"

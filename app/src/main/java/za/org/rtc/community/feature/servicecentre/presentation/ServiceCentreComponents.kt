@@ -47,6 +47,7 @@ fun ServiceCentreProviderCard(
     provider: ServiceCentreProvider,
     onRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    onViewMap: (() -> Unit)? = null,
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
         Column(
@@ -85,6 +86,11 @@ fun ServiceCentreProviderCard(
                 if (rating != null && reviews > 0) "%.1f · %d review%s".format(rating, reviews, if (reviews == 1) "" else "s") else "New provider",
                 style = MaterialTheme.typography.bodySmall,
             )
+            onViewMap?.let { openMap ->
+                androidx.compose.material3.OutlinedButton(onClick = openMap, modifier = Modifier.fillMaxWidth().height(RtcSize.minimumTouchTarget)) {
+                    Text("Business map")
+                }
+            }
             Button(onClick = onRequest, modifier = Modifier.fillMaxWidth().height(RtcSize.minimumTouchTarget)) {
                 Text("Request")
             }

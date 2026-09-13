@@ -8,6 +8,7 @@ import io.ktor.http.ContentType
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -43,17 +44,9 @@ class SupabasePublicReportRepository @Inject constructor(
     }
     private val localComments = java.util.concurrent.ConcurrentHashMap<String, MutableList<PublicReportComment>>()
 
-    override suspend fun categories(): Result<List<PublicReportCategory>> = runCatching {
-        val remote = runCatching {
-            decodeObjects(
-                supabase.postgrest.rpc(
-                    PublicReportRpcContract.CATEGORIES,
-                    buildJsonObject {},
-                ),
-            ).map(PublicReportJsonMappers::category)
-        }.getOrDefault(emptyList())
-
-        if (remote.isNotEmpty()) remote else PublicReportMockData.getSampleCategories()
+    override suspend fun categories(): Result<List<PublicReportCategory>> = authoritativeResult {
+        decodeObjects(supabase.postgrest.rpc(PublicReportRpcContract.CATEGORIES, buildJsonObject {}))
+            .map(PublicReportJsonMappers::category)
     }
 
     override suspend fun page(
@@ -61,81 +54,25 @@ class SupabasePublicReportRepository @Inject constructor(
         cursorCreatedAt: Instant?,
         cursorId: String?,
         limit: Int,
-    ): Result<PublicReportPage> = runCatching {
+    ): Result<PublicReportPage> = authoritativeResult {
         val bounded = limit.coerceIn(1, PublicReportValidation.PAGE_MAX)
-        val remoteRows = runCatching {
-            decodeObjects(
-                supabase.postgrest.rpc(
-                    PublicReportRpcContract.VERIFIED_PAGE,
-                    pageParameters(filters, cursorCreatedAt, cursorId, bounded),
-                ),
-            ).map(PublicReportJsonMappers::report)
-        }.getOrDefault(emptyList())
-
-        val items = if (remoteRows.isNotEmpty()) {
-            remoteRows
-        } else {
-            synchronized(localReports) {
-                var list = localReports.toList()
-
-                if (!filters.searchQuery.isNullOrBlank()) {
-                    val q = filters.searchQuery.trim().lowercase()
-                    list = list.filter {
-                        it.title.lowercase().contains(q) ||
-                        it.description.lowercase().contains(q) ||
-                        it.categoryLabel.lowercase().contains(q) ||
-                        it.publicLocationLabel.lowercase().contains(q)
-                    }
-                }
-
-                if (filters.urgency != null) {
-                    list = list.filter { it.urgency == filters.urgency }
-                }
-
-                if (!filters.categorySlug.isNullOrBlank()) {
-                    list = list.filter { it.categorySlug == filters.categorySlug }
-                }
-
-                when (filters.effectiveScope) {
-                    PublicReportScope.ACTIVE -> list = list.filter {
-                        it.status in setOf(
-                            PublicReportStatus.SUBMITTED,
-                            PublicReportStatus.ACKNOWLEDGED,
-                            PublicReportStatus.IN_PROGRESS
-                        )
-                    }
-                    PublicReportScope.RESOLVED -> list = list.filter {
-                        it.status in setOf(PublicReportStatus.COMPLETED, PublicReportStatus.CLOSED)
-                    }
-                    PublicReportScope.UNRESOLVED -> list = list.filter {
-                        it.status !in setOf(PublicReportStatus.COMPLETED, PublicReportStatus.CLOSED)
-                    }
-                    PublicReportScope.VERIFIED -> { /* all sample reports are verified */ }
-                }
-
-                list
-            }
-        }
-
+        val items = decodeObjects(supabase.postgrest.rpc(
+            PublicReportRpcContract.VERIFIED_PAGE,
+            pageParameters(filters, cursorCreatedAt, cursorId, bounded),
+        )).map(PublicReportJsonMappers::report)
         PublicReportPage(
             items = items,
             nextCreatedAt = items.lastOrNull()?.createdAt,
             nextId = items.lastOrNull()?.id,
-            endReached = true,
+            endReached = items.size < bounded,
         )
     }
 
-    override suspend fun get(reportId: String): Result<za.org.rtc.community.feature.publicreports.domain.PublicReport?> = runCatching {
-        val remote = runCatching {
-            decodeObjects(
-                supabase.postgrest.rpc(
-                    PublicReportRpcContract.GET,
-                    buildJsonObject { put("p_report_id", reportId) },
-                ),
-            ).firstOrNull()?.let(PublicReportJsonMappers::report)
-        }.getOrNull()
-
-        remote ?: synchronized(localReports) { localReports.firstOrNull { it.id == reportId } }
+    override suspend fun get(reportId: String): Result<za.org.rtc.community.feature.publicreports.domain.PublicReport?> = authoritativeResult {
+        decodeObjects(supabase.postgrest.rpc(
+            PublicReportRpcContract.GET,
+            buildJsonObject { put("p_report_id", reportId) },
+        )).firstOrNull()?.let(PublicReportJsonMappers::report)
     }
 
     override suspend fun timeline(reportId: String): Result<List<PublicReportTimelineEntry>> = runCatching {
@@ -251,63 +188,13 @@ class SupabasePublicReportRepository @Inject constructor(
         remote ?: PublicReportVoteResult(thumbsUpCount = thumbsUp, thumbsDownCount = thumbsDown, currentUserVote = userVote)
     }
 
-    override suspend fun create(draft: PublicReportDraft): Result<String> = runCatching {
-        val reportId = "report_${java.util.UUID.randomUUID()}"
-        val categories = categories().getOrDefault(PublicReportMockData.getSampleCategories())
-        val cat = categories.firstOrNull { it.id == draft.categoryId }
-
-        val newReport = za.org.rtc.community.feature.publicreports.domain.PublicReport(
-            id = reportId,
-            title = draft.title.trim(),
-            description = draft.description.trim(),
-            startedAt = draft.startedAt ?: Instant.now(),
-            categoryId = draft.categoryId,
-            categorySlug = cat?.slug ?: "general",
-            categoryLabel = cat?.label ?: "General",
-            urgency = draft.urgency,
-            status = PublicReportStatus.SUBMITTED,
-            identityMode = draft.identityMode,
-            publicLocationLabel = draft.publicLocationLabel.trim().ifBlank { "Community Sector" },
-            authorDisplayName = "You (Community Resident)",
-            verified = true,
-            verificationReason = "Submitted and queued for inspection",
-            duplicateOf = null,
-            thumbsUpCount = 1,
-            thumbsDownCount = 0,
-            commentCount = 0,
-            evidenceCount = 0,
-            currentUserVote = 1,
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
-        )
-
-        synchronized(localReports) {
-            localReports.add(0, newReport)
-        }
-
-        runCatching {
-            supabase.postgrest.rpc(
-                PublicReportRpcContract.CREATE,
-                buildJsonObject {
-                    put("p_client_request_id", draft.clientRequestId)
-                    put("p_title", draft.title.trim())
-                    put("p_description", draft.description.trim())
-                    draft.startedAt?.let { put("p_started_at", it.toString()) }
-                    put("p_category_id", draft.categoryId)
-                    put("p_urgency", draft.urgency.name)
-                    put("p_identity_mode", draft.identityMode.name)
-                    put("p_location_mode", draft.locationMode.name)
-                    put("p_public_location_label", draft.publicLocationLabel.trim())
-                    draft.latitude?.let { put("p_latitude", it) }
-                    draft.longitude?.let { put("p_longitude", it) }
-                    draft.exactAddress?.trim()?.takeIf { it.isNotEmpty() }?.let { put("p_exact_address", it) }
-                    draft.noEvidenceReason?.trim()?.takeIf { it.isNotEmpty() }?.let { put("p_no_evidence_reason", it) }
-                    put("p_contact_permission", draft.contactPermission)
-                    put("p_guidelines_version", draft.guidelinesVersion)
-                },
-            ).decodeSingle<String>()
-        }
-        reportId
+    override suspend fun create(draft: PublicReportDraft): Result<String> = authoritativeResult {
+        val serverId = supabase.postgrest.rpc(
+            PublicReportRpcContract.CREATE,
+            publicReportCreateParameters(draft),
+        ).decodeSingle<String>()
+        java.util.UUID.fromString(serverId)
+        serverId
     }
 
     override suspend fun currentUserId(): Result<String> = runCatching {
@@ -461,6 +348,14 @@ class SupabasePublicReportRepository @Inject constructor(
         )
         Unit
     }.recoverCatching { error -> throw PublicReportFailure.from(error) }
+
+    private suspend fun <T> authoritativeResult(block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Exception) {
+        Result.failure(PublicReportFailure.from(failure))
+    }
 
     private fun pageParameters(
         filters: PublicReportFilters,

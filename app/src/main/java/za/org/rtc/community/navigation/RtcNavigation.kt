@@ -72,6 +72,8 @@ object RtcRoute {
     const val SERVICE_CENTRE_CHAT = "account/service-centre/chat/{bookingId}"
 
     fun dailyPost(postId: String) = "daily-post/$postId"
+    fun marketplaceDirections(businessId: String, locationId: String = "primary") =
+        "community/marketplace/business/${android.net.Uri.encode(businessId)}/directions/${android.net.Uri.encode(locationId)}"
     fun marketplaceBusiness(idOrSlug: String) = "community/marketplace/business/$idOrSlug"
     fun marketplaceReviews(businessId: String) = "community/marketplace/business/$businessId/reviews"
     fun marketplaceEdit(businessId: String) = "account/marketplace/business/$businessId/edit"

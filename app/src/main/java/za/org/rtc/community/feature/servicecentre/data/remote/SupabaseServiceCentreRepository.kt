@@ -41,12 +41,9 @@ class SupabaseServiceCentreRepository @Inject constructor(
     override fun currentUserId(): String? = supabase.auth.currentUserOrNull()?.id
 
     override suspend fun categories(): Result<List<ServiceCentreCategory>> = runCatching {
-        val remote = runCatching {
-            supabase.postgrest.rpc("service_centre_categories")
-                .decodeSingle<JsonArray>()
-                .map { it.jsonObject.toServiceCentreCategory() }
-        }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else ServiceCentreMockData.getSampleCategories()
+        supabase.postgrest.rpc("service_centre_categories")
+            .decodeSingle<JsonArray>()
+            .map { it.jsonObject.toServiceCentreCategory() }
     }
 
     override suspend fun localRadar(
@@ -60,35 +57,24 @@ class SupabaseServiceCentreRepository @Inject constructor(
         require(offset >= 0) { "Provider offset cannot be negative." }
         val boundedRadius = radiusMetres.coerceIn(100, 50_000)
         val boundedLimit = limit.coerceIn(1, 50)
-        val remote = runCatching {
-            supabase.postgrest.rpc("service_centre_local_radar", buildJsonObject {
-                categoryId?.takeIf(String::isNotBlank)?.let { put("p_category_id", it) }
-                locality?.takeIf(String::isNotBlank)?.let { put("p_locality", it.trim()) }
-                origin?.let {
-                    put("p_origin_latitude", it.latitude)
-                    put("p_origin_longitude", it.longitude)
-                }
-                put("p_radius_metres", boundedRadius)
-                put("p_offset", offset)
-                put("p_limit", boundedLimit)
-            }).decodeList<JsonObject>().map { it.toServiceCentreProvider() }
-        }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else {
-            ServiceCentreMockData.getSampleProviders().filter { prov ->
-                categoryId.isNullOrBlank() || prov.categoryId.contains(categoryId, true)
+        supabase.postgrest.rpc("service_centre_local_radar", buildJsonObject {
+            categoryId?.takeIf(String::isNotBlank)?.let { put("p_category_id", it) }
+            locality?.takeIf(String::isNotBlank)?.let { put("p_locality", it.trim()) }
+            origin?.let {
+                put("p_origin_latitude", it.latitude)
+                put("p_origin_longitude", it.longitude)
             }
-        }
+            put("p_radius_metres", boundedRadius)
+            put("p_offset", offset)
+            put("p_limit", boundedLimit)
+        }).decodeList<JsonObject>().map { it.toServiceCentreProvider() }
     }
 
     override suspend fun provider(reference: String): Result<ServiceCentreProvider> = runCatching {
         require(reference.isNotBlank()) { "Choose a provider." }
-        val remote = runCatching {
-            supabase.postgrest.rpc("service_centre_provider_detail", buildJsonObject {
-                put("p_provider_reference", reference.trim())
-            }).decodeSingle<JsonObject>().toServiceCentreProvider()
-        }.getOrNull()
-        remote ?: (ServiceCentreMockData.getSampleProviders().firstOrNull { it.providerUserId == reference || it.displayName.contains(reference, true) }
-            ?: ServiceCentreMockData.getSampleProviders().first())
+        supabase.postgrest.rpc("service_centre_provider_detail", buildJsonObject {
+            put("p_provider_reference", reference.trim())
+        }).decodeSingle<JsonObject>().toServiceCentreProvider()
     }
 
     override suspend fun myProviderProfile(): Result<ServiceCentreProviderProfile?> = runCatching {

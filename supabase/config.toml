@@ -32,3 +32,6 @@ verify_jwt = true
 # itself fails closed through assert_daily_post_scheduler_secret().
 [functions.daily-post-scheduler]
 verify_jwt = false
+[functions.tomtom-location]
+# The handler validates resident access tokens with Supabase Auth before accessing Vault or TomTom.
+verify_jwt = false
