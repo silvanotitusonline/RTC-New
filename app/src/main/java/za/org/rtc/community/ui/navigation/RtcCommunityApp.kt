@@ -9,22 +9,17 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import za.org.rtc.community.ui.animation.LocalReducedMotion
-import za.org.rtc.community.ui.animation.LocalSnackbarHostState
-import za.org.rtc.community.ui.animation.RtcMotionAlertDialog
-import za.org.rtc.community.ui.animation.RtcMotionPatterns
-import za.org.rtc.community.ui.animation.RtcMotionSnackbar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +34,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -48,8 +44,10 @@ import za.org.rtc.community.core.ResidentModernisationFeature
 import za.org.rtc.community.core.ResidentModernisationFeatureFlags
 import za.org.rtc.community.core.SessionAuthority
 import za.org.rtc.community.core.UserRole
+import za.org.rtc.community.feature.account.LocalRtcApplicationLanguage
 import za.org.rtc.community.feature.account.NotificationPanel
-import za.org.rtc.community.feature.account.PublicWelcomeScreen
+import za.org.rtc.community.feature.account.PublicWelcomeGuestHost
+import za.org.rtc.community.feature.account.ResidentEntryViewModel
 import za.org.rtc.community.feature.onboarding.InteractiveOnboardingTutorial
 import za.org.rtc.community.navigation.RouteAccessPolicy
 import za.org.rtc.community.navigation.RtcRoute
@@ -57,9 +55,14 @@ import za.org.rtc.community.navigation.navigateOverlay
 import za.org.rtc.community.navigation.navigatePrimary
 import za.org.rtc.community.navigation.residentPrimaryRoutes
 import za.org.rtc.community.navigation.returnToSafeWorkspace
-import za.org.rtc.community.ui.components.RtcSplashScreen
+import za.org.rtc.community.ui.animation.LocalReducedMotion
+import za.org.rtc.community.ui.animation.LocalSnackbarHostState
+import za.org.rtc.community.ui.animation.RtcMotionAlertDialog
+import za.org.rtc.community.ui.animation.RtcMotionPatterns
+import za.org.rtc.community.ui.animation.RtcMotionSnackbar
 import za.org.rtc.community.ui.components.RtcResidentBottomNavigation
 import za.org.rtc.community.ui.components.RtcResidentNavItem
+import za.org.rtc.community.ui.components.RtcSplashScreen
 import za.org.rtc.community.ui.config.LocalRtcUiConfiguration
 import za.org.rtc.community.ui.config.presentationForRoute
 import za.org.rtc.community.ui.config.rtcContentDensity
@@ -84,8 +87,13 @@ internal fun ServiceCentreDeepLinkScope(
 }
 
 @Composable
-internal fun RtcCommunityApp(viewModel: RtcViewModel) {
+internal fun RtcCommunityApp(
+    viewModel: RtcViewModel,
+    residentEntryViewModel: ResidentEntryViewModel = hiltViewModel(),
+) {
     val session by viewModel.session.collectAsStateWithLifecycle()
+    val residentEntryGranted by residentEntryViewModel.residentEntryGranted.collectAsStateWithLifecycle()
+    val applicationLanguage by residentEntryViewModel.applicationLanguage.collectAsStateWithLifecycle()
     val pendingCommunityAlertId by viewModel.pendingCommunityAlertId.collectAsStateWithLifecycle()
     val pendingCommunityPostId by viewModel.pendingCommunityPostId.collectAsStateWithLifecycle()
     val authenticationUi by viewModel.authenticationUi.collectAsStateWithLifecycle()
@@ -115,10 +123,12 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
         return
     }
 
-    if (session.role == UserRole.ANONYMOUS_PUBLIC) {
-        PublicWelcomeScreen(
+    if (session.role == UserRole.ANONYMOUS_PUBLIC && !residentEntryGranted) {
+        PublicWelcomeGuestHost(
+            language = applicationLanguage,
             authenticationUi = authenticationUi,
             passwordUi = passwordUi,
+            onContinueAsGuest = residentEntryViewModel::continueAsGuest,
             onSignIn = viewModel::signInWithEmail,
             onGoogleCredential = viewModel::signInWithGoogleIdToken,
             onGoogleSignInError = viewModel::reportGoogleSignInError,
@@ -174,14 +184,14 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
         }
     }
 
-    LaunchedEffect(pendingCommunityAlertId, session.authority) {
-        pendingCommunityAlertId?.takeIf { session.authority == SessionAuthority.SUPABASE_AUTH }?.let { alertId ->
+    LaunchedEffect(pendingCommunityAlertId) {
+        pendingCommunityAlertId?.let { alertId ->
             navController.navigateOverlay(RtcRoute.alertDetail(alertId))
             viewModel.consumePendingCommunityAlert()
         }
     }
-    LaunchedEffect(pendingCommunityPostId, session.authority) {
-        pendingCommunityPostId?.takeIf { session.authority == SessionAuthority.SUPABASE_AUTH }?.let { postId ->
+    LaunchedEffect(pendingCommunityPostId) {
+        pendingCommunityPostId?.let { postId ->
             navController.navigateOverlay(communityPostRoute(postId))
             viewModel.consumePendingCommunityPost()
         }
@@ -198,6 +208,21 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
     val isPrimaryResidentRoute = route in residentPrimaryRoutes
     val showBack = route != null && route !in residentPrimaryRoutes && route != RtcRoute.WORK_QUEUE
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(authenticationUi.message, session.role, residentEntryGranted) {
+        val message = authenticationUi.message?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        if (session.role != UserRole.ANONYMOUS_PUBLIC || !residentEntryGranted) return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = message,
+            actionLabel = "Sign in",
+            withDismissAction = true,
+            duration = SnackbarDuration.Long,
+        )
+        viewModel.dismissAuthenticationMessage()
+        if (result == SnackbarResult.ActionPerformed) {
+            residentEntryViewModel.returnToWelcome()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -295,6 +320,7 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
                         )
                     }
                     CompositionLocalProvider(
+                        LocalRtcApplicationLanguage provides applicationLanguage,
                         LocalReducedMotion provides remember(context) { RtcMotionPatterns.isReducedMotion(context) },
                         LocalRtcContentDensity provides routePresentation.rtcContentDensity(uiConfiguration.appearance.densityPreset),
                         LocalSnackbarHostState provides snackbarHostState,
