@@ -278,16 +278,8 @@ internal fun CommunityPostDetailScreen(
                             val isActive = emoji in activePost.userReactions
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
-                                color = if (isActive) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceContainerHigh
-                                },
-                                contentColor = if (isActive) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
+                                color = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier
                                     .clickable { communityViewModel.toggleReaction(activePost.id, emoji) }
                                     .semantics { contentDescription = "Reaction $emoji $count" },
@@ -381,12 +373,13 @@ internal fun CommunityPostDetailScreen(
                                 style = MaterialTheme.typography.labelMedium,
                             )
                         }
-                        TextButton(
-                            onClick = {},
+                        Row(
                             modifier = Modifier
                                 .weight(1f)
                                 .sizeIn(minHeight = RtcSize.minimumTouchTarget)
-                                .semantics { contentDescription = "Open ${activePost.comments} comments" },
+                                .semantics { contentDescription = "${activePost.comments} comments" },
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
                                 Icons.Outlined.Forum,
