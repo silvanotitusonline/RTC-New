@@ -33,7 +33,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -68,28 +67,24 @@ import za.org.rtc.community.ui.theme.LocalRtcContentDensity
 import za.org.rtc.community.ui.theme.RtcWindowWidth
 import za.org.rtc.community.ui.theme.classifyRtcWindowWidth
 
-private data class ServiceCentreDeepLinkContext(
-    val bookingId: String? = null,
-    val onConsumed: () -> Unit = {},
-)
-
-private val LocalServiceCentreDeepLinkContext = staticCompositionLocalOf { ServiceCentreDeepLinkContext() }
-
+/**
+ * Compatibility sink for stale pre-removal booking deep links. Booking routes no longer exist;
+ * consuming an old notification prevents repeated delivery without restoring the removed feature.
+ */
 @Composable
 internal fun ServiceCentreDeepLinkScope(
     bookingId: String?,
     onConsumed: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    CompositionLocalProvider(
-        LocalServiceCentreDeepLinkContext provides ServiceCentreDeepLinkContext(bookingId, onConsumed),
-        content = content,
-    )
+    LaunchedEffect(bookingId) {
+        if (bookingId != null) onConsumed()
+    }
+    content()
 }
 
 @Composable
 internal fun RtcCommunityApp(viewModel: RtcViewModel) {
-    val serviceCentreDeepLink = LocalServiceCentreDeepLinkContext.current
     val session by viewModel.session.collectAsStateWithLifecycle()
     val pendingCommunityAlertId by viewModel.pendingCommunityAlertId.collectAsStateWithLifecycle()
     val pendingCommunityPostId by viewModel.pendingCommunityPostId.collectAsStateWithLifecycle()
@@ -189,12 +184,6 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
         pendingCommunityPostId?.takeIf { session.authority == SessionAuthority.SUPABASE_AUTH }?.let { postId ->
             navController.navigateOverlay(communityPostRoute(postId))
             viewModel.consumePendingCommunityPost()
-        }
-    }
-    LaunchedEffect(serviceCentreDeepLink.bookingId, session.authority) {
-        serviceCentreDeepLink.bookingId?.takeIf { session.authority == SessionAuthority.SUPABASE_AUTH }?.let { bookingId ->
-            navController.navigateOverlay(RtcRoute.serviceCentreBooking(bookingId))
-            serviceCentreDeepLink.onConsumed()
         }
     }
     LaunchedEffect(session.role, passwordRecoveryActive) {
