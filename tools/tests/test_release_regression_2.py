@@ -96,6 +96,9 @@ def test_reference_home_and_explore_cards_use_approved_server_values():
 
 def test_reference_onboarding_uses_supplied_splash_logo_and_real_full_page_auth_paths():
     welcome = _function_body(ACCOUNT_WELCOME, 'PublicWelcomeScreen', [])
+    guest_host = (
+        ROOT / 'app/src/main/java/za/org/rtc/community/feature/account/PublicWelcomeGuestHost.kt'
+    ).read_text()
     brand = _function_body(BRAND_LOCKUP, 'RtcBrandLockup', [])
     configuration = (ROOT / 'app/src/main/java/za/org/rtc/community/core/UiConfiguration.kt').read_text()
     welcome_configuration = re.search(
@@ -107,8 +110,9 @@ def test_reference_onboarding_uses_supplied_splash_logo_and_real_full_page_auth_
     assert '@drawable/rtc_splash_logo' in (ROOT / 'app/src/main/res/drawable/rtc_splash_background.xml').read_text()
     assert 'R.drawable.rtc_community_logo_transparent' not in brand
     assert 'R.drawable.rtc_logo_mark_transparent' in brand
-    assert 'import za.org.rtc.community.feature.account.PublicWelcomeScreen' in MAIN
-    assert 'PublicWelcomeScreen(' in MAIN
+    assert 'import za.org.rtc.community.feature.account.PublicWelcomeGuestHost' in MAIN
+    assert 'PublicWelcomeGuestHost(' in MAIN
+    assert 'PublicWelcomeScreen(' in guest_host
     assert 'val welcome = LocalRtcUiConfiguration.current.welcome' in welcome
     for configured_field in [
         'welcome.headline',
