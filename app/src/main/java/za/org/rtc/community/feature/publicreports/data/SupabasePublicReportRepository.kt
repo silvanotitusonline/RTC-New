@@ -77,7 +77,7 @@ class SupabasePublicReportRepository @Inject constructor(
         } catch (failure: Exception) {
             val cached = if (cursorCreatedAt == null && cursorId == null && filters.cacheCompatible) {
                 verifiedCache.latest((bounded * 3).coerceAtMost(100))
-                    .map(VerifiedPublicReportEntity::toDomain)
+                    .map { it.toDomain() }
                     .filter { it.matches(filters) }
                     .take(bounded)
             } else {
@@ -309,7 +309,7 @@ class SupabasePublicReportRepository @Inject constructor(
     private suspend fun cacheVerifiedReports(reports: List<PublicReport>) {
         val verified = reports.filter(PublicReport::verified)
         if (verified.isEmpty()) return
-        verifiedCache.upsertAll(verified.map(PublicReport::toCacheEntity))
+        verifiedCache.upsertAll(verified.map { it.toCacheEntity() })
         verifiedCache.deleteOlderThan(System.currentTimeMillis() - CACHE_RETENTION_MILLIS)
     }
 
