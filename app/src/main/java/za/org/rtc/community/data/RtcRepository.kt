@@ -1485,50 +1485,12 @@ class RtcRepository @Inject constructor(
     }
 
     suspend fun createPost(text: String, mediaUris: List<Uri> = emptyList()): Result<String> {
-        val cleanText = text.trim()
-        val postId = "post_${UUID.randomUUID()}"
-        val mediaItems = mediaUris.mapIndexed { index, uri ->
-            za.org.rtc.community.core.MediaItem(
-                id = "media_${UUID.randomUUID()}",
-                targetType = za.org.rtc.community.core.MediaTargetType.COMMUNITY_POST,
-                targetId = postId,
-                storagePath = uri.toString(),
-                kind = za.org.rtc.community.core.MediaKind.IMAGE,
-                mimeType = "image/jpeg",
-                byteSize = 1024L,
-                position = index,
-                caption = "Attached image",
-                signedUrl = uri.toString(),
-            )
+        val result = productionUxRepository.createCommunityPost(text.trim(), mediaUris)
+        if (result.isSuccess) {
+            runCatching { discardDraft(DraftArea.COMMUNITY) }
+            runCatching { refreshLiveContent() }
         }
-
-        val newPost = za.org.rtc.community.core.CommunityPost(
-            id = postId,
-            author = _session.value.displayName.ifBlank { "You (Community Member)" },
-            handle = _session.value.handle.ifBlank { "@resident" },
-            content = cleanText,
-            category = "Community Updates",
-            createdAt = java.time.Instant.now().toString(),
-            reactions = 0,
-            comments = 0,
-            viewerHasLiked = false,
-            trendingScore = 50,
-            isFollowedTopic = true,
-            hasMedia = mediaItems.isNotEmpty(),
-            media = mediaItems,
-            isOfficial = _session.value.role in setOf(UserRole.SYSTEM_ADMIN, UserRole.CONTENT_EDITOR, UserRole.CASE_STAFF),
-            authorId = _session.value.id,
-            authorAvatarUrl = _session.value.avatarUrl,
-        )
-
-        database.cachedPostDao().insertPost(newPost.toCachedEntity())
-
-        _posts.value = listOf(newPost) + _posts.value.filterNot { it.id == newPost.id }
-        discardDraft(DraftArea.COMMUNITY)
-
-        runCatching { productionUxRepository.createCommunityPost(text, mediaUris) }
-        refreshLiveContent()
-        return Result.success(postId)
+        return result
     }
 
     suspend fun submitSupportRequest(title: String, detail: String): Result<String> {
