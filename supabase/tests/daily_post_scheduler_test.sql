@@ -1,8 +1,12 @@
 BEGIN;
 SET LOCAL search_path = extensions,public,pg_catalog;
-SELECT plan(10);
+SELECT plan(12);
 SELECT ok(NOT has_function_privilege('authenticated','public.daily_post_claim_due_jobs_v1(integer)','EXECUTE'),
   'Residents cannot claim publication jobs');
+SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid='public.notification_delivery_attempts'::regclass),
+  'Delivery ledger enforces row-level security');
+SELECT ok(NOT has_table_privilege('authenticated','public.notification_delivery_attempts','SELECT'),
+  'Residents cannot read device delivery metadata');
 SELECT lives_ok($q$INSERT INTO public.notification_delivery_attempts(source_type,source_id,token_fingerprint)
   VALUES('DAILY_POST_JOB',gen_random_uuid(),'scheduler-contract-only')$q$,
   'Daily Post delivery attempts satisfy the live delivery log contract');

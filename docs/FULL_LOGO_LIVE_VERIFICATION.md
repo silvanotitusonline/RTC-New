@@ -32,7 +32,8 @@ translates a small synthetic sample, and attempts TTS plus private upload,
 signed playback fetch, and cleanup. Provider errors return bounded codes;
 credentials, device tokens, audio URLs, and publication content are not exposed.
 
-The new migration permits `DAILY_POST_JOB` delivery records, retries failed jobs
+The new migration also reconstructs the canonical delivery ledger on fresh
+databases, with RLS and service-only access. It permits `DAILY_POST_JOB` delivery records, retries failed jobs
 after five minutes, limits attempts to five, and reclaims workers after a
 15-minute lease. Only new FCM acceptances count as pushed; an HTTP 404 alone
 does not delete a device registration without FCM's `UNREGISTERED` reason.
