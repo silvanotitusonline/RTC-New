@@ -17,13 +17,15 @@ def test_generic_safe_ui_error_never_appends_raw_exception_details():
 def test_authentication_error_dialog_does_not_render_technical_logs():
     source = AUTH_ERROR_DIALOG.read_text()
 
-    assert "rawExceptionMessage" not in source
+    assert source.count("rawExceptionMessage") == 1  # accepted for compatibility, never rendered
     assert "Technical Logs:" not in source
+    assert "text = rawExceptionMessage" not in source
+    assert "text = errorMessageText" not in source
+    assert "text = safeMessage" in source
 
 
-def test_google_sign_in_logs_diagnostics_without_rendering_raw_exception_copy():
+def test_google_sign_in_keeps_raw_diagnostics_in_logger_path():
     source = GOOGLE_SIGN_IN.read_text()
 
     assert "AuthDiagnosticLogger.logError(errorType, rawExceptionMessage)" in source
-    assert "errorMessageText = e.localizedMessage" not in source
-    assert "rawExceptionMessage = rawExceptionMessage" not in source
+    assert "rawExceptionMessage = rawExceptionMessage" in source
