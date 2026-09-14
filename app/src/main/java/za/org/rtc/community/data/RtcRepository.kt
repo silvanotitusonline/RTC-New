@@ -87,7 +87,6 @@ import za.org.rtc.community.data.local.CachedPostEntity
 import za.org.rtc.community.data.local.CachedCommentEntity
 import za.org.rtc.community.data.local.CachedUserProfileEntity
 import za.org.rtc.community.data.local.CachedSessionEntity
-import za.org.rtc.community.data.local.CachedReportEntity
 import za.org.rtc.community.feature.community.toCachedEntity
 import za.org.rtc.community.feature.community.toCommunityPost
 import za.org.rtc.community.feature.community.toCommunityComment
@@ -138,9 +137,9 @@ class RtcRepository @Inject constructor(
         (communityEventsRepository as? za.org.rtc.community.feature.events.data.remote.SupabaseCommunityEventsRepository)?.eventsFlow
             ?: MutableStateFlow<List<za.org.rtc.community.feature.events.domain.CommunityEvent>>(emptyList()).asStateFlow()
 
-    suspend fun toggleEventRsvp(eventId: String) {
+    suspend fun toggleEventRsvp(eventId: String): Result<Unit> =
         communityEventsRepository.toggleRsvp(eventId)
-    }
+
     private val _session = MutableStateFlow(
         RtcSession(
             id = "public-visitor",
@@ -1238,36 +1237,34 @@ class RtcRepository @Inject constructor(
         require(cleanName.length in 2..120) { "Enter a display name between 2 and 120 characters." }
         require(cleanBio.length <= 600) { "Keep the bio to 600 characters or fewer." }
 
-        val currentSession = _session.value
-        database.cachedUserProfileDao().insertProfile(
-            CachedUserProfileEntity(
-                userId = currentSession.id,
-                email = currentSession.authenticatedEmail,
-                displayName = cleanName,
-                bio = cleanBio,
-                interestsJson = cleanInterests.joinToString(","),
-                avatarUrl = currentSession.avatarUrl,
-                role = currentSession.role.name,
-                updatedAtEpochMillis = System.currentTimeMillis(),
-            )
-        )
-
-        if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
-            productionUxRepository.saveOwnProfile(cleanName, cleanBio, cleanInterests).getOrThrow()
-            hydrateSupabaseSession()
-            _session.value = _session.value.copy(
-                displayName = cleanName,
-                bio = cleanBio,
-                interests = cleanInterests,
-            )
-            refreshLiveContent()
-            _communityPostDetail.value?.id?.let { postId -> loadCommunityPostDetail(postId) }
-        } else {
-            _session.value = _session.value.copy(
-                displayName = cleanName,
-                bio = cleanBio,
-                interests = cleanInterests,
-            )
+        when (_session.value.authority) {
+            SessionAuthority.SUPABASE_AUTH -> {
+                productionUxRepository.saveOwnProfile(cleanName, cleanBio, cleanInterests).getOrThrow()
+                hydrateSupabaseSession()
+                refreshLiveContent()
+                _communityPostDetail.value?.id?.let { postId -> loadCommunityPostDetail(postId) }
+            }
+            SessionAuthority.DEVELOPMENT_ADAPTER -> {
+                val currentSession = _session.value
+                database.cachedUserProfileDao().insertProfile(
+                    CachedUserProfileEntity(
+                        userId = currentSession.id,
+                        email = currentSession.authenticatedEmail,
+                        displayName = cleanName,
+                        bio = cleanBio,
+                        interestsJson = cleanInterests.joinToString(","),
+                        avatarUrl = currentSession.avatarUrl,
+                        role = currentSession.role.name,
+                        updatedAtEpochMillis = System.currentTimeMillis(),
+                    )
+                )
+                _session.value = currentSession.copy(
+                    displayName = cleanName,
+                    bio = cleanBio,
+                    interests = cleanInterests,
+                )
+            }
+            SessionAuthority.PUBLIC -> error("Sign in before changing your profile.")
         }
     }
 
@@ -1363,20 +1360,8 @@ class RtcRepository @Inject constructor(
     }
 
     suspend fun reportCommunityPost(postId: String, reason: ModerationReason, detail: String): Result<Unit> {
-        val reportEntity = CachedReportEntity(
-            id = "report_${UUID.randomUUID()}",
-            targetType = "COMMUNITY_POST",
-            targetId = postId,
-            reason = reason.name,
-            details = detail.trim(),
-            status = "PENDING_REVIEW",
-            createdAtEpochMillis = System.currentTimeMillis(),
-        )
-        database.cachedReportDao().insertReport(reportEntity)
-        if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
-            runCatching { productionUxRepository.reportCommunityPost(postId, reason, detail) }
-        }
-        return Result.success(Unit)
+        require(_session.value.authority == SessionAuthority.SUPABASE_AUTH) { "Sign in before reporting Community content." }
+        return productionUxRepository.reportCommunityPost(postId, reason, detail)
     }
 
     suspend fun registerFcmDevice(token: String, appVersion: String?): Result<Unit> {
