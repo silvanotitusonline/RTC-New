@@ -13,20 +13,18 @@ def _function_body(source: str, start_marker: str, end_marker: str) -> str:
     return source[start:end]
 
 
-def test_get_started_opens_auth_choice_before_sign_in_form():
+def test_welcome_get_started_creates_account_and_sign_in_opens_login():
     source = WELCOME.read_text()
 
-    assert 'mode = "AUTH_MENU"' in source
-    assert 'mode == "AUTH_MENU"' in source
-    assert '"Get started"' in source
-    assert '"Sign in"' in source
-    assert '"Create account"' in source
+    get_started_label = 'text = welcome.primaryActionLabel.ifBlank { "Get started" }'
+    sign_in_label = 'text = welcome.secondaryActionLabel.ifBlank { "Sign in" }'
+    assert get_started_label in source
+    assert sign_in_label in source
 
-
-def test_sign_in_and_create_forms_return_to_auth_choice():
-    source = WELCOME.read_text()
-
-    assert 'if (isForgotPassword) mode = "SIGN_IN" else mode = "AUTH_MENU"' in source
+    get_started_block = source[source.rfind("Box(", 0, source.index(get_started_label)):source.index(get_started_label)]
+    sign_in_block = source[source.rfind("Box(", 0, source.index(sign_in_label)):source.index(sign_in_label)]
+    assert 'mode = "CREATE"' in get_started_block
+    assert 'mode = "SIGN_IN"' in sign_in_block
 
 
 def test_tutorial_is_rendered_for_authenticated_accounts_only():
