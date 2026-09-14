@@ -22,6 +22,17 @@ class CommunityOptimisationContractTest(unittest.TestCase):
         self.assertNotIn("refreshLiveContent()", vm)
         self.assertIn("communityViewModel::loadNextPage", screen)
 
+    def test_feed_pagination_never_falls_back_to_offset_range(self):
+        repo = self.read("SupabaseCommunityRepository.kt")
+        load_feed_page = repo.split("override suspend fun loadFeedPage", 1)[1].split(
+            "override suspend fun loadPost", 1
+        )[0]
+        self.assertIn("community_post_page_v3", load_feed_page)
+        self.assertIn("community_post_page_v2", load_feed_page)
+        self.assertNotIn('from("community_post_feed")', load_feed_page)
+        self.assertNotIn("range(0,", load_feed_page)
+        self.assertIn("postsAfterCommunityCursor", load_feed_page)
+
     def test_signed_urls_are_bounded_expiry_aware_and_shared(self):
         cache = (CORE_MEDIA / "SignedUrlCache.kt").read_text(encoding="utf-8")
         compatibility = self.read("SignedUrlCache.kt")
