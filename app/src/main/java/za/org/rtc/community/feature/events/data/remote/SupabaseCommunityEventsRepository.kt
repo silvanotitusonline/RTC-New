@@ -18,128 +18,110 @@ import za.org.rtc.community.feature.events.domain.CommunityEvent
 import za.org.rtc.community.feature.events.domain.CommunityEventDraft
 import za.org.rtc.community.feature.events.domain.CommunityEventState
 import za.org.rtc.community.feature.events.domain.CommunityEventsRepository
-import za.org.rtc.community.feature.events.domain.SampleCommunityEvents
 
 @Singleton
 class SupabaseCommunityEventsRepository @Inject constructor(
     private val supabase: SupabaseClient,
 ) : CommunityEventsRepository {
-    private val _eventsFlow = MutableStateFlow<List<CommunityEvent>>(SampleCommunityEvents)
+    private val _eventsFlow = MutableStateFlow<List<CommunityEvent>>(emptyList())
     val eventsFlow: StateFlow<List<CommunityEvent>> = _eventsFlow.asStateFlow()
 
     override suspend fun page(locality: String?, offset: Int, limit: Int): Result<List<CommunityEvent>> = runCatching {
-        val remoteList = runCatching {
-            supabase.postgrest.rpc("community_events_page", buildJsonObject {
-                put("p_limit", limit.coerceIn(1, 50))
-                put("p_offset", offset.coerceAtMost(1000))
-                locality?.trim()?.takeIf(String::isNotBlank)?.let { put("p_locality", it) }
-            }).decodeSingle<JsonArray>().map { it as JsonObject }.map { event -> event.toCommunityEvent() }
-        }.getOrNull()
+        val remoteList = supabase.postgrest.rpc("community_events_page", buildJsonObject {
+            put("p_limit", limit.coerceIn(1, 50))
+            put("p_offset", offset.coerceIn(0, 1000))
+            locality?.trim()?.takeIf(String::isNotBlank)?.let { put("p_locality", it) }
+        }).decodeSingle<JsonArray>().map { it as JsonObject }.map { event -> event.toCommunityEvent() }
 
-        if (!remoteList.isNullOrEmpty()) {
-            remoteList
-        } else {
-            val filterLocality = locality?.trim()?.lowercase()
-            _eventsFlow.value.filter { event ->
-                event.state == CommunityEventState.PUBLISHED &&
-                    (filterLocality.isNullOrBlank() || event.locality?.lowercase()?.contains(filterLocality) == true)
-            }
+        if (offset == 0) {
+            _eventsFlow.value = remoteList
         }
+        remoteList
     }
 
     override suspend fun adminPage(offset: Int, limit: Int): Result<List<CommunityEvent>> = runCatching {
-        val remoteList = runCatching {
-            supabase.postgrest.rpc("community_events_admin_page", buildJsonObject {
-                put("p_limit", limit.coerceIn(1, 100))
-                put("p_offset", offset.coerceAtMost(1000))
-            }).decodeSingle<JsonArray>().map { it as JsonObject }.map { event -> event.toCommunityEvent() }
-        }.getOrNull()
+        val remoteList = supabase.postgrest.rpc("community_events_admin_page", buildJsonObject {
+            put("p_limit", limit.coerceIn(1, 100))
+            put("p_offset", offset.coerceIn(0, 1000))
+        }).decodeSingle<JsonArray>().map { it as JsonObject }.map { event -> event.toCommunityEvent() }
 
-        if (!remoteList.isNullOrEmpty()) {
-            remoteList
-        } else {
-            _eventsFlow.value
+        if (offset == 0) {
+            _eventsFlow.value = remoteList
         }
+        remoteList
     }
 
     override suspend fun upsert(draft: CommunityEventDraft): Result<String> = runCatching {
-        val newId = draft.id ?: "event-${System.currentTimeMillis()}"
-        val existing = _eventsFlow.value.find { it.id == newId }
-        val updatedEvent = CommunityEvent(
-            id = newId,
-            title = draft.title,
-            description = draft.description,
+        val eventId = supabase.postgrest.rpc("upsert_community_event", buildJsonObject {
+            draft.id?.let { put("p_event_id", it) }
+            put("p_title", draft.title.trim())
+            put("p_description", draft.description.trim())
+            put("p_starts_at", draft.startsAt.toString())
+            put("p_ends_at", draft.endsAt.toString())
+            put("p_time_zone", draft.timeZone.trim())
+            draft.locality?.trim()?.takeIf(String::isNotBlank)?.let { put("p_locality", it) }
+            put("p_venue_label", draft.venueLabel.trim())
+            put("p_is_local", draft.isLocal)
+        }).decodeSingle<String>()
+
+        val existing = _eventsFlow.value.firstOrNull { it.id == eventId }
+        val confirmed = CommunityEvent(
+            id = eventId,
+            title = draft.title.trim(),
+            description = draft.description.trim(),
             startsAt = draft.startsAt,
             endsAt = draft.endsAt,
-            timeZone = draft.timeZone,
-            locality = draft.locality,
-            venueLabel = draft.venueLabel,
+            timeZone = draft.timeZone.trim(),
+            locality = draft.locality?.trim()?.takeIf(String::isNotBlank),
+            venueLabel = draft.venueLabel.trim(),
             isLocal = draft.isLocal,
             category = draft.category,
             state = existing?.state ?: CommunityEventState.DRAFT,
+            cancellationReason = existing?.cancellationReason,
+            publishedAt = existing?.publishedAt,
             rsvpCount = existing?.rsvpCount ?: 0,
             isRsvped = existing?.isRsvped ?: false,
         )
-        _eventsFlow.value = listOf(updatedEvent) + _eventsFlow.value.filterNot { it.id == newId }
-
-        runCatching {
-            supabase.postgrest.rpc("upsert_community_event", buildJsonObject {
-                put("p_event_id", draft.id)
-                put("p_title", draft.title.trim())
-                put("p_description", draft.description.trim())
-                put("p_starts_at", draft.startsAt.toString())
-                put("p_ends_at", draft.endsAt.toString())
-                put("p_time_zone", draft.timeZone.trim())
-                draft.locality?.trim()?.takeIf(String::isNotBlank)?.let { put("p_locality", it) }
-                put("p_venue_label", draft.venueLabel.trim())
-                put("p_is_local", draft.isLocal)
-            })
-        }
-        newId
+        _eventsFlow.value = listOf(confirmed) + _eventsFlow.value.filterNot { it.id == eventId }
+        eventId
     }
 
     override suspend fun publish(eventId: String): Result<Unit> = runCatching {
         require(eventId.isNotBlank()) { "Choose an Event." }
-        _eventsFlow.value = _eventsFlow.value.map {
-            if (it.id == eventId) it.copy(state = CommunityEventState.PUBLISHED, publishedAt = Instant.now()) else it
+        supabase.postgrest.rpc("publish_community_event", buildJsonObject { put("p_event_id", eventId) })
+        _eventsFlow.value = _eventsFlow.value.map { event ->
+            if (event.id == eventId) {
+                event.copy(state = CommunityEventState.PUBLISHED)
+            } else {
+                event
+            }
         }
-        runCatching {
-            supabase.postgrest.rpc("publish_community_event", buildJsonObject { put("p_event_id", eventId) })
-        }
-        Unit
     }
 
     override suspend fun cancel(eventId: String, reason: String): Result<Unit> = runCatching {
         require(eventId.isNotBlank()) { "Choose an Event." }
-        _eventsFlow.value = _eventsFlow.value.map {
-            if (it.id == eventId) it.copy(state = CommunityEventState.CANCELLED, cancellationReason = reason) else it
-        }
-        runCatching {
-            supabase.postgrest.rpc("cancel_community_event", buildJsonObject {
-                put("p_event_id", eventId)
-                put("p_reason", reason.trim())
-            })
-        }
-        Unit
-    }
-
-    override suspend fun delete(eventId: String): Result<Unit> = runCatching {
-        require(eventId.isNotBlank()) { "Choose an Event." }
-        _eventsFlow.value = _eventsFlow.value.filterNot { it.id == eventId }
-        Unit
-    }
-
-    override suspend fun toggleRsvp(eventId: String): Result<Unit> = runCatching {
-        require(eventId.isNotBlank()) { "Choose an Event." }
+        val cleanReason = reason.trim()
+        require(cleanReason.length in 3..500) { "Provide a cancellation reason between 3 and 500 characters." }
+        supabase.postgrest.rpc("cancel_community_event", buildJsonObject {
+            put("p_event_id", eventId)
+            put("p_reason", cleanReason)
+        })
         _eventsFlow.value = _eventsFlow.value.map { event ->
             if (event.id == eventId) {
-                val newRsvped = !event.isRsvped
-                val newCount = if (newRsvped) event.rsvpCount + 1 else (event.rsvpCount - 1).coerceAtLeast(0)
-                event.copy(isRsvped = newRsvped, rsvpCount = newCount)
-            } else event
+                event.copy(state = CommunityEventState.CANCELLED, cancellationReason = cleanReason)
+            } else {
+                event
+            }
         }
-        Unit
     }
+
+    override suspend fun delete(eventId: String): Result<Unit> = Result.failure(
+        UnsupportedOperationException("Community Event deletion is not exposed by the production backend. Cancel the Event instead."),
+    )
+
+    override suspend fun toggleRsvp(eventId: String): Result<Unit> = Result.failure(
+        UnsupportedOperationException("Community Event RSVP is not exposed by the production backend."),
+    )
 
     private fun JsonObject.toCommunityEvent(): CommunityEvent = CommunityEvent(
         id = requiredString("id"),
@@ -164,4 +146,3 @@ class SupabaseCommunityEventsRepository @Inject constructor(
     private fun JsonObject.optionalString(key: String): String? =
         get(key)?.jsonPrimitive?.contentOrNull
 }
-

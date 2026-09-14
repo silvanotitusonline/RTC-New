@@ -42,6 +42,11 @@ internal class RtcAuthenticationCoordinator(
         _isSessionRestoring.value = true
         return try {
             val result = repository.restoreSupabaseSession()
+            result.onSuccess { restored ->
+                if (restored) {
+                    repository.checkAndTriggerOnboardingTutorial(repository.session.value.id)
+                }
+            }
             result.onFailure {
                 _authenticationUi.value = AuthenticationUiState(
                     message = "Your saved session could not be restored. Please sign in again."
@@ -71,7 +76,10 @@ internal class RtcAuthenticationCoordinator(
         scope.launch {
             _authenticationUi.value = AuthenticationUiState(isWorking = true)
             repository.signInWithEmail(email, password)
-                .onSuccess { completeAuthentication() }
+                .onSuccess {
+                    repository.checkAndTriggerOnboardingTutorial(repository.session.value.id)
+                    completeAuthentication()
+                }
                 .onFailure { error ->
                     _authenticationUi.value = AuthenticationUiState(
                         message = SafeUiError.generic(error, "Sign-in could not be completed.")
@@ -84,7 +92,10 @@ internal class RtcAuthenticationCoordinator(
         scope.launch {
             _authenticationUi.value = AuthenticationUiState(isWorking = true)
             repository.signInWithGoogleIdToken(idToken, nonce)
-                .onSuccess { completeAuthentication() }
+                .onSuccess {
+                    repository.checkAndTriggerOnboardingTutorial(repository.session.value.id)
+                    completeAuthentication()
+                }
                 .onFailure { error ->
                     _authenticationUi.value = AuthenticationUiState(
                         message = SafeUiError.generic(error, "Google sign-in could not be completed.")

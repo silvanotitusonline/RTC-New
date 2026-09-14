@@ -1,19 +1,26 @@
 package za.org.rtc.community.ui.auth
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.SettingsSuggest
 import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import za.org.rtc.community.ui.animation.RtcMotionAlertDialog
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun AuthenticationErrorDialog(
     errorType: String, // "NETWORK", "CONFIGURATION", "NO_ACCOUNTS", "UNKNOWN", "PLAY_SERVICES_MISSING"
@@ -22,6 +29,14 @@ fun AuthenticationErrorDialog(
     onDismissRequest: () -> Unit,
     onRetry: () -> Unit,
 ) {
+    val safeMessage = when (errorType) {
+        "NETWORK" -> "Google sign-in could not reach the service. Check your connection and try again."
+        "CONFIGURATION" -> "Google sign-in is temporarily unavailable. Please use email sign-in or try again later."
+        "NO_ACCOUNTS" -> "No Google account is available on this device. Add an account or use email sign-in."
+        "PLAY_SERVICES_MISSING" -> "Google Play services needs attention before Google sign-in can continue."
+        else -> "Google sign-in could not be completed. Please try again."
+    }
+
     RtcMotionAlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
@@ -38,7 +53,6 @@ fun AuthenticationErrorDialog(
                     },
                     contentDescription = null,
                     tint = when (errorType) {
-                        "NETWORK" -> MaterialTheme.colorScheme.error
                         "CONFIGURATION", "PLAY_SERVICES_MISSING" -> MaterialTheme.colorScheme.tertiary
                         else -> MaterialTheme.colorScheme.error
                     },
@@ -46,11 +60,11 @@ fun AuthenticationErrorDialog(
                 )
                 Text(
                     text = when (errorType) {
-                        "NETWORK" -> "Network Connection Issue"
-                        "CONFIGURATION" -> "Google API Config Error"
-                        "NO_ACCOUNTS" -> "No Google Accounts"
-                        "PLAY_SERVICES_MISSING" -> "Google Play Services"
-                        else -> "Sign-In Failed"
+                        "NETWORK" -> "Connection issue"
+                        "CONFIGURATION" -> "Google sign-in unavailable"
+                        "NO_ACCOUNTS" -> "No Google accounts"
+                        "PLAY_SERVICES_MISSING" -> "Google Play services"
+                        else -> "Sign-in couldn’t finish"
                     },
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleMedium,
@@ -60,34 +74,10 @@ fun AuthenticationErrorDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = errorMessageText,
+                    text = safeMessage,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                
-                // Collapse/Expand Technical Logs
-                if (rawExceptionMessage.isNotBlank()) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = "Technical Logs:",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = rawExceptionMessage,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
             }
         },
         confirmButton = {
@@ -97,16 +87,13 @@ fun AuthenticationErrorDialog(
                     onRetry()
                 },
             ) {
-                Text(if (errorType == "CONFIGURATION") "Re-configure" else "Retry Flow")
+                Text("Try again")
             }
         },
         dismissButton = {
-            TextButton(
-                onClick = onDismissRequest,
-            ) {
+            TextButton(onClick = onDismissRequest) {
                 Text("Close", color = MaterialTheme.colorScheme.outline)
             }
-        }
+        },
     )
 }
-

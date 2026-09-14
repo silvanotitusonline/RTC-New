@@ -39,8 +39,11 @@ SELECT lives_ok($q$SELECT public.bookmark_community_post('e1000000-0000-4000-800
  'Visible source can be bookmarked');
 SELECT lives_ok($q$SELECT public.repost_community_post('e1000000-0000-4000-8000-000000000001')$q$,
  'Visible source can be reposted');
-SELECT is(public.unbookmark_community_post('e2000000-0000-4000-8000-000000000002')->>'bookmark_count','0',
- 'Own hidden bookmark can be removed without revealing other residents count');
+SELECT is(
+ (SELECT bookmark_count FROM public.unbookmark_community_post('e2000000-0000-4000-8000-000000000002')),
+ 0,
+ 'Own hidden bookmark can be removed without revealing other residents count'
+);
 SELECT is((SELECT count(*)::integer FROM public.community_bookmarks
  WHERE post_id='e2000000-0000-4000-8000-000000000002'),0,'Own hidden bookmark was removed');
 RESET ROLE;
