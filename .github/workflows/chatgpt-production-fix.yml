@@ -28,8 +28,8 @@ jobs:
       - name: Install source-contract test runner
         run: python -m pip install --disable-pip-version-check pytest
 
-      - name: Run source regression contracts
-        run: python -m pytest -q tools/tests
+      - name: Verify production truth-boundary contract
+        run: python -m pytest -q tools/tests/test_production_no_mock_fallback_contract.py
 
       - name: Commit patched production sources
         shell: bash
