@@ -91,7 +91,7 @@ class SupabaseCommunityEventsRepository @Inject constructor(
         supabase.postgrest.rpc("publish_community_event", buildJsonObject { put("p_event_id", eventId) })
         _eventsFlow.value = _eventsFlow.value.map { event ->
             if (event.id == eventId) {
-                event.copy(state = CommunityEventState.PUBLISHED, publishedAt = event.publishedAt ?: Instant.now())
+                event.copy(state = CommunityEventState.PUBLISHED)
             } else {
                 event
             }
