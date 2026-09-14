@@ -11,12 +11,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +51,7 @@ internal fun AccountScreen(
     val session by viewModel.session.collectAsStateWithLifecycle()
     val authenticationUi by viewModel.authenticationUi.collectAsStateWithLifecycle()
     var profileEditorOpen by rememberSaveable { mutableStateOf(false) }
+    var logoutConfirmationOpen by rememberSaveable { mutableStateOf(false) }
     var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
     val profilePhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         pendingPhotoUri = uri
@@ -108,6 +113,21 @@ internal fun AccountScreen(
                     onClick = onHelp,
                 )
             }
+            item {
+                AccountRow(
+                    title = "Log out",
+                    description = "Sign out of this device and return to the welcome screen.",
+                    icon = {
+                        Icon(
+                            Icons.Filled.Logout,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                    destructive = true,
+                    onClick = { logoutConfirmationOpen = true },
+                )
+            }
         }
     }
 
@@ -134,6 +154,37 @@ internal fun AccountScreen(
             },
         )
     }
+
+    if (logoutConfirmationOpen) {
+        AlertDialog(
+            onDismissRequest = { logoutConfirmationOpen = false },
+            icon = {
+                Icon(
+                    Icons.Filled.Logout,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            title = { Text("Log out?") },
+            text = { Text("You’ll be signed out of this device and returned to the welcome screen.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        logoutConfirmationOpen = false
+                        viewModel.signOutToPublicWelcome()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) {
+                    Text("Log out")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { logoutConfirmationOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -141,13 +192,19 @@ private fun AccountRow(
     title: String,
     description: String,
     icon: @Composable () -> Unit,
+    destructive: Boolean = false,
     onClick: () -> Unit,
 ) {
     RtcCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.small)) {
             icon()
             Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                )
                 Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
