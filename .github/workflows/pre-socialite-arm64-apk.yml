@@ -21,13 +21,15 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Verify historical base
         shell: bash
         run: |
           set -euo pipefail
           git merge-base --is-ancestor e074a44d6929bc789a7130e162d55ff47e8093cb HEAD
-          git diff --exit-code e074a44d6929bc789a7130e162d55ff47e8093cb -- ':!/.github/workflows/pre-socialite-arm64-apk.yml'
+          git diff --exit-code e074a44d6929bc789a7130e162d55ff47e8093cb -- . ':(exclude).github/workflows/pre-socialite-arm64-apk.yml'
 
       - name: Set up JDK
         uses: actions/setup-java@v5
