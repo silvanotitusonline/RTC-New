@@ -89,5 +89,6 @@ def test_events_repository_starts_empty_and_does_not_manufacture_server_success(
     assert 'runCatching {\n            supabase.postgrest.rpc("upsert_community_event"' not in events
     assert 'runCatching {\n            supabase.postgrest.rpc("publish_community_event"' not in events
     assert 'runCatching {\n            supabase.postgrest.rpc("cancel_community_event"' not in events
+    assert "Instant.now()" not in events
     assert 'UnsupportedOperationException("Community Event deletion is not exposed by the production backend.' in events
     assert 'UnsupportedOperationException("Community Event RSVP is not exposed by the production backend.' in events
