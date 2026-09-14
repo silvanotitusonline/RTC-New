@@ -1,5 +1,6 @@
 package za.org.rtc.community.feature.community
 
+import java.time.Instant
 import za.org.rtc.community.core.CommunityPost
 
 internal const val COMMUNITY_FEED_PAGE_SIZE = 20
@@ -32,6 +33,45 @@ internal fun buildCommunityFeedPage(
         nextCursor = cursor,
         hasMore = hasMore,
     )
+}
+
+/**
+ * Applies the same composite keyset boundary used by `community_post_page_v2/v3` to cached posts.
+ *
+ * PostgreSQL pages by `(created_at, id) < (cursor.created_at, cursor.id)` while ordering both
+ * columns descending. Keeping the identical boundary in the Room fallback prevents an append
+ * request from restarting at page one when the network RPC is temporarily unavailable.
+ */
+internal fun postsAfterCommunityCursor(
+    posts: List<CommunityPost>,
+    cursor: CommunityCursor?,
+): List<CommunityPost> {
+    val ordered = posts.sortedWith { left, right ->
+        val createdAtComparison = compareCommunityCreatedAt(right.createdAt, left.createdAt)
+        if (createdAtComparison != 0) {
+            createdAtComparison
+        } else {
+            right.id.compareTo(left.id)
+        }
+    }
+
+    if (cursor == null) return ordered
+
+    return ordered.filter { post ->
+        val createdAtComparison = compareCommunityCreatedAt(post.createdAt, cursor.createdAt)
+        createdAtComparison < 0 ||
+            (createdAtComparison == 0 && post.id < cursor.id)
+    }
+}
+
+private fun compareCommunityCreatedAt(left: String, right: String): Int {
+    val leftInstant = runCatching { Instant.parse(left) }.getOrNull()
+    val rightInstant = runCatching { Instant.parse(right) }.getOrNull()
+    return if (leftInstant != null && rightInstant != null) {
+        leftInstant.compareTo(rightInstant)
+    } else {
+        left.compareTo(right)
+    }
 }
 
 data class CommunityFeedState(
