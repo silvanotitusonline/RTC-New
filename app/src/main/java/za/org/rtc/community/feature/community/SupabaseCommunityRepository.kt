@@ -90,12 +90,23 @@ class SupabaseCommunityRepository @Inject constructor(
                 },
             ).decodeList<CommunityFeedRow>()
             coroutineScope { rows.map { row -> async { row.toCommunityPost() } }.awaitAll() }
-        }.getOrThrow()
-
-        if (remotePosts.isNotEmpty()) {
-            cachedPostDao.insertPosts(remotePosts.map { it.toCachedEntity() })
         }
-        buildCommunityFeedPage(posts = remotePosts, visibleLimit = visibleLimit)
+
+        val pagePosts = remotePosts.fold(
+            onSuccess = { posts ->
+                if (posts.isNotEmpty()) {
+                    cachedPostDao.insertPosts(posts.map { it.toCachedEntity() })
+                }
+                posts
+            },
+            onFailure = {
+                postsAfterCommunityCursor(
+                    posts = cachedPostDao.getAllPosts().map { it.toCommunityPost() },
+                    cursor = cursor,
+                )
+            },
+        )
+        buildCommunityFeedPage(posts = pagePosts, visibleLimit = visibleLimit)
     }
 
     override suspend fun loadPost(postId: String): Result<CommunityPost?> = runCatching {
