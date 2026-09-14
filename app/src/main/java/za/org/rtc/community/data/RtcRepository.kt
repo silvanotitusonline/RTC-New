@@ -638,15 +638,23 @@ class RtcRepository @Inject constructor(
 
     private suspend fun administratorMfaStatus(role: UserRole): AdministratorMfaStatus {
         if (role != UserRole.SYSTEM_ADMIN) return AdministratorMfaStatus.NOT_REQUIRED
-        val factors = runCatching { supabase.auth.mfa.retrieveFactorsForCurrentUser() }.getOrDefault(emptyList())
-        if (factors.none { it.isVerified }) return AdministratorMfaStatus.NOT_REQUIRED
+        val factors = try {
+            supabase.auth.mfa.retrieveFactorsForCurrentUser()
+        } catch (_: Throwable) {
+            return AdministratorMfaStatus.VERIFICATION_REQUIRED
+        }
+        if (factors.none { it.isVerified }) return AdministratorMfaStatus.ENROLLMENT_REQUIRED
         val accessToken = supabase.auth.currentSessionOrNull()?.accessToken
-            ?: return AdministratorMfaStatus.NOT_REQUIRED
-        val assurance = runCatching { supabase.auth.mfa.getAuthenticatorAssuranceLevel(accessToken) }.getOrNull()
-        return if (assurance?.current == AuthenticatorAssuranceLevel.AAL2) {
+            ?: return AdministratorMfaStatus.VERIFICATION_REQUIRED
+        val assurance = try {
+            supabase.auth.mfa.getAuthenticatorAssuranceLevel(accessToken)
+        } catch (_: Throwable) {
+            return AdministratorMfaStatus.VERIFICATION_REQUIRED
+        }
+        return if (assurance.current == AuthenticatorAssuranceLevel.AAL2) {
             AdministratorMfaStatus.VERIFIED
         } else {
-            AdministratorMfaStatus.NOT_REQUIRED
+            AdministratorMfaStatus.VERIFICATION_REQUIRED
         }
     }
 
