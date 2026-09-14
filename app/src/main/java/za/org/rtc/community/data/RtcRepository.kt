@@ -87,7 +87,6 @@ import za.org.rtc.community.data.local.CachedPostEntity
 import za.org.rtc.community.data.local.CachedCommentEntity
 import za.org.rtc.community.data.local.CachedUserProfileEntity
 import za.org.rtc.community.data.local.CachedSessionEntity
-import za.org.rtc.community.data.local.CachedReportEntity
 import za.org.rtc.community.feature.community.toCachedEntity
 import za.org.rtc.community.feature.community.toCommunityPost
 import za.org.rtc.community.feature.community.toCommunityComment
@@ -101,11 +100,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
-import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
-import za.org.rtc.community.feature.community.CommunityMockData
 import za.org.rtc.community.feature.administration.security.hasServerAdminClaim
-import java.util.UUID
 
 data class AdministratorTotpEnrollment(
     val factorId: String,
@@ -128,7 +123,6 @@ internal fun resolveVerifiedServerRole(appMetadata: JsonObject?, resolvedRoles: 
 
 @Singleton
 class RtcRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val supabase: SupabaseClient,
     private val productionUxRepository: ProductionUxRepository,
     private val communityEventsRepository: za.org.rtc.community.feature.events.domain.CommunityEventsRepository,
@@ -141,11 +135,11 @@ class RtcRepository @Inject constructor(
 
     val events: StateFlow<List<za.org.rtc.community.feature.events.domain.CommunityEvent>> =
         (communityEventsRepository as? za.org.rtc.community.feature.events.data.remote.SupabaseCommunityEventsRepository)?.eventsFlow
-            ?: MutableStateFlow(za.org.rtc.community.feature.events.domain.SampleCommunityEvents).asStateFlow()
+            ?: MutableStateFlow<List<za.org.rtc.community.feature.events.domain.CommunityEvent>>(emptyList()).asStateFlow()
 
-    suspend fun toggleEventRsvp(eventId: String) {
+    suspend fun toggleEventRsvp(eventId: String): Result<Unit> =
         communityEventsRepository.toggleRsvp(eventId)
-    }
+
     private val _session = MutableStateFlow(
         RtcSession(
             id = "public-visitor",
@@ -644,15 +638,23 @@ class RtcRepository @Inject constructor(
 
     private suspend fun administratorMfaStatus(role: UserRole): AdministratorMfaStatus {
         if (role != UserRole.SYSTEM_ADMIN) return AdministratorMfaStatus.NOT_REQUIRED
-        val factors = runCatching { supabase.auth.mfa.retrieveFactorsForCurrentUser() }.getOrDefault(emptyList())
-        if (factors.none { it.isVerified }) return AdministratorMfaStatus.NOT_REQUIRED
+        val factors = try {
+            supabase.auth.mfa.retrieveFactorsForCurrentUser()
+        } catch (_: Throwable) {
+            return AdministratorMfaStatus.VERIFICATION_REQUIRED
+        }
+        if (factors.none { it.isVerified }) return AdministratorMfaStatus.ENROLLMENT_REQUIRED
         val accessToken = supabase.auth.currentSessionOrNull()?.accessToken
-            ?: return AdministratorMfaStatus.NOT_REQUIRED
-        val assurance = runCatching { supabase.auth.mfa.getAuthenticatorAssuranceLevel(accessToken) }.getOrNull()
-        return if (assurance?.current == AuthenticatorAssuranceLevel.AAL2) {
+            ?: return AdministratorMfaStatus.VERIFICATION_REQUIRED
+        val assurance = try {
+            supabase.auth.mfa.getAuthenticatorAssuranceLevel(accessToken)
+        } catch (_: Throwable) {
+            return AdministratorMfaStatus.VERIFICATION_REQUIRED
+        }
+        return if (assurance.current == AuthenticatorAssuranceLevel.AAL2) {
             AdministratorMfaStatus.VERIFIED
         } else {
-            AdministratorMfaStatus.NOT_REQUIRED
+            AdministratorMfaStatus.VERIFICATION_REQUIRED
         }
     }
 
@@ -703,44 +705,30 @@ class RtcRepository @Inject constructor(
         _isLiveContentLoading.value = true
         _liveContentMessage.value = null
         val refreshGeneration = ++directoryGeneration
-        var sessionRefreshFailure: Throwable? = null
+        var firstFailure: Throwable? = null
+        fun rememberFailure(result: Result<*>) {
+            if (firstFailure == null) firstFailure = result.exceptionOrNull()
+        }
+
         if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
             runCatching {
                 hydrateSupabaseSession()
                 recordPrivacyAnalyticsAppActivity()
                 refreshCommunityGuidelinesStatus()
-            }.onFailure { sessionRefreshFailure = it }
+            }.onFailure { firstFailure = it }
         } else if (_session.value.authority == SessionAuthority.DEVELOPMENT_ADAPTER) {
             refreshCommunityGuidelinesStatus()
         } else {
             _communityGuidelinesAccepted.value = null
         }
-        val metrics = productionUxRepository.getDashboardMetrics()
-        val projects = productionUxRepository.listProjects(offset = 0)
-        val centres = productionUxRepository.listCentres(offset = 0)
-        val opportunities = productionUxRepository.listOpportunities(offset = 0)
-        val notices = productionUxRepository.publishedOfficialNotices()
-        val helpArticles = productionUxRepository.publishedHelpArticles()
-        // Community views deliberately grant SELECT only to authenticated users. Public startup
-        // must not convert that policy boundary into a misleading empty/error state.
-        val communityPosts = runCatching {
-            productionUxRepository.publishedCommunityPosts().getOrThrow()
-        }.getOrElse { emptyList() }
 
-        val alerts = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
-            productionUxRepository.communityAlertInbox()
-        } else {
-            Result.success(RtcMockData.getSampleAlerts())
-        }
-        val supportCases = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
-            productionUxRepository.mySupportCases()
-        } else Result.success(RtcMockData.getSampleSupportCases())
-        val alertDashboard = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH
-            && _session.value.role in setOf(UserRole.CONTENT_EDITOR, UserRole.SYSTEM_ADMIN)
-        ) productionUxRepository.communityAlertDashboard() else Result.success(RtcMockData.getSampleAlertDashboard())
-        val assignedSupportCases = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH
-            && _session.value.role == UserRole.CASE_STAFF
-        ) productionUxRepository.listAssignedSupportCases() else Result.success(RtcMockData.getSampleAssignedCases())
+        val metrics = productionUxRepository.getDashboardMetrics().also(::rememberFailure)
+        val projects = productionUxRepository.listProjects(offset = 0).also(::rememberFailure)
+        val centres = productionUxRepository.listCentres(offset = 0).also(::rememberFailure)
+        val opportunities = productionUxRepository.listOpportunities(offset = 0).also(::rememberFailure)
+        val notices = productionUxRepository.publishedOfficialNotices().also(::rememberFailure)
+        val helpArticles = productionUxRepository.publishedHelpArticles().also(::rememberFailure)
+
         metrics.onSuccess { _dashboardMetrics.value = it }
         if (refreshGeneration == directoryGeneration) {
             projects.onSuccess { _projectsPage.value = it }
@@ -750,57 +738,70 @@ class RtcRepository @Inject constructor(
         notices.onSuccess { _notices.value = it }
         helpArticles.onSuccess { _helpArticles.value = it }
 
-        val samplePosts = CommunityMockData.getSamplePosts(context)
-        val cachedEntities = database.cachedPostDao().getAllPosts()
-        if (cachedEntities.isEmpty()) {
-            database.cachedPostDao().insertPosts(samplePosts.map { it.toCachedEntity() })
-        }
-        if (communityPosts.isNotEmpty()) {
-            database.cachedPostDao().insertPosts(communityPosts.map { it.toCachedEntity() })
-        }
-        val allRoomPosts = database.cachedPostDao().getAllPosts().map { it.toCommunityPost() }
-        _posts.value = allRoomPosts
+        if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
+            val communityPosts = productionUxRepository.publishedCommunityPosts().also(::rememberFailure)
+            communityPosts.onSuccess { loaded ->
+                database.cachedPostDao().insertPosts(loaded.map { it.toCachedEntity() })
+                _posts.value = database.cachedPostDao().getAllPosts().map { it.toCommunityPost() }
+            }
 
-        val loadedCases = supportCases.getOrDefault(emptyList()).ifEmpty {
-            RtcMockData.getSampleSupportCases()
-        }
-        _cases.value = loadedCases
-        alerts.onSuccess { loaded ->
-            val effectiveAlerts = loaded.ifEmpty { RtcMockData.getSampleAlerts() }
-            _communityAlerts.value = effectiveAlerts
-            val alertNotifications = effectiveAlerts.map { alert ->
-                RtcNotification(
-                    id = alert.notificationId,
-                    title = alert.title,
-                    message = alert.summary,
-                    createdAt = alert.publishedAt ?: alert.createdAt,
-                    unread = alert.unread,
-                    route = MainDestination.HOME,
-                    alertId = alert.id,
-                )
+            val supportCases = productionUxRepository.mySupportCases().also(::rememberFailure)
+            supportCases.onSuccess { _cases.value = it }
+
+            val alerts = productionUxRepository.communityAlertInbox().also(::rememberFailure)
+            alerts.onSuccess { loaded ->
+                _communityAlerts.value = loaded
+                val alertNotifications = loaded.map { alert ->
+                    RtcNotification(
+                        id = alert.notificationId,
+                        title = alert.title,
+                        message = alert.summary,
+                        createdAt = alert.publishedAt ?: alert.createdAt,
+                        unread = alert.unread,
+                        route = MainDestination.HOME,
+                        alertId = alert.id,
+                    )
+                }
+                val caseNotifications = _cases.value.map { caseItem ->
+                    RtcNotification(
+                        id = "case_${caseItem.id}",
+                        title = "Support Ticket: ${caseItem.title}",
+                        message = "Stage: ${caseItem.stage.label}",
+                        createdAt = caseItem.updatedAt,
+                        unread = caseItem.stage != CaseStage.RESOLVED,
+                        route = MainDestination.SUPPORT,
+                        alertId = null,
+                    )
+                }
+                _notifications.value = (alertNotifications + caseNotifications).sortedByDescending { it.createdAt }
             }
-            val caseNotifications = loadedCases.map { caseItem ->
-                RtcNotification(
-                    id = "case_${caseItem.id}",
-                    title = "Support Ticket: ${caseItem.title}",
-                    message = "Stage: ${caseItem.stage.label}",
-                    createdAt = caseItem.updatedAt,
-                    unread = caseItem.stage != za.org.rtc.community.core.CaseStage.RESOLVED,
-                    route = MainDestination.SUPPORT,
-                    alertId = null,
-                )
+
+            if (_session.value.role in setOf(UserRole.CONTENT_EDITOR, UserRole.SYSTEM_ADMIN)) {
+                productionUxRepository.communityAlertDashboard()
+                    .also(::rememberFailure)
+                    .onSuccess { _communityAlertDashboard.value = it }
+            } else {
+                _communityAlertDashboard.value = emptyList()
             }
-            _notifications.value = (alertNotifications + caseNotifications).sortedByDescending { it.createdAt }.ifEmpty {
-                RtcMockData.getSampleNotifications()
+            if (_session.value.role == UserRole.CASE_STAFF) {
+                productionUxRepository.listAssignedSupportCases()
+                    .also(::rememberFailure)
+                    .onSuccess { _assignedSupportCases.value = it }
+            } else {
+                _assignedSupportCases.value = emptyList()
             }
+        } else {
+            _posts.value = emptyList()
+            _cases.value = emptyList()
+            _communityAlerts.value = emptyList()
+            _communityAlertDashboard.value = emptyList()
+            _assignedSupportCases.value = emptyList()
+            _notifications.value = emptyList()
         }
-        alertDashboard.onSuccess { loaded ->
-            _communityAlertDashboard.value = loaded.ifEmpty { RtcMockData.getSampleAlertDashboard() }
+
+        if (firstFailure != null) {
+            _liveContentMessage.value = "Some live information could not be refreshed. Cached verified data is shown where available."
         }
-        assignedSupportCases.onSuccess { loaded ->
-            _assignedSupportCases.value = loaded.ifEmpty { RtcMockData.getSampleAssignedCases() }
-        }
-        _liveContentMessage.value = null
         _isLiveContentLoading.value = false
     }
 
@@ -847,114 +848,40 @@ class RtcRepository @Inject constructor(
         _isLiveContentLoading.value = true
         _liveContentMessage.value = null
 
-        val remotePost = runCatching { productionUxRepository.communityPost(postId).getOrNull() }.getOrNull()
-        val remoteComments = runCatching { productionUxRepository.communityComments(postId).getOrNull() }.getOrNull()
+        val remotePost = productionUxRepository.communityPost(postId)
+        val remoteComments = productionUxRepository.communityComments(postId)
 
-        if (remotePost != null) {
-            database.cachedPostDao().insertPost(remotePost.toCachedEntity())
-        }
-        if (!remoteComments.isNullOrEmpty()) {
-            database.cachedCommentDao().insertComments(remoteComments.map { it.toCachedEntity() })
+        remotePost.getOrNull()?.let { database.cachedPostDao().insertPost(it.toCachedEntity()) }
+        remoteComments.getOrNull()?.let { comments ->
+            if (comments.isNotEmpty()) database.cachedCommentDao().insertComments(comments.map { it.toCachedEntity() })
         }
 
-        val post = remotePost
+        _communityPostDetail.value = remotePost.getOrNull()
             ?: database.cachedPostDao().getPostById(postId)?.toCommunityPost()
             ?: _posts.value.firstOrNull { it.id == postId }
-            ?: CommunityMockData.getSamplePosts(context).firstOrNull { it.id == postId }
+        _communityComments.value = remoteComments.getOrNull()
+            ?: database.cachedCommentDao().getCommentsForPost(postId).map { it.toCommunityComment() }
 
-        val roomComments = database.cachedCommentDao().getCommentsForPost(postId).map { it.toCommunityComment() }
-        val comments = if (roomComments.isNotEmpty()) {
-            roomComments
-        } else if (!remoteComments.isNullOrEmpty()) {
-            remoteComments
-        } else {
-            val samples = CommunityMockData.getSampleComments(postId)
-            if (samples.isNotEmpty()) {
-                database.cachedCommentDao().insertComments(samples.map { it.toCachedEntity() })
-            }
-            samples
+        if (remotePost.isFailure || remoteComments.isFailure) {
+            _liveContentMessage.value = "This Community item could not be fully refreshed. Cached verified data is shown where available."
         }
-
-        _communityPostDetail.value = post
-        _communityComments.value = comments
         _isLiveContentLoading.value = false
     }
 
     suspend fun createCommunityComment(postId: String, body: String): Result<Unit> {
         val cleanBody = body.trim()
-        if (cleanBody.isBlank()) return Result.success(Unit)
-
-        val newComment = CommunityComment(
-            id = "comment_${UUID.randomUUID()}",
-            postId = postId,
-            authorId = _session.value.id,
-            author = _session.value.displayName.ifBlank { "You (Community Member)" },
-            handle = _session.value.handle.ifBlank { "@resident" },
-            authorAvatarUrl = _session.value.avatarUrl,
-            content = cleanBody,
-            createdAt = java.time.Instant.now().toString(),
-        )
-
-        database.cachedCommentDao().insertComment(newComment.toCachedEntity())
-
-        val existingPost = database.cachedPostDao().getPostById(postId)
-        if (existingPost != null) {
-            database.cachedPostDao().insertPost(existingPost.copy(comments = existingPost.comments + 1))
+        if (cleanBody.isBlank()) return Result.failure(IllegalArgumentException("Write a comment before posting."))
+        return productionUxRepository.createCommunityComment(postId, cleanBody).mapCatching {
+            loadCommunityPostDetail(postId)
+            refreshLiveContent()
         }
-
-        val updatedComments = _communityComments.value + newComment
-        _communityComments.value = updatedComments
-
-        _communityPostDetail.value?.let { current ->
-            if (current.id == postId) {
-                _communityPostDetail.value = current.copy(comments = current.comments + 1)
-            }
-        }
-        _posts.value = _posts.value.map { p ->
-            if (p.id == postId) p.copy(comments = p.comments + 1) else p
-        }
-
-        runCatching { productionUxRepository.createCommunityComment(postId, cleanBody) }
-        refreshLiveContent()
-        return Result.success(Unit)
     }
 
-    suspend fun toggleCommunityPostLike(postId: String): Result<Unit> {
-        var newLikedState = false
-        var newReactionsCount = 0
-
-        val cachedPost = database.cachedPostDao().getPostById(postId)
-        if (cachedPost != null) {
-            newLikedState = !cachedPost.viewerHasLiked
-            newReactionsCount = (cachedPost.reactions + if (newLikedState) 1 else -1).coerceAtLeast(0)
-            database.cachedPostDao().insertPost(
-                cachedPost.copy(
-                    viewerHasLiked = newLikedState,
-                    reactions = newReactionsCount,
-                )
-            )
+    suspend fun toggleCommunityPostLike(postId: String): Result<Unit> =
+        productionUxRepository.toggleCommunityPostLike(postId).mapCatching {
+            loadCommunityPostDetail(postId)
+            refreshLiveContent()
         }
-
-        _posts.value = _posts.value.map { p ->
-            if (p.id == postId) {
-                newLikedState = !p.viewerHasLiked
-                newReactionsCount = (p.reactions + if (newLikedState) 1 else -1).coerceAtLeast(0)
-                p.copy(viewerHasLiked = newLikedState, reactions = newReactionsCount)
-            } else p
-        }
-
-        _communityPostDetail.value?.let { detail ->
-            if (detail.id == postId) {
-                _communityPostDetail.value = detail.copy(
-                    viewerHasLiked = newLikedState,
-                    reactions = newReactionsCount
-                )
-            }
-        }
-
-        runCatching { productionUxRepository.toggleCommunityPostLike(postId) }
-        return Result.success(Unit)
-    }
 
     suspend fun searchAccessManagedAccount(email: String): Result<AccessManagedAccount?> =
         productionUxRepository.searchVerifiedAccessAccount(email).also { result ->
@@ -994,15 +921,9 @@ class RtcRepository @Inject constructor(
 
     /** Refreshes aggregate-only metrics and the server-suppressed locality summary. */
     suspend fun refreshAdminPrivacyAnalytics(period: AdminAnalyticsPeriod): Result<Unit> = runCatching {
-        val metrics = productionUxRepository.adminAnalyticsMetrics(period.wireValue).getOrElse {
-            RtcMockData.getSampleAdminAnalyticsDashboard().metrics
-        }
-        val localities = productionUxRepository.adminAnalyticsLocalities(period.wireValue).getOrElse {
-            RtcMockData.getSampleAdminLocalities()
-        }
-        val auditTrail = productionUxRepository.adminAnalyticsAuditTrail().getOrElse {
-            RtcMockData.getSampleAdminAuditEvents()
-        }
+        val metrics = productionUxRepository.adminAnalyticsMetrics(period.wireValue).getOrThrow()
+        val localities = productionUxRepository.adminAnalyticsLocalities(period.wireValue).getOrThrow()
+        val auditTrail = productionUxRepository.adminAnalyticsAuditTrail().getOrThrow()
         _adminAnalyticsDashboard.value = AdminAnalyticsDashboard(period = period, metrics = metrics)
         _adminAnalyticsLocalities.value = localities
         _adminAnalyticsAuditEvents.value = auditTrail
@@ -1028,33 +949,25 @@ class RtcRepository @Inject constructor(
      * authoritative for role, current-session, MFA, and item ownership checks.
      */
     suspend fun refreshOperationsHub(): Result<Unit> = runCatching {
-        val queue = productionUxRepository.operationsWorkQueue().getOrElse {
-            RtcMockData.getSampleOperationsWorkQueue()
-        }
+        val queue = productionUxRepository.operationsWorkQueue().getOrThrow()
+        val preferences = productionUxRepository.workPreferences().getOrThrow()
+        val moderationQueue = productionUxRepository.moderationQueue().getOrThrow()
+        val moderationAppeals = productionUxRepository.moderationAppeals().getOrThrow()
+        val editorialNotices = productionUxRepository.editorialNotices().getOrThrow()
+        val controls = productionUxRepository.activeOperationsControls().getOrThrow()
+        val incidents = productionUxRepository.operationalIncidents().getOrThrow()
+        val health = productionUxRepository.systemHealth().getOrThrow()
+        val activity = productionUxRepository.administrativeActivity().getOrThrow()
+
         _operationsWorkQueue.value = queue
-        _staffWorkPreferences.value = productionUxRepository.workPreferences().getOrElse { StaffWorkPreferences() }
-
-        _moderationQueue.value = productionUxRepository.moderationQueue().getOrElse {
-            RtcMockData.getSampleModerationQueue()
-        }
-        _moderationAppeals.value = productionUxRepository.moderationAppeals().getOrElse {
-            RtcMockData.getSampleModerationAppeals()
-        }
-
-        _editorialNotices.value = productionUxRepository.editorialNotices().getOrElse {
-            RtcMockData.getSampleEditorialNotices()
-        }
-
-        _operationsControls.value = productionUxRepository.activeOperationsControls().getOrElse { OperationsControlState() }
-        _operationalIncidents.value = productionUxRepository.operationalIncidents().getOrElse {
-            RtcMockData.getSampleOperationalIncidents()
-        }
-        _systemHealth.value = productionUxRepository.systemHealth().getOrElse {
-            RtcMockData.getSampleSystemHealth()
-        }
-        _administrativeActivity.value = productionUxRepository.administrativeActivity().getOrElse {
-            RtcMockData.getSampleAdministrativeActivity()
-        }
+        _staffWorkPreferences.value = preferences
+        _moderationQueue.value = moderationQueue
+        _moderationAppeals.value = moderationAppeals
+        _editorialNotices.value = editorialNotices
+        _operationsControls.value = controls
+        _operationalIncidents.value = incidents
+        _systemHealth.value = health
+        _administrativeActivity.value = activity
     }
 
     suspend fun saveStaffWorkPreferences(
@@ -1187,37 +1100,31 @@ class RtcRepository @Inject constructor(
 
     suspend fun acceptCommunityGuidelines(): Result<Unit> {
         val userId = _session.value.id
-        preferencesStore.setCommunityGuidelinesAccepted(userId, true)
-        _communityGuidelinesAccepted.value = true
-        return if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
-            productionUxRepository.acceptCommunityGuidelines().onSuccess {
-                _communityGuidelinesAccepted.value = true
-            }.recoverCatching {
+        return when (_session.value.authority) {
+            SessionAuthority.SUPABASE_AUTH -> productionUxRepository.acceptCommunityGuidelines().mapCatching {
+                preferencesStore.setCommunityGuidelinesAccepted(userId, true)
                 _communityGuidelinesAccepted.value = true
             }
-        } else {
-            Result.success(Unit)
+            SessionAuthority.DEVELOPMENT_ADAPTER -> runCatching {
+                preferencesStore.setCommunityGuidelinesAccepted(userId, true)
+                _communityGuidelinesAccepted.value = true
+            }
+            SessionAuthority.PUBLIC -> Result.failure(IllegalStateException("Sign in before accepting Community Guidelines."))
         }
     }
 
     private suspend fun refreshCommunityGuidelinesStatus() {
         val userId = _session.value.id
-        val locallyAccepted = preferencesStore.isCommunityGuidelinesAccepted(userId)
-        if (locallyAccepted) {
-            _communityGuidelinesAccepted.value = true
-            checkAndTriggerOnboardingTutorial(userId)
-            return
-        }
-        if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
-            val remoteStatus = productionUxRepository
-                .communityGuidelinesAcceptedStatus()
-                .getOrDefault(false)
-            if (remoteStatus) {
-                preferencesStore.setCommunityGuidelinesAccepted(userId, true)
+        when (_session.value.authority) {
+            SessionAuthority.SUPABASE_AUTH -> {
+                val remoteStatus = productionUxRepository.communityGuidelinesAcceptedStatus().getOrThrow()
+                if (remoteStatus) preferencesStore.setCommunityGuidelinesAccepted(userId, true)
+                _communityGuidelinesAccepted.value = remoteStatus
             }
-            _communityGuidelinesAccepted.value = remoteStatus
-        } else {
-            _communityGuidelinesAccepted.value = locallyAccepted
+            SessionAuthority.DEVELOPMENT_ADAPTER -> {
+                _communityGuidelinesAccepted.value = preferencesStore.isCommunityGuidelinesAccepted(userId)
+            }
+            SessionAuthority.PUBLIC -> _communityGuidelinesAccepted.value = null
         }
         checkAndTriggerOnboardingTutorial(userId)
     }
@@ -1338,36 +1245,34 @@ class RtcRepository @Inject constructor(
         require(cleanName.length in 2..120) { "Enter a display name between 2 and 120 characters." }
         require(cleanBio.length <= 600) { "Keep the bio to 600 characters or fewer." }
 
-        val currentSession = _session.value
-        database.cachedUserProfileDao().insertProfile(
-            CachedUserProfileEntity(
-                userId = currentSession.id,
-                email = currentSession.authenticatedEmail,
-                displayName = cleanName,
-                bio = cleanBio,
-                interestsJson = cleanInterests.joinToString(","),
-                avatarUrl = currentSession.avatarUrl,
-                role = currentSession.role.name,
-                updatedAtEpochMillis = System.currentTimeMillis(),
-            )
-        )
-
-        if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
-            productionUxRepository.saveOwnProfile(cleanName, cleanBio, cleanInterests).getOrThrow()
-            hydrateSupabaseSession()
-            _session.value = _session.value.copy(
-                displayName = cleanName,
-                bio = cleanBio,
-                interests = cleanInterests,
-            )
-            refreshLiveContent()
-            _communityPostDetail.value?.id?.let { postId -> loadCommunityPostDetail(postId) }
-        } else {
-            _session.value = _session.value.copy(
-                displayName = cleanName,
-                bio = cleanBio,
-                interests = cleanInterests,
-            )
+        when (_session.value.authority) {
+            SessionAuthority.SUPABASE_AUTH -> {
+                productionUxRepository.saveOwnProfile(cleanName, cleanBio, cleanInterests).getOrThrow()
+                hydrateSupabaseSession()
+                refreshLiveContent()
+                _communityPostDetail.value?.id?.let { postId -> loadCommunityPostDetail(postId) }
+            }
+            SessionAuthority.DEVELOPMENT_ADAPTER -> {
+                val currentSession = _session.value
+                database.cachedUserProfileDao().insertProfile(
+                    CachedUserProfileEntity(
+                        userId = currentSession.id,
+                        email = currentSession.authenticatedEmail,
+                        displayName = cleanName,
+                        bio = cleanBio,
+                        interestsJson = cleanInterests.joinToString(","),
+                        avatarUrl = currentSession.avatarUrl,
+                        role = currentSession.role.name,
+                        updatedAtEpochMillis = System.currentTimeMillis(),
+                    )
+                )
+                _session.value = currentSession.copy(
+                    displayName = cleanName,
+                    bio = cleanBio,
+                    interests = cleanInterests,
+                )
+            }
+            SessionAuthority.PUBLIC -> error("Sign in before changing your profile.")
         }
     }
 
@@ -1463,20 +1368,8 @@ class RtcRepository @Inject constructor(
     }
 
     suspend fun reportCommunityPost(postId: String, reason: ModerationReason, detail: String): Result<Unit> {
-        val reportEntity = CachedReportEntity(
-            id = "report_${UUID.randomUUID()}",
-            targetType = "COMMUNITY_POST",
-            targetId = postId,
-            reason = reason.name,
-            details = detail.trim(),
-            status = "PENDING_REVIEW",
-            createdAtEpochMillis = System.currentTimeMillis(),
-        )
-        database.cachedReportDao().insertReport(reportEntity)
-        if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
-            runCatching { productionUxRepository.reportCommunityPost(postId, reason, detail) }
-        }
-        return Result.success(Unit)
+        require(_session.value.authority == SessionAuthority.SUPABASE_AUTH) { "Sign in before reporting Community content." }
+        return productionUxRepository.reportCommunityPost(postId, reason, detail)
     }
 
     suspend fun registerFcmDevice(token: String, appVersion: String?): Result<Unit> {
