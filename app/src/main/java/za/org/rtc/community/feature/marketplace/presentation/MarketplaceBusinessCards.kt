@@ -218,11 +218,13 @@ fun AppStoreBusinessRowCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outlineVariant,
                         )
-                        val distStr = if (business.distanceMetres < 1000) "${business.distanceMetres}m" else "%.1f km".format(business.distanceMetres / 1000.0)
+                        val distStr = if (business.distanceMetres < 1000) "${business.distanceMetres}\u00A0m" else "%.1f\u00A0km".format(business.distanceMetres / 1000.0)
                         Text(
                             text = distStr,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false,
                         )
                     }
                 }

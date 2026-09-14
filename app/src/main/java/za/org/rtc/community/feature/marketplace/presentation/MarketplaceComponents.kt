@@ -199,6 +199,40 @@ internal fun JsonObject.marketplaceString(name: String): String = marketplaceStr
 internal fun JsonObject.marketplaceStringOrNull(name: String): String? = this[name]?.jsonPrimitive?.contentOrNull
 internal fun JsonObject.marketplaceArray(name: String): JsonArray = runCatching { this[name]?.jsonArray }.getOrNull() ?: JsonArray(emptyList())
 
+@Composable
+fun <T> MarketplaceLoadContainer(
+    state: MarketplaceLoadState<T>,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (T) -> Unit,
+) {
+    when (state) {
+        is MarketplaceLoadState.Idle,
+        is MarketplaceLoadState.Loading -> {
+            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        }
+        is MarketplaceLoadState.Failure -> {
+            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
+                    modifier = Modifier.padding(RtcSpacing.pageGutter)
+                ) {
+                    Text(state.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                    Button(onClick = onRetry) { Text("Retry") }
+                }
+            }
+        }
+        is MarketplaceLoadState.Data -> {
+            Box(modifier = modifier) {
+                content(state.value)
+            }
+        }
+    }
+}
+
 /**
  * Interactive Google Maps-styled visual map component for the "Businesses Near Me" section
  * and dedicated Map Discovery screen.

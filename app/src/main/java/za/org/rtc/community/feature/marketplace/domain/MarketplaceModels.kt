@@ -56,12 +56,19 @@ data class MarketplaceOffering(
     val availabilityNote: String?,
 ) {
     val priceLabel: String
-        get() = when (priceType) {
-            "FREE" -> "Free"
-            "QUOTE" -> "Quote on request"
-            "RANGE" -> listOfNotNull(priceMin?.let { "R$it" }, priceMax?.let { "R$it" }).joinToString(" – ")
-            "FROM" -> priceMin?.let { "From R$it" } ?: "Price on request"
-            else -> priceMin?.let { "R$it" } ?: "Price on request"
+        get() {
+            fun formatZarPrice(raw: String): String {
+                val num = raw.toDoubleOrNull() ?: return "R $raw"
+                val format = java.text.NumberFormat.getCurrencyInstance(java.util.Locale("en", "ZA"))
+                return format.format(num).replace("ZAR", "R").trim()
+            }
+            return when (priceType) {
+                "FREE" -> "Free"
+                "QUOTE" -> "Quote on request"
+                "RANGE" -> listOfNotNull(priceMin?.let(::formatZarPrice), priceMax?.let(::formatZarPrice)).joinToString(" – ")
+                "FROM" -> priceMin?.let { "From ${formatZarPrice(it)}" } ?: "Price on request"
+                else -> priceMin?.let(::formatZarPrice) ?: "Price on request"
+            }
         }
 }
 

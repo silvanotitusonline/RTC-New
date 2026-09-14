@@ -43,128 +43,60 @@ class MediaPreparation @Inject constructor(@ApplicationContext private val conte
     )
 
     suspend fun prepare(uri: Uri): Prepared {
-        val mime = withContext(Dispatchers.IO) { resolveMimeType(uri) }
+        val mime = withContext(Dispatchers.IO) {
+            context.contentResolver.getType(uri)?.lowercase() ?: run {
+                val path = uri.path?.lowercase() ?: ""
+                when {
+                    path.endsWith(".jpg") || path.endsWith(".jpeg") -> "image/jpeg"
+                    path.endsWith(".png") -> "image/png"
+                    path.endsWith(".webp") -> "image/webp"
+                    path.endsWith(".mp4") -> "video/mp4"
+                    path.endsWith(".webm") -> "video/webm"
+                    else -> "image/jpeg"
+                }
+            }
+        }
         return when {
             mime in IMAGE_TYPES -> withContext(Dispatchers.IO) { prepareImage(uri) }
             mime in VIDEO_TYPES -> prepareVideo(uri, mime)
-            else -> throw IllegalArgumentException("Choose a supported JPEG, PNG, WebP, MP4, or WebM file.")
+            else -> withContext(Dispatchers.IO) { prepareImage(uri) }
         }
     }
-
-    private fun resolveMimeType(uri: Uri): String {
-        normalizeMime(context.contentResolver.getType(uri))?.let { mime ->
-            if (mime in IMAGE_TYPES || mime in VIDEO_TYPES) return mime
-        }
-
-        queryDisplayName(uri)?.lowercase()?.let { name ->
-            mimeFromName(name)?.let { return it }
-        }
-
-        sniffMimeType(uri)?.let { return it }
-        throw IllegalArgumentException("The selected media type could not be identified. Choose a JPEG, PNG, WebP, MP4, or WebM file.")
-    }
-
-    private fun normalizeMime(raw: String?): String? = when (raw?.trim()?.lowercase()) {
-        null, "", "application/octet-stream", "binary/octet-stream" -> null
-        "image/jpg", "image/pjpeg" -> "image/jpeg"
-        "image/x-png" -> "image/png"
-        else -> raw.trim().lowercase()
-    }
-
-    private fun queryDisplayName(uri: Uri): String? = runCatching {
-        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) cursor.getString(0) else null
-        }
-    }.getOrNull()
-
-    private fun mimeFromName(name: String): String? = when {
-        name.endsWith(".jpg") || name.endsWith(".jpeg") -> "image/jpeg"
-        name.endsWith(".png") -> "image/png"
-        name.endsWith(".webp") -> "image/webp"
-        name.endsWith(".mp4") || name.endsWith(".m4v") -> "video/mp4"
-        name.endsWith(".webm") -> "video/webm"
-        else -> null
-    }
-
-    private fun sniffMimeType(uri: Uri): String? = runCatching {
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            val header = ByteArray(16)
-            val count = input.read(header)
-            if (count < 4) return@use null
-            when {
-                header[0].toInt() and 0xFF == 0xFF &&
-                    header[1].toInt() and 0xFF == 0xD8 &&
-                    header[2].toInt() and 0xFF == 0xFF -> "image/jpeg"
-                count >= 8 && header.copyOfRange(0, 8).contentEquals(PNG_SIGNATURE) -> "image/png"
-                count >= 12 && ascii(header, 0, 4) == "RIFF" && ascii(header, 8, 12) == "WEBP" -> "image/webp"
-                count >= 8 && ascii(header, 4, 8) == "ftyp" -> "video/mp4"
-                header[0].toInt() and 0xFF == 0x1A &&
-                    header[1].toInt() and 0xFF == 0x45 &&
-                    header[2].toInt() and 0xFF == 0xDF &&
-                    header[3].toInt() and 0xFF == 0xA3 -> "video/webm"
-                else -> null
-            }
-        }
-    }.getOrNull()
-
-    private fun ascii(bytes: ByteArray, start: Int, end: Int): String =
-        bytes.copyOfRange(start, end).toString(Charsets.US_ASCII)
 
     private fun prepareImage(uri: Uri): Prepared {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
             ?: error("The selected image could not be read.")
         require(bounds.outWidth > 0 && bounds.outHeight > 0) { "The selected image could not be decoded." }
-
         var sample = 1
         while (bounds.outWidth / sample > 3072 || bounds.outHeight / sample > 3072) sample *= 2
         val options = BitmapFactory.Options().apply { inSampleSize = sample }
         val source = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
             ?: error("The selected image could not be decoded.")
-
-        val orientation = readExifOrientation(uri)
+        val orientation = context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+            ExifInterface(descriptor.fileDescriptor).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        } ?: ExifInterface.ORIENTATION_NORMAL
         var normalized = source.normalizedForExif(orientation)
         if (normalized !== source) source.recycle()
         if (maxOf(normalized.width, normalized.height) > 2048) {
             val ratio = 2048f / maxOf(normalized.width, normalized.height)
-            val scaled = Bitmap.createScaledBitmap(
-                normalized,
-                (normalized.width * ratio).toInt().coerceAtLeast(1),
-                (normalized.height * ratio).toInt().coerceAtLeast(1),
-                true,
-            )
+            val scaled = Bitmap.createScaledBitmap(normalized, (normalized.width * ratio).toInt(), (normalized.height * ratio).toInt(), true)
             if (scaled !== normalized) normalized.recycle()
             normalized = scaled
         }
-
         val encoding = preparedImageEncoding(normalized.hasAlpha())
         val out = stagingFile("image", encoding.extension)
-        try {
-            FileOutputStream(out).use { stream ->
-                val format = if (encoding == PreparedImageEncoding.PNG) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-                val quality = if (encoding == PreparedImageEncoding.PNG) 100 else 88
-                check(normalized.compress(format, quality, stream)) { "The selected image could not be encoded." }
-            }
-            val width = normalized.width
-            val height = normalized.height
-            require(out.length() in 1..MAX_IMAGE_BYTES) { "Prepared image exceeds 5 MB." }
-            return Prepared(out, MediaKind.IMAGE, encoding.mimeType, out.length(), width, height)
-        } catch (t: Throwable) {
-            out.delete()
-            throw t
-        } finally {
-            normalized.recycle()
+        FileOutputStream(out).use { stream ->
+            val format = if (encoding == PreparedImageEncoding.PNG) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+            val quality = if (encoding == PreparedImageEncoding.PNG) 100 else 88
+            check(normalized.compress(format, quality, stream))
         }
+        val width = normalized.width
+        val height = normalized.height
+        normalized.recycle()
+        require(out.length() in 1..MAX_IMAGE_BYTES) { out.delete(); "Prepared image exceeds 5 MB." }
+        return Prepared(out, MediaKind.IMAGE, encoding.mimeType, out.length(), width, height)
     }
-
-    private fun readExifOrientation(uri: Uri): Int = runCatching {
-        context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
-            ExifInterface(descriptor.fileDescriptor).getAttributeInt(
-                ExifInterface.TAG_ORIENTATION,
-                ExifInterface.ORIENTATION_NORMAL,
-            )
-        } ?: ExifInterface.ORIENTATION_NORMAL
-    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
 
     @OptIn(markerClass = [UnstableApi::class])
     private suspend fun prepareVideo(uri: Uri, originalMime: String): Prepared {
@@ -182,11 +114,9 @@ class MediaPreparation @Inject constructor(@ApplicationContext private val conte
         return Prepared(prepared, MediaKind.VIDEO, mime, prepared.length(), durationSeconds = duration)
     }
 
-    private fun querySize(uri: Uri): Long? = runCatching {
-        context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) cursor.getLong(0).takeIf { it >= 0 } else null
-        }
-    }.getOrNull()
+    private fun querySize(uri: Uri): Long? = context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+        if (c.moveToFirst()) c.getLong(0).takeIf { it >= 0 } else null
+    }
 
     private fun copyUri(uri: Uri, extension: String, limit: Long): File {
         val out = stagingFile("media", extension)
@@ -205,10 +135,7 @@ class MediaPreparation @Inject constructor(@ApplicationContext private val conte
                 }
             } ?: error("The selected media could not be read.")
             return out
-        } catch (t: Throwable) {
-            out.delete()
-            throw t
-        }
+        } catch (t: Throwable) { out.delete(); throw t }
     }
 
     @OptIn(markerClass = [UnstableApi::class])
@@ -235,27 +162,16 @@ class MediaPreparation @Inject constructor(@ApplicationContext private val conte
                     override fun onCompleted(composition: androidx.media3.transformer.Composition, exportResult: ExportResult) {
                         if (continuation.isActive) continuation.resume(Unit)
                     }
-
-                    override fun onError(
-                        composition: androidx.media3.transformer.Composition,
-                        exportResult: ExportResult,
-                        exportException: ExportException,
-                    ) {
+                    override fun onError(composition: androidx.media3.transformer.Composition, exportResult: ExportResult, exportException: ExportException) {
                         if (continuation.isActive) continuation.resumeWithException(exportException)
                     }
                 })
-                continuation.invokeOnCancellation {
-                    transformer.cancel()
-                    output.delete()
-                }
+                continuation.invokeOnCancellation { transformer.cancel(); output.delete() }
                 transformer.start(edited, output.absolutePath)
             }
             check(output.exists() && output.length() > 0) { "Video preparation produced no output." }
             return output
-        } catch (t: Throwable) {
-            output.delete()
-            throw t
-        }
+        } catch (t: Throwable) { output.delete(); throw t }
     }
 
     private fun videoDurationSeconds(uri: Uri): Int {
@@ -264,20 +180,14 @@ class MediaPreparation @Inject constructor(@ApplicationContext private val conte
             retriever.setDataSource(context, uri)
             val ms = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
             ((ms + 999) / 1000).toInt()
-        } finally {
-            retriever.release()
-        }
+        } finally { retriever.release() }
     }
 
     private fun stagingFile(prefix: String, extension: String): File = File(context.cacheDir, "rtc_upload_outbox").let { dir ->
-        dir.mkdirs()
-        File.createTempFile("${prefix}_", extension, dir)
+        dir.mkdirs(); File.createTempFile("${prefix}_", extension, dir)
     }
 
-    private fun extensionFor(mime: String) = when (mime) {
-        "video/webm" -> ".webm"
-        else -> ".mp4"
-    }
+    private fun extensionFor(mime: String) = when (mime) { "video/webm" -> ".webm"; else -> ".mp4" }
 
     private fun Bitmap.normalizedForExif(orientation: Int): Bitmap {
         if (orientation == ExifInterface.ORIENTATION_NORMAL || orientation == ExifInterface.ORIENTATION_UNDEFINED) return this
@@ -286,15 +196,9 @@ class MediaPreparation @Inject constructor(@ApplicationContext private val conte
                 ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> preScale(-1f, 1f)
                 ExifInterface.ORIENTATION_ROTATE_180 -> postRotate(180f)
                 ExifInterface.ORIENTATION_FLIP_VERTICAL -> preScale(1f, -1f)
-                ExifInterface.ORIENTATION_TRANSPOSE -> {
-                    preScale(-1f, 1f)
-                    postRotate(270f)
-                }
+                ExifInterface.ORIENTATION_TRANSPOSE -> { preScale(-1f, 1f); postRotate(270f) }
                 ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
-                ExifInterface.ORIENTATION_TRANSVERSE -> {
-                    preScale(-1f, 1f)
-                    postRotate(90f)
-                }
+                ExifInterface.ORIENTATION_TRANSVERSE -> { preScale(-1f, 1f); postRotate(90f) }
                 ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(270f)
             }
         }
@@ -307,8 +211,5 @@ class MediaPreparation @Inject constructor(@ApplicationContext private val conte
         const val MAX_VIDEO_SECONDS = 180
         val IMAGE_TYPES = setOf("image/jpeg", "image/png", "image/webp")
         val VIDEO_TYPES = setOf("video/mp4", "video/webm")
-        val PNG_SIGNATURE = byteArrayOf(
-            0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        )
     }
 }

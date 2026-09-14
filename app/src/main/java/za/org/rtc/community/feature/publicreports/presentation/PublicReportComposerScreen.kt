@@ -1,36 +1,38 @@
 package za.org.rtc.community.feature.publicreports.presentation
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import za.org.rtc.community.core.maps.LiveMapPanel
-import za.org.rtc.community.core.maps.RtcMapMarker
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import za.org.rtc.community.feature.publicreports.domain.PublicReportIdentityMode
@@ -50,7 +52,36 @@ fun PublicReportComposerScreen(
     viewModel: PublicReportComposerViewModel = hiltViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
-    var showMapPicker by rememberSaveable(state.clientRequestId, state.draftAccountId) { mutableStateOf(false) }
+    var showDiscardDialog by rememberSaveable { mutableStateOf(false) }
+
+    val isDirty = state.title.isNotBlank() || state.description.isNotBlank() || state.exactAddress.isNotBlank() || state.evidence.isNotEmpty()
+    BackHandler(enabled = isDirty) {
+        showDiscardDialog = true
+    }
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text("Discard unsaved changes?") },
+            text = { Text("You have unsaved report details. If you leave now, your draft will be discarded.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardDialog = false
+                        onSubmitted("")
+                    },
+                ) {
+                    Text("Discard", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) {
+                    Text("Keep editing")
+                }
+            },
+        )
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.take(PublicReportValidation.EVIDENCE_MAX).forEach(viewModel::addEvidence)
     }
@@ -64,7 +95,20 @@ fun PublicReportComposerScreen(
         }
     }
 
-    RtcScreenScaffold {
+    val descriptionLen = state.description.trim().length
+    val hasMinDescription = descriptionLen >= 20
+    val isFormValid = state.title.trim().length >= 3 &&
+        hasMinDescription &&
+        !state.categoryId.isNullOrBlank() &&
+        state.guidelinesAccepted &&
+        (!state.cannotProvideEvidence || state.noEvidenceReason.trim().isNotEmpty()) &&
+        !state.submitting
+
+    RtcScreenScaffold(
+        modifier = Modifier
+            .imePadding()
+            .navigationBarsPadding(),
+    ) {
         item { RtcSectionHeader(title = "New Public Report", subtitle = "Tell RTC what is happening in a public place.") }
         item {
             RtcCard {
@@ -80,7 +124,35 @@ fun PublicReportComposerScreen(
                         value = state.description,
                         onValueChange = viewModel::setDescription,
                         label = { Text("What’s happening?") },
-                        supportingText = { Text("What happened, when it started, and any immediate risk.") },
+                        supportingText = {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = if (state.description.isNotEmpty() && !hasMinDescription) {
+                                        "Minimum 20 characters required"
+                                    } else {
+                                        "What happened, when it started, and any immediate risk."
+                                    },
+                                    color = if (state.description.isNotEmpty() && !hasMinDescription) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                )
+                                Text(
+                                    text = "${state.description.length}/2000",
+                                    color = if (state.description.isNotEmpty() && !hasMinDescription) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                        },
+                        isError = state.description.isNotEmpty() && !hasMinDescription,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
                     )
                     Text("When did it start?")
@@ -90,20 +162,28 @@ fun PublicReportComposerScreen(
                     Text("Category")
                     Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
                         state.categories.forEach { category ->
+                            val selected = state.categoryId == category.id
                             FilterChip(
-                                selected = state.categoryId == category.id,
+                                selected = selected,
                                 onClick = { viewModel.setCategory(category.id) },
                                 label = { Text(category.label) },
+                                leadingIcon = if (selected) {
+                                    { Icon(Icons.Default.Check, contentDescription = "Selected", modifier = Modifier.size(16.dp)) }
+                                } else null,
                             )
                         }
                     }
                     Text("Urgency")
                     Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
                         listOf(PublicReportUrgency.LOW, PublicReportUrgency.NORMAL, PublicReportUrgency.HIGH, PublicReportUrgency.CRITICAL).forEach { urgency ->
+                            val selected = state.urgency == urgency
                             FilterChip(
-                                selected = state.urgency == urgency,
+                                selected = selected,
                                 onClick = { viewModel.setUrgency(urgency) },
                                 label = { Text(urgency.label) },
+                                leadingIcon = if (selected) {
+                                    { Icon(Icons.Default.Check, contentDescription = "Selected", modifier = Modifier.size(16.dp)) }
+                                } else null,
                             )
                         }
                     }
@@ -119,30 +199,10 @@ fun PublicReportComposerScreen(
                     OutlinedTextField(
                         value = state.exactAddress,
                         onValueChange = viewModel::setExactAddress,
-                        label = { Text(if (state.selectedLocation == null) "Manual address or landmark" else "Private address or landmark (optional)") },
-                        supportingText = { Text("The exact address is kept private for authorised RTC staff.") },
+                        label = { Text("Manual address or landmark") },
+                        supportingText = { Text(state.mapUnavailableNotice) },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Text(
-                        "The public map shows an approximate location. Your selected exact location is kept private for authorised RTC staff. Keep personal addresses out of the public landmark field.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Button(
-                        onClick = { showMapPicker = true },
-                        enabled = !state.submitting && state.draftAccountId != null,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    ) {
-                        Text(if (state.selectedLocation == null) "Choose location on map" else "Change map location")
-                    }
-                    if (state.selectedLocation != null) {
-                        Text("Map location selected", style = MaterialTheme.typography.bodyMedium)
-                        TextButton(
-                            onClick = viewModel::clearMapLocation,
-                            enabled = !state.submitting,
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) { Text("Remove map location and enter address manually") }
-                    }
                     Text("Evidence")
                     TextButton(
                         onClick = {
@@ -190,44 +250,14 @@ fun PublicReportComposerScreen(
                     }
                     Button(
                         onClick = viewModel::submit,
-                        enabled = !state.submitting,
+                        enabled = isFormValid,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     ) {
-                        Text(if (state.submitting) "Submitting…" else "Submit Public Report")
+                        Text(if (state.submitting) "Publishing…" else "Publish Civic Report")
                     }
                     state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
     }
-    if (showMapPicker) {
-        Dialog(
-            onDismissRequest = { showMapPicker = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Surface(Modifier.fillMaxSize()) {
-                Column(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Choose report location", style = MaterialTheme.typography.titleMedium)
-                        TextButton(onClick = { showMapPicker = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Close") }
-                    }
-                    Text("Search for a place or use your current location, then confirm the selected location.", style = MaterialTheme.typography.bodySmall)
-                    val existing = state.selectedLocation?.let { point ->
-                        RtcMapMarker("report-draft-location", "Selected report location", point)
-                    }
-                    LiveMapPanel(
-                        markers = listOfNotNull(existing),
-                        initialSelectedMarkerId = existing?.id,
-                        onOpenMarker = {},
-                        onChooseLocation = { point ->
-                            viewModel.setMapLocation(point)
-                            showMapPicker = false
-                        },
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                    )
-                }
-            }
-        }
-    }
-
 }

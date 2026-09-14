@@ -27,8 +27,8 @@ def test_concept6_shared_system_is_used_by_major_surfaces():
     assert 'RtcCommunityFeedCard' in COMPONENTS
     assert 'RtcEmergencyBanner' in COMPONENTS
     assert 'RtcCaseProgress' in COMPONENTS
-    for name in ['CommunityScreen', 'CommunityUpdatesScreen', 'SupportScreen', 'AccountScreen', 'SearchScreen', 'NotificationsScreen', 'AiAssistantScreen']:
-        source = COMMUNITY_FEED if name == 'CommunityScreen' else EXPLORE_SCREEN if name == 'CommunityUpdatesScreen' else SUPPORT_SCREENS if name == 'SupportScreen' else ACCOUNT_SCREEN if name == 'AccountScreen' else ACCOUNT_NOTIFICATIONS if name == 'NotificationsScreen' else PUBLIC_SEARCH if name == 'SearchScreen' else ADMIN_AI
+    for name in ['CommunityScreen', 'ExploreScreen', 'SupportScreen', 'AccountScreen', 'SearchScreen', 'NotificationsScreen', 'AiAssistantScreen']:
+        source = COMMUNITY_FEED if name == 'CommunityScreen' else EXPLORE_SCREEN if name == 'ExploreScreen' else SUPPORT_SCREENS if name == 'SupportScreen' else ACCOUNT_SCREEN if name == 'AccountScreen' else ACCOUNT_NOTIFICATIONS if name == 'NotificationsScreen' else PUBLIC_SEARCH if name == 'SearchScreen' else ADMIN_AI
         block = re.search(rf'(?:private|internal) fun {name}\(.*?(?=\n@Composable|\Z)', source, re.S)
         assert block and 'RtcScreenScaffold' in block.group(0), name
     assert 'import za.org.rtc.community.feature.community.CommunityScreen' in MAIN
@@ -111,21 +111,17 @@ def test_reference_driven_makeover_uses_transparent_rtc_brand_and_shared_palette
     theme = (ROOT / 'app/src/main/java/za/org/rtc/community/ui/theme/Theme.kt').read_text()
     splash = (ROOT / 'app/src/main/res/values/themes.xml').read_text()
     splash_background = (ROOT / 'app/src/main/res/drawable/rtc_splash_background.xml').read_text()
-    guest_host = (
-        ROOT / 'app/src/main/java/za/org/rtc/community/feature/account/PublicWelcomeGuestHost.kt'
-    ).read_text()
     logo = ROOT / 'app/src/main/res/drawable-nodpi/rtc_logo_mark_transparent.png'
     assert 'val RtcInk = Color(0xFF0C1013)' in theme
     assert 'val RtcMint = Color(0xFF2EC27E)' in theme
     assert 'val RtcCivicGold = Color(0xFFD4AF37)' in theme
-    assert '@drawable/rtc_splash_logo' in splash
-    assert '@drawable/rtc_splash_logo' in splash_background
+    assert '@drawable/rtc_community_logo_transparent' in splash
+    assert '@drawable/rtc_community_logo_transparent' in splash_background
     assert logo.exists() and logo.stat().st_size > 0
     assert 'fun RtcBrandLockup(' in BRAND_LOCKUP
     assert 'R.drawable.rtc_logo_mark_transparent' in BRAND_LOCKUP
-    assert 'import za.org.rtc.community.feature.account.PublicWelcomeGuestHost' in MAIN
-    assert 'PublicWelcomeGuestHost(' in MAIN
-    assert 'PublicWelcomeScreen(' in guest_host
+    assert 'import za.org.rtc.community.feature.account.PublicWelcomeScreen' in MAIN
+    assert 'PublicWelcomeScreen(' in MAIN
     supplied_splash_logo = ROOT / 'app/src/main/res/drawable-nodpi/rtc_community_logo_transparent.png'
     assert supplied_splash_logo.exists() and supplied_splash_logo.stat().st_size > 0
     with Image.open(supplied_splash_logo) as splash_logo:
@@ -134,8 +130,7 @@ def test_reference_driven_makeover_uses_transparent_rtc_brand_and_shared_palette
 
 
 def test_reference_administrator_workspace_has_real_guarded_navigation_and_profile_exit():
-    workspace = _function_body(ADMIN_WORKSPACE, 'AdminWorkspace', [])
-    catalog = (ROOT / 'app/src/main/java/za/org/rtc/community/feature/administration/AdminWorkspaceDestinationCatalog.kt').read_text()
+    workspace = _function_body(ADMIN_WORKSPACE, 'AdminWorkspace', ['OperationsWorkItemCard'])
     mfa_screen = _function_body(ADMIN_MFA_SCREEN, 'AdministratorMfaVerificationScreen', [])
     profile = _function_body(ADMIN_MY_WORK, 'MyWorkProfileScreen', ['AssignedSupportCaseCard'])
     bottom_nav = _function_body(NAV_CHROME, 'StaffWorkspaceBottomNavigation', ['StaffWorkspacePane'])
@@ -144,24 +139,30 @@ def test_reference_administrator_workspace_has_real_guarded_navigation_and_profi
     assert 'ProtectedRoute(RtcRoute.ADMIN_MFA' in MAIN
     assert 'AdministratorMfaVerificationScreen(' in MAIN
     assert 'import za.org.rtc.community.feature.administration.AdminWorkspace' in MAIN
+    assert 'import za.org.rtc.community.feature.administration.MyWorkProfileScreen' in MAIN
+    assert 'MyWorkProfileScreen(viewModel = viewModel' in NAV_GRAPH or 'MyWorkProfileScreen(\n                            viewModel = viewModel,' in NAV_GRAPH
     assert 'Verify and continue' in mfa_screen
     assert 'TotpQrCode(uri = it.uri)' in mfa_screen
     assert 'it.secret' not in mfa_screen
-    for title in ['Access management', 'Operational controls', 'Privacy analytics']:
-        assert f'title = "{title}"' in catalog
-    assert 'route = RtcRoute.ACCESS_MANAGEMENT' in catalog
-    assert 'route = RtcRoute.OPERATIONAL_CONTROLS' in catalog
-    assert 'route = RtcRoute.ANALYTICS_DASHBOARD' in catalog
-    assert 'adminWorkspaceDestinations(session.role)' in workspace
-    assert 'resolveAdminDestinationRoute(destination, needsLiveAdministratorMfa)' in workspace
-    assert 'AdminNeedsAttentionCard(' in workspace
-    assert 'OperationsWorkItemCard(' in workspace
+    assert 'Access Management' in workspace
+    assert 'Operational Controls' in workspace
+    assert 'Privacy Analytics' in workspace
+    assert 'RTC AI' in workspace
+    assert 'onOpenTool(if (needsLiveAdministratorMfa) RtcRoute.ADMIN_MFA else RtcRoute.ACCESS_MANAGEMENT)' in workspace
+    assert 'onOpenTool(if (needsLiveAdministratorMfa) RtcRoute.ADMIN_MFA else RtcRoute.OPERATIONAL_CONTROLS)' in workspace
+    assert 'onOpenTool(if (needsLiveAdministratorMfa) RtcRoute.ADMIN_MFA else RtcRoute.ANALYTICS_DASHBOARD)' in workspace
+    assert 'AdminWorkspaceNavigation(role = session.role' in workspace
+    assert 'AdminWorkspaceMetricTile(workItems.count { it.assignedToMe }.toString(), "Assigned"' in workspace
+    assert 'AdminWorkspaceMetricTile(workItems.count { it.priority in setOf("URGENT", "HIGH") }.toString(), "High priority"' in workspace
+    assert 'AdminWorkspaceMetricTile(workItems.count { it.isUnassigned }.toString(), "Unassigned"' in workspace
     assert 'internal fun StaffWorkspaceBottomNavigation(' in NAV_CHROME
     assert 'StaffWorkspaceBottomNavigation(' in MAIN
     assert '"Queue"' in bottom_nav and '"Access"' in bottom_nav and '"Controls"' in bottom_nav and '"Analytics"' in bottom_nav
+    assert 'onOpenAccount = { navController.navigateOverlay(RtcRoute.ACCOUNT) }' in MAIN
     assert 'Text("Account profile")' in profile
     assert 'viewModel::signOutToPublicWelcome' in profile
     assert 'onClick = {}' not in (HOME_SCREEN + COMMUNITY_FEED + COMMUNITY_DETAIL + EXPLORE_SCREEN + SUPPORT_SCREENS + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS + ADMIN_WORKSPACE + ADMIN_ACCESS + ADMIN_CONTENT + ADMIN_OPERATIONAL + ADMIN_MY_WORK + STAFF_ALERTS)
+
 
 def test_selected_launcher_icon_is_packaged_for_standard_android_densities():
     manifest = (ROOT / 'app/src/main/AndroidManifest.xml').read_text()

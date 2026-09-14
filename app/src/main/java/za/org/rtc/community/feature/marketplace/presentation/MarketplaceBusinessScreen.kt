@@ -1,5 +1,7 @@
 package za.org.rtc.community.feature.marketplace.presentation
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,6 +67,29 @@ fun MarketplaceDetailRoute(
                 )
             }
         }
+    }
+}
+
+internal fun launchDeviceMapDirections(
+    context: android.content.Context,
+    location: MarketplaceLocation?,
+    businessName: String,
+    localityFallback: String? = null,
+) {
+    val query = when {
+        location?.latitude != null && location.longitude != null ->
+            "${location.latitude},${location.longitude}($businessName)"
+        !location?.address.isNullOrBlank() ->
+            listOfNotNull(location.address, location.locality, location.municipality, location.province)
+                .filter { it.isNotBlank() }
+                .joinToString(", ")
+        !localityFallback.isNullOrBlank() -> "$localityFallback, $businessName"
+        else -> businessName
+    }
+    val mapIntent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query)))
+    runCatching { context.startActivity(mapIntent) }.onFailure {
+        val webUri = Uri.parse("https://www.google.com/maps/search/?api=1&query=" + Uri.encode(query))
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, webUri)) }
     }
 }
 

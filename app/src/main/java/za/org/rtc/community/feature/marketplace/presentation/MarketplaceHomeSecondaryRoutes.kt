@@ -61,12 +61,6 @@ fun MarketplaceMapRoute(
     val state by viewModel.home.collectAsStateWithLifecycle()
     val area by viewModel.area.collectAsStateWithLifecycle()
     val savedState by viewModel.saved.collectAsStateWithLifecycle()
-    val mapState by viewModel.mapLocations.collectAsStateWithLifecycle()
-    val session by viewModel.session.collectAsStateWithLifecycle()
-    LaunchedEffect(session.id) {
-        viewModel.loadHome()
-        viewModel.loadSaved()
-    }
 
     val savedIds = remember(savedState) {
         (savedState as? MarketplaceLoadState.Data)?.value?.map { it.id }?.toSet().orEmpty()
@@ -76,8 +70,6 @@ fun MarketplaceMapRoute(
             (home.nearby + home.featured + home.topRated + home.newest).distinctBy { it.id }
         }.orEmpty()
     }
-
-    LaunchedEffect(businesses, session.id) { viewModel.loadMapLocations(businesses) }
 
     Column(
         modifier = Modifier
@@ -106,35 +98,23 @@ fun MarketplaceMapRoute(
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 )
                 Text(
-                    text = if (area.isNullOrBlank()) "Published business locations" else "Published locations in $area",
+                    text = if (area.isNullOrBlank()) "All registered neighborhood businesses" else "Showing locations in $area",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        if (state is MarketplaceLoadState.Failure) {
-            Text((state as MarketplaceLoadState.Failure).message)
-            TextButton(onClick = { viewModel.loadHome() }) { Text("Retry businesses") }
-        }
-        if (state is MarketplaceLoadState.Loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (mapState is MarketplaceLoadState.Data) {
-            val data = (mapState as MarketplaceLoadState.Data).value
-            if (data.failedCount > 0) {
-                Text("${data.failedCount} business locations could not be loaded.", style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = { viewModel.loadMapLocations(businesses, force = true) }) { Text("Retry locations") }
-            }
-            MarketplaceNearMeMapView(
-                data = data,
-                isSaved = { savedIds.contains(it) },
-                onToggleSave = { id -> viewModel.toggleSaved(id, !savedIds.contains(id)) },
-                onBusinessClick = { onNavigate(RtcRoute.marketplaceBusiness(it.slug)) },
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
-        } else {
-            LinearProgressIndicator(Modifier.fillMaxWidth())
-            Text("Loading published locations…")
-        }
+        MarketplaceNearMeMapView(
+            businesses = businesses,
+            locality = area,
+            isSaved = { savedIds.contains(it) },
+            onToggleSave = { id -> viewModel.toggleSaved(id, !savedIds.contains(id)) },
+            onBusinessClick = { onNavigate("community/marketplace/business/${it.slug}") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        )
     }
 }
 

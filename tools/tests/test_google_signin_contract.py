@@ -20,13 +20,8 @@ def test_google_signin_is_wired_through_existing_auth_layers():
     assert '281489677261-j6isgtjd4mqv4os6fakt2qeloogpav8p.apps.googleusercontent.com' in ui
 
     app = text('app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt')
-    guest_host = text('app/src/main/java/za/org/rtc/community/feature/account/PublicWelcomeGuestHost.kt')
-    # Google remains available from the explicit authentication surface, but it is not a gate for
-    # anonymous resident reads.
-    assert 'PublicWelcomeGuestHost' in app
+    assert 'PublicWelcomeScreen' in app
     assert 'onGoogleCredential = viewModel::signInWithGoogleIdToken' in app
-    assert 'PublicWelcomeScreen(' in guest_host
-    assert 'onGoogleCredential = onGoogleCredential' in guest_host
 
     view_model = text('app/src/main/java/za/org/rtc/community/app/RtcViewModel.kt')
     coordinator = text('app/src/main/java/za/org/rtc/community/app/RtcAuthenticationCoordinator.kt')

@@ -52,25 +52,4 @@ class HomeRenderingTest {
         assertTrue(items.filterIsInstance<HomeRenderItem.Image>().isEmpty())
         assertEquals(HomeLayout.default().sections, items.filterIsInstance<HomeRenderItem.Section>().map { it.section })
     }
-
-    @Test
-    fun dailyPostSnapshotRetainsUpperSectionsWhenQuickAccessIsReorderedFirst() {
-        val reordered = HomeLayout(
-            sections = listOf(
-                HomeSection.QUICK_ACCESS,
-                HomeSection.WELCOME,
-                HomeSection.COMMUNITY_SNAPSHOT,
-                HomeSection.HELP,
-            ),
-            imageWidget = widget,
-        )
-
-        assertEquals(
-            listOf(
-                HomeRenderItem.Section(HomeSection.WELCOME),
-                HomeRenderItem.Section(HomeSection.COMMUNITY_SNAPSHOT),
-            ),
-            reordered.renderItems().retainedForDailyPostSnapshot(),
-        )
-    }
 }

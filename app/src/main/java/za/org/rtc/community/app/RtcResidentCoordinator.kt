@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import za.org.rtc.community.core.DraftArea
 import za.org.rtc.community.core.ModerationReason
-import za.org.rtc.community.core.SessionAuthority
 import za.org.rtc.community.data.RtcRepository
 
 internal class RtcResidentCoordinator(
@@ -22,12 +21,6 @@ internal class RtcResidentCoordinator(
     private val _pendingPublicReportId = MutableStateFlow<String?>(null)
     val pendingPublicReportId = _pendingPublicReportId.asStateFlow()
 
-    private fun requireAuthenticated(action: String): Boolean {
-        if (repository.session.value.authority == SessionAuthority.SUPABASE_AUTH) return true
-        showGlobalMessage("Sign in to $action.", false, false)
-        return false
-    }
-
     fun openPublicReportFromDeepLink(reportId: String?) {
         _pendingPublicReportId.value = reportId?.trim()?.takeIf { value ->
             value.length <= 128 && value.all { it.isLetterOrDigit() || it in "-_" }
@@ -37,7 +30,6 @@ internal class RtcResidentCoordinator(
     fun consumePendingPublicReport() {
         _pendingPublicReportId.value = null
     }
-
     private val _communityActionUi = MutableStateFlow(CommunityActionUiState())
     val communityActionUi = _communityActionUi.asStateFlow()
     private val _supportUi = MutableStateFlow(WorkflowSubmissionUiState())
@@ -90,7 +82,6 @@ internal class RtcResidentCoordinator(
     }
 
     fun acceptCommunityGuidelines() {
-        if (!requireAuthenticated("accept the Community Guidelines and participate")) return
         scope.launch {
             _communityActionUi.value = CommunityActionUiState(
                 action = CommunityAction.GUIDELINES,
@@ -121,7 +112,6 @@ internal class RtcResidentCoordinator(
     }
 
     fun createCommunityComment(postId: String, body: String) {
-        if (!requireAuthenticated("comment on Community posts")) return
         scope.launch {
             _communityActionUi.value = CommunityActionUiState(
                 action = CommunityAction.COMMENT,
@@ -148,7 +138,6 @@ internal class RtcResidentCoordinator(
     }
 
     fun toggleCommunityPostLike(postId: String) {
-        if (!requireAuthenticated("react to Community posts")) return
         scope.launch {
             _communityActionUi.value = CommunityActionUiState(
                 action = CommunityAction.LIKE,
@@ -175,7 +164,6 @@ internal class RtcResidentCoordinator(
     }
 
     fun updateCommunityComment(postId: String, commentId: String, body: String) {
-        if (!requireAuthenticated("edit your Community comments")) return
         scope.launch {
             repository.updateCommunityComment(postId, commentId, body)
                 .onFailure {
@@ -192,7 +180,6 @@ internal class RtcResidentCoordinator(
     }
 
     fun deleteCommunityComment(postId: String, commentId: String) {
-        if (!requireAuthenticated("remove your Community comments")) return
         scope.launch {
             repository.deleteCommunityComment(postId, commentId)
                 .onFailure {
@@ -208,7 +195,6 @@ internal class RtcResidentCoordinator(
     fun dismissLiveContentMessage() = repository.dismissLiveContentMessage()
 
     fun markNotificationsRead() {
-        if (!requireAuthenticated("update notification status")) return
         scope.launch {
             repository.markAllNotificationsRead()
                 .onFailure {
@@ -230,7 +216,6 @@ internal class RtcResidentCoordinator(
     }
 
     fun reportCommunityPost(postId: String, reason: ModerationReason, detail: String) {
-        if (!requireAuthenticated("report Community content")) return
         scope.launch {
             showGlobalMessage("", false, true)
             repository.reportCommunityPost(postId, reason, detail)
@@ -246,7 +231,6 @@ internal class RtcResidentCoordinator(
     }
 
     fun createPost(text: String, mediaUris: List<Uri> = emptyList()) {
-        if (!requireAuthenticated("publish a Community post")) return
         scope.launch {
             _communityActionUi.value = CommunityActionUiState(
                 action = CommunityAction.POST,
@@ -273,7 +257,6 @@ internal class RtcResidentCoordinator(
     }
 
     fun submitSupportRequest(title: String, detail: String) {
-        if (!requireAuthenticated("submit a support request")) return
         scope.launch {
             _supportUi.value = WorkflowSubmissionUiState(isWorking = true)
             repository.submitSupportRequest(title, detail)
@@ -312,7 +295,6 @@ internal class RtcResidentCoordinator(
     }
 
     fun updateAssignedSupportCaseState(caseId: String, state: String, note: String) {
-        if (!requireAuthenticated("update assigned support work")) return
         scope.launch {
             _assignedSupportCaseUi.value = WorkflowSubmissionUiState(isWorking = true)
             repository.updateAssignedSupportCaseState(caseId, state, note)
@@ -335,7 +317,6 @@ internal class RtcResidentCoordinator(
     }
 
     fun addSupportCaseMessage(caseId: String, body: String) {
-        if (!requireAuthenticated("send a support message")) return
         scope.launch {
             repository.addSupportCaseMessage(caseId, body)
                 .onFailure {

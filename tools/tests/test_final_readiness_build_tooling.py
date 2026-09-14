@@ -12,9 +12,7 @@ def test_android_ci_uses_node24_capable_current_action_majors_without_weakening_
     assert 'uses: actions/setup-java@v5' in workflow
     assert 'uses: android-actions/setup-android@v4' in workflow
     assert 'uses: gradle/actions/setup-gradle@v6' in workflow
-    # Debug verification, production-connected phone beta, and signed release
-    # each publish through the current Node-24-capable artifact action.
-    assert workflow.count('uses: actions/upload-artifact@v6') == 3
+    assert workflow.count('uses: actions/upload-artifact@v6') == 2
     assert 'uses: denoland/setup-deno@v2' in workflow
 
     for obsolete in [

@@ -11,11 +11,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Public Complete SDK flavor; no API key or private Maven credentials belong here.
-        maven {
-            url = uri("https://repositories.tomtom.com/artifactory/maven")
-            content { includeGroupByRegex("com\\.tomtom\\..*") }
-        }
     }
 }
 

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import za.org.rtc.community.feature.events.domain.CommunityEvent
 import za.org.rtc.community.feature.publicreports.domain.PublicReportScope
 import za.org.rtc.community.ui.components.RtcCard
 import za.org.rtc.community.ui.theme.RtcSpacing
@@ -114,6 +116,28 @@ fun HomePostComposerCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+fun HomeUpcomingEventsCard(
+    events: List<CommunityEvent>,
+    onOpenEvents: () -> Unit,
+) {
+    RtcCard(modifier = Modifier.fillMaxWidth(), onClick = onOpenEvents) {
+        Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
+            Text("Upcoming Events", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (events.isEmpty()) {
+                Text("No local events are scheduled yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                events.take(3).forEach { event ->
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(event.title, modifier = Modifier.weight(1f))
+                        Text(event.startsAt.toString().take(10), style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
         }
     }
 }

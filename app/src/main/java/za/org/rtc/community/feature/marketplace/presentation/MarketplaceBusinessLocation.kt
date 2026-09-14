@@ -53,7 +53,6 @@ fun MarketplaceLocationCard(
     businessName: String,
     onGetDirections: () -> Unit,
     modifier: Modifier = Modifier,
-    directionsAvailable: Boolean = true,
 ) {
     var expandedSchedule by rememberSaveable { mutableStateOf(false) }
     val evaluator = remember { MarketplaceHoursEvaluator() }
@@ -291,7 +290,6 @@ fun MarketplaceLocationCard(
             // Get Directions Button
             Button(
                 onClick = onGetDirections,
-                enabled = directionsAvailable,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -299,7 +297,7 @@ fun MarketplaceLocationCard(
             ) {
                 Icon(Icons.Filled.Directions, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(if (directionsAvailable) "Get Directions" else "Map location not published", fontWeight = FontWeight.Bold)
+                Text("Get Directions", fontWeight = FontWeight.Bold)
             }
         }
     }

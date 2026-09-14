@@ -1,7 +1,9 @@
 package za.org.rtc.community.feature.community
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -90,6 +92,7 @@ import androidx.compose.material.icons.outlined.Reply
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Surface
 import za.org.rtc.community.core.CommunityComment
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun CommunityPostDetailScreen(
@@ -168,6 +171,7 @@ internal fun CommunityPostDetailScreen(
     }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+
     val sharedModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
         with(sharedTransitionScope) {
             Modifier.sharedBounds(
@@ -182,15 +186,47 @@ internal fun CommunityPostDetailScreen(
     } else {
         Modifier
     }
+
     if (activePost == null) {
-        CommunityPostDetailLoadingState(
-            postId = postId,
-            message = detailState.message,
-            sharedModifier = sharedModifier,
-            onRetry = { communityViewModel.loadPostDetail(postId) },
-        )
+        if (detailState.isLoading || postId.isNotBlank()) {
+            if (detailState.message == null) {
+                LazyColumn(contentPadding = PaddingValues(RtcSpacing.standard), verticalArrangement = Arrangement.spacedBy(RtcSpacing.small)) {
+                    item {
+                        PostCardSkeleton(modifier = Modifier.fillMaxWidth().then(sharedModifier))
+                    }
+                    item {
+                        Spacer(Modifier.height(RtcSpacing.small))
+                        SkeletonBox(height = 20.dp, width = 120.dp)
+                    }
+                    items(3) {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Row(modifier = Modifier.padding(RtcSpacing.small), verticalAlignment = Alignment.Top) {
+                                Box(modifier = Modifier.size(RtcSize.avatarCompact).skeletonPulse(shape = CircleShape))
+                                Spacer(Modifier.width(RtcSpacing.compact))
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    SkeletonBox(height = 14.dp, width = 100.dp)
+                                    SkeletonBox(height = 14.dp)
+                                    SkeletonBox(height = 14.dp, width = 180.dp)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    PurposefulEmptyState(detailState.message ?: "Community conversation unavailable.", "Retry") {
+                        communityViewModel.loadPostDetail(postId)
+                    }
+                }
+            }
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                PurposefulEmptyState("This Community post is no longer available.", "Return to Community", {})
+            }
+        }
         return
     }
+
     LazyColumn(contentPadding = PaddingValues(RtcSpacing.standard), verticalArrangement = Arrangement.spacedBy(RtcSpacing.small)) {
         item {
             Card(modifier = Modifier.fillMaxWidth().then(sharedModifier)) {
@@ -415,6 +451,7 @@ internal fun CommunityPostDetailScreen(
             val depth = threaded.depth
             val isOwner = comment.authorId == session.id
             val commentPending = comment.id in detailState.pendingCommentIds
+            
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -557,6 +594,7 @@ internal fun CommunityPostDetailScreen(
             }
         }
     }
+    
     if (selectedMediaIndex != null || mediaGalleryOpen) {
         FullScreenMediaGallery(
             media = activePost.media,

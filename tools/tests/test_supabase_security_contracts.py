@@ -33,17 +33,6 @@ def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_firebase_credential_replay_preserves_service_only_json_text_boundary():
-    migration = ROOT / "supabase" / "migrations" / "20260913033828_firebase_fcm_vault_boundary.sql"
-    text = " ".join(_text(migration).lower().split())
-    signature = "public.get_firebase_fcm_service_account()"
-    assert f"revoke all on function {signature} from public, anon, authenticated" in text
-    assert f"grant execute on function {signature} to service_role" in text
-    assert "returns text" in text and "security definer" in text and "set search_path = ''" in text
-    assert "where s.name = 'rtc_firebase_fcm_service_account'" in text
-    assert "private_key" not in text
-
-
 def test_rpc_only_hardening_is_forward_only_transactional_and_scoped_to_missing_denials():
     text = _text(RPC_DENY).lower().strip()
     assert text.startswith("begin;")

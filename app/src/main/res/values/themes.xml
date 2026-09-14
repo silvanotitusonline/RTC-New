@@ -10,7 +10,7 @@
 
     <style name="Theme.RtcCommunity.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#0C1013</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/rtc_splash_logo</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/rtc_community_logo_transparent</item>
         <item name="postSplashScreenTheme">@style/Theme.RtcCommunity</item>
         <item name="android:windowBackground">@drawable/rtc_splash_background</item>
     </style>

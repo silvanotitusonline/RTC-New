@@ -33,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceBusinessDetail
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceRating
@@ -51,10 +52,10 @@ internal fun MarketplaceBusinessDetailContent(
     onAddReview: (Int, String, String, List<String>) -> Unit,
     onReportBusiness: (reason: String, details: String) -> Unit = { _, _ -> },
 ) {
+    val context = LocalContext.current
     var showReviewDialog by rememberSaveable { mutableStateOf(false) }
     var showReportDialog by rememberSaveable { mutableStateOf(false) }
     var isBookmarked by rememberSaveable(detail.saved) { mutableStateOf(detail.saved) }
-    val publishedLocations = remember(detail) { detail.toMarketplaceMapListings() }
     val activeRating = remember(reviewsState, detail.rating) {
         (reviewsState as? MarketplaceLoadState.Data)?.value?.second ?: detail.rating
     }
@@ -108,6 +109,18 @@ internal fun MarketplaceBusinessDetailContent(
                     horizontalArrangement = Arrangement.spacedBy(RtcSpacing.controlGap),
                     verticalArrangement = Arrangement.spacedBy(RtcSpacing.controlGap),
                 ) {
+                    Button(
+                        onClick = {
+                            onNavigate(
+                                RtcRoute.serviceCentreRequest(
+                                    providerId = detail.card.id,
+                                    businessId = detail.card.id,
+                                    offeringId = detail.offerings.firstOrNull()?.id,
+                                ),
+                            )
+                        },
+                        modifier = Modifier.height(RtcSize.minimumTouchTarget),
+                    ) { Text(MarketplaceRequestBookingLabel) }
                     OutlinedButton(
                         onClick = {
                             val next = !isBookmarked
@@ -123,8 +136,14 @@ internal fun MarketplaceBusinessDetailContent(
                         Text(if (isBookmarked) "Saved" else "Save")
                     }
                     OutlinedButton(
-                        onClick = { onNavigate(RtcRoute.marketplaceDirections(detail.card.id)) },
-                        enabled = publishedLocations.isNotEmpty(),
+                        onClick = {
+                            launchDeviceMapDirections(
+                                context = context,
+                                location = detail.locations.firstOrNull(),
+                                businessName = detail.card.displayName,
+                                localityFallback = detail.card.locality,
+                            )
+                        },
                         modifier = Modifier.height(RtcSize.minimumTouchTarget),
                     ) {
                         Icon(Icons.Filled.LocationOn, contentDescription = null)
@@ -183,6 +202,18 @@ internal fun MarketplaceBusinessDetailContent(
                         Text(offering.title, fontWeight = FontWeight.Bold)
                         offering.description.takeIf(String::isNotBlank)?.let { Text(it) }
                         Text(offering.priceLabel, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                        Button(
+                            onClick = {
+                                onNavigate(
+                                    RtcRoute.serviceCentreRequest(
+                                        providerId = detail.card.id,
+                                        businessId = detail.card.id,
+                                        offeringId = offering.id,
+                                    ),
+                                )
+                            },
+                            modifier = Modifier.height(RtcSize.minimumTouchTarget),
+                        ) { Text(MarketplaceRequestBookingLabel) }
                     }
                 }
             }
@@ -194,8 +225,14 @@ internal fun MarketplaceBusinessDetailContent(
                 MarketplaceLocationCard(
                     location = location,
                     businessName = detail.card.displayName,
-                    directionsAvailable = location.publicMapMarker(detail.card) != null,
-                    onGetDirections = { onNavigate(RtcRoute.marketplaceDirections(detail.card.id, location.id)) },
+                    onGetDirections = {
+                        launchDeviceMapDirections(
+                            context = context,
+                            location = location,
+                            businessName = detail.card.displayName,
+                            localityFallback = detail.card.locality,
+                        )
+                    },
                 )
             }
         }

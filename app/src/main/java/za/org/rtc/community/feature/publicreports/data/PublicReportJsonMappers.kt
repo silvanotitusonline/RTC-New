@@ -71,8 +71,6 @@ object PublicReportJsonMappers {
             status = status(row.string("status")),
             identityMode = identityMode,
             publicLocationLabel = row.string("public_location_label").orEmpty(),
-            publicLatitude = row.double("public_latitude"),
-            publicLongitude = row.double("public_longitude"),
             authorDisplayName = author,
             verified = row.string("verified_at") != null,
             verificationReason = row.string("verification_reason"),

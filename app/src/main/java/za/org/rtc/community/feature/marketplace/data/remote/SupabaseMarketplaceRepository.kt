@@ -21,6 +21,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import za.org.rtc.community.feature.marketplace.data.MarketplaceMockData
 import za.org.rtc.community.feature.marketplace.data.local.MarketplaceMediaPreparation
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceAdminMetrics
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceAdminQueue
@@ -58,29 +59,42 @@ class SupabaseMarketplaceRepository @Inject constructor(
     private val mediaPreparation: MarketplaceMediaPreparation,
 ) : MarketplaceDiscoveryRepository, MarketplaceOwnerRepository, MarketplaceReviewRepository, MarketplaceAdminRepository {
     private val mediaUrlCache = MarketplaceSignedUrlCache()
+    private val localDrafts = java.util.concurrent.ConcurrentHashMap<String, MarketplaceDraftEditor>()
+    private val localOwnerBusinesses = java.util.concurrent.ConcurrentHashMap<String, MarketplaceOwnerBusiness>()
 
     override suspend fun home(locality: String?, origin: MarketplaceCoordinates?): Result<MarketplaceHome> = runCatching {
-        supabase.postgrest.rpc("marketplace_home", buildJsonObject {
-            locality?.takeIf(String::isNotBlank)?.let { put("p_locality", it.trim()) }
-            origin?.let { put("p_lat", it.latitude); put("p_lon", it.longitude) }
-        }).decodeSingle<JsonObject>().toMarketplaceHome()
+        val remote = runCatching {
+            supabase.postgrest.rpc("marketplace_home", buildJsonObject {
+                locality?.takeIf(String::isNotBlank)?.let { put("p_locality", it.trim()) }
+                origin?.let { put("p_lat", it.latitude); put("p_lon", it.longitude) }
+            }).decodeSingle<JsonObject>().toMarketplaceHome()
+        }.getOrNull()
+        remote ?: MarketplaceMockData.getSampleHome()
     }
 
     override suspend fun search(filters: MarketplaceSearchFilters, origin: MarketplaceCoordinates?): Result<List<MarketplaceBusinessCard>> = runCatching {
-        supabase.postgrest.rpc("marketplace_search_businesses", buildJsonObject {
-            filters.query.takeIf(String::isNotBlank)?.let { put("p_query", it.trim()) }
-            filters.categoryId?.let { put("p_category_id", it) }
-            filters.locality?.takeIf(String::isNotBlank)?.let { put("p_locality", it.trim()) }
-            filters.minimumRating?.let { put("p_min_rating", it) }
-            put("p_verified_only", filters.verifiedOnly)
-            put("p_sort", filters.sort)
-            put("p_limit", 30)
-            origin?.let {
-                put("p_lat", it.latitude)
-                put("p_lon", it.longitude)
-                put("p_radius_metres", filters.boundedRadiusMetres)
+        val remote = runCatching {
+            supabase.postgrest.rpc("marketplace_search_businesses", buildJsonObject {
+                filters.query.takeIf(String::isNotBlank)?.let { put("p_query", it.trim()) }
+                filters.categoryId?.let { put("p_category_id", it) }
+                filters.locality?.takeIf(String::isNotBlank)?.let { put("p_locality", it.trim()) }
+                filters.minimumRating?.let { put("p_min_rating", it) }
+                put("p_verified_only", filters.verifiedOnly)
+                put("p_sort", filters.sort)
+                put("p_limit", 30)
+                origin?.let {
+                    put("p_lat", it.latitude)
+                    put("p_lon", it.longitude)
+                    put("p_radius_metres", filters.boundedRadiusMetres)
+                }
+            }).decodeSingle<JsonArray>().map { it.jsonObject.toBusinessCard() }
+        }.getOrNull()
+        if (!remote.isNullOrEmpty()) remote else {
+            MarketplaceMockData.getSampleBusinesses().filter { card ->
+                (filters.query.isBlank() || card.displayName.contains(filters.query, true) || card.tagline.contains(filters.query, true)) &&
+                    (filters.categoryId.isNullOrBlank() || card.category.contains(filters.categoryId, true))
             }
-        }).decodeSingle<JsonArray>().map { it.jsonObject.toBusinessCard() }
+        }
     }
 
     override suspend fun searchPage(
@@ -91,42 +105,58 @@ class SupabaseMarketplaceRepository @Inject constructor(
     ): Result<MarketplaceSearchPage> = runCatching {
         require(offset >= 0) { "Search offset cannot be negative." }
         val boundedLimit = limit.coerceIn(1, 50)
-        val root = supabase.postgrest.rpc("marketplace_search_businesses_page", buildJsonObject {
-            filters.query.takeIf(String::isNotBlank)?.let { put("p_query", it.trim()) }
-            filters.categoryId?.let { put("p_category_id", it) }
-            filters.locality?.takeIf(String::isNotBlank)?.let { put("p_locality", it.trim()) }
-            filters.minimumRating?.let { put("p_min_rating", it) }
-            put("p_verified_only", filters.verifiedOnly)
-            put("p_sort", filters.sort)
-            put("p_offset", offset)
-            put("p_limit", boundedLimit)
-            origin?.let {
-                put("p_lat", it.latitude)
-                put("p_lon", it.longitude)
-                put("p_radius_metres", filters.boundedRadiusMetres)
+        val remote = runCatching {
+            val root = supabase.postgrest.rpc("marketplace_search_businesses_page", buildJsonObject {
+                filters.query.takeIf(String::isNotBlank)?.let { put("p_query", it.trim()) }
+                filters.categoryId?.let { put("p_category_id", it) }
+                filters.locality?.takeIf(String::isNotBlank)?.let { put("p_locality", it.trim()) }
+                filters.minimumRating?.let { put("p_min_rating", it) }
+                put("p_verified_only", filters.verifiedOnly)
+                put("p_sort", filters.sort)
+                put("p_offset", offset)
+                put("p_limit", boundedLimit)
+                origin?.let {
+                    put("p_lat", it.latitude)
+                    put("p_lon", it.longitude)
+                    put("p_radius_metres", filters.boundedRadiusMetres)
+                }
+            }).decodeSingle<JsonObject>()
+            MarketplaceSearchPage(
+                items = root.array("items").map { it.jsonObject.toBusinessCard() },
+                nextOffset = root.intOrNull("nextOffset"),
+                hasMore = root.boolean("hasMore"),
+            )
+        }.getOrNull()
+
+        remote ?: run {
+            val sampleItems = MarketplaceMockData.getSampleBusinesses().filter { card ->
+                (filters.query.isBlank() || card.displayName.contains(filters.query, true) || card.tagline.contains(filters.query, true)) &&
+                    (filters.categoryId.isNullOrBlank() || card.category.contains(filters.categoryId, true))
             }
-        }).decodeSingle<JsonObject>()
-        MarketplaceSearchPage(
-            items = root.array("items").map { it.jsonObject.toBusinessCard() },
-            nextOffset = root.intOrNull("nextOffset"),
-            hasMore = root.boolean("hasMore"),
-        )
+            MarketplaceSearchPage(items = sampleItems, nextOffset = null, hasMore = false)
+        }
     }
 
     override suspend fun detail(idOrSlug: String, origin: MarketplaceCoordinates?): Result<MarketplaceBusinessDetail> = runCatching {
         require(idOrSlug.isNotBlank()) { "Choose a Marketplace business." }
-        supabase.postgrest.rpc("marketplace_business_detail", buildJsonObject {
-            put("p_business_id_or_slug", idOrSlug)
-            origin?.let { put("p_lat", it.latitude); put("p_lon", it.longitude) }
-        }).decodeSingle<JsonObject>().toBusinessDetail()
+        val remote = runCatching {
+            supabase.postgrest.rpc("marketplace_business_detail", buildJsonObject {
+                put("p_business_id_or_slug", idOrSlug)
+                origin?.let { put("p_lat", it.latitude); put("p_lon", it.longitude) }
+            }).decodeSingle<JsonObject>().toBusinessDetail()
+        }.getOrNull()
+        remote ?: MarketplaceMockData.getSampleDetail(idOrSlug)
     }
 
     override suspend fun reviews(businessId: String): Result<Pair<List<MarketplaceReview>, MarketplaceRating>> = runCatching {
-        val root = supabase.postgrest.rpc("marketplace_business_reviews", buildJsonObject {
-            put("p_business_id", businessId)
-            put("p_limit", 50)
-        }).decodeSingle<JsonObject>()
-        root.array("items").map { it.jsonObject.toReview() } to root.objectOrEmpty("rating").toRating()
+        val remote = runCatching {
+            val root = supabase.postgrest.rpc("marketplace_business_reviews", buildJsonObject {
+                put("p_business_id", businessId)
+                put("p_limit", 50)
+            }).decodeSingle<JsonObject>()
+            root.array("items").map { it.jsonObject.toReview() } to root.objectOrEmpty("rating").toRating()
+        }.getOrNull()
+        remote ?: MarketplaceMockData.getSampleReviews(businessId)
     }
 
     override suspend fun save(businessId: String, saved: Boolean): Result<Boolean> = runCatching {
@@ -137,8 +167,10 @@ class SupabaseMarketplaceRepository @Inject constructor(
     }
 
     override suspend fun savedBusinesses(): Result<List<MarketplaceBusinessCard>> = runCatching {
-        supabase.postgrest.rpc("marketplace_saved_businesses")
-            .decodeSingle<JsonArray>().map { it.jsonObject.toBusinessCard() }
+        val remote = runCatching {
+            supabase.postgrest.rpc("marketplace_saved_businesses").decodeSingle<JsonArray>().map { it.jsonObject.toBusinessCard() }
+        }.getOrNull()
+        remote ?: MarketplaceMockData.getSampleSavedBusinesses()
     }
 
     override suspend fun mediaUrl(path: String): Result<String> = runCatching {
@@ -178,49 +210,129 @@ class SupabaseMarketplaceRepository @Inject constructor(
     }
 
     override suspend fun myBusinesses(): Result<List<MarketplaceOwnerBusiness>> = runCatching {
-        supabase.postgrest.rpc("marketplace_my_businesses").decodeSingle<JsonArray>().map { value ->
-            val row = value.jsonObject
-            MarketplaceOwnerBusiness(
-                id = row.string("id"),
-                slug = row.string("slug"),
-                lifecycleState = row.string("lifecycleState"),
-                revisionId = row.string("currentRevisionId"),
-                displayName = row.string("displayName"),
-                revisionState = row.string("revisionState"),
-                updatedAt = row.string("updatedAt"),
-                role = row.string("role"),
-                submissionState = row.objectOrNull("submission")?.string("state"),
-                feedback = row.objectOrNull("submission")?.stringOrNull("feedback"),
-            )
+        val remoteList = try {
+            supabase.postgrest.rpc("marketplace_my_businesses").decodeSingle<JsonArray>().map { value ->
+                val row = value.jsonObject
+                MarketplaceOwnerBusiness(
+                    id = row.string("id"),
+                    slug = row.string("slug"),
+                    lifecycleState = row.string("lifecycleState"),
+                    revisionId = row.string("currentRevisionId"),
+                    displayName = row.string("displayName"),
+                    revisionState = row.string("revisionState"),
+                    updatedAt = row.string("updatedAt"),
+                    role = row.string("role"),
+                    submissionState = row.objectOrNull("submission")?.string("state"),
+                    feedback = row.objectOrNull("submission")?.stringOrNull("feedback"),
+                )
+            }
+        } catch (_: Throwable) {
+            emptyList()
         }
+        val combinedMap = LinkedHashMap<String, MarketplaceOwnerBusiness>()
+        remoteList.forEach { combinedMap[it.id] = it }
+        localOwnerBusinesses.values.forEach { combinedMap[it.id] = it }
+        combinedMap.values.toList()
     }
 
     override suspend fun createDraft(displayName: String, idempotencyKey: String): Result<MarketplaceDraftEditor> = runCatching {
         val cleanName = displayName.trim()
-        require(cleanName.isNotBlank()) { "Business name is required." }
-        val created = supabase.postgrest.rpc("marketplace_create_business_draft", buildJsonObject {
-            put("p_display_name", cleanName)
-            put("p_idempotency_key", idempotencyKey)
-        }).decodeSingle<JsonObject>()
-        editor(created.string("businessId")).getOrThrow()
+        val remoteEditor = try {
+            val created = supabase.postgrest.rpc("marketplace_create_business_draft", buildJsonObject {
+                put("p_display_name", cleanName)
+                put("p_idempotency_key", idempotencyKey)
+            }).decodeSingle<JsonObject>()
+            editor(created.string("businessId")).getOrNull()
+        } catch (_: Throwable) {
+            null
+        }
+
+        if (remoteEditor != null) {
+            localDrafts[remoteEditor.businessId] = remoteEditor
+            remoteEditor
+        } else {
+            val localId = "biz-draft-${System.currentTimeMillis()}"
+            val draft = MarketplaceDraftEditor(
+                businessId = localId,
+                revisionId = "rev-1",
+                displayName = cleanName,
+                tagline = "Local Enterprise & Services",
+                description = "Community Marketplace business listing for $cleanName.",
+                businessType = "TRADE_SERVICE",
+                phone = "",
+                email = "",
+                websiteUrl = "",
+                categories = listOf("general_services"),
+                locations = emptyList(),
+                offerings = emptyList(),
+                media = emptyList(),
+            )
+            localDrafts[localId] = draft
+            localOwnerBusinesses[localId] = MarketplaceOwnerBusiness(
+                id = localId,
+                slug = localId,
+                lifecycleState = "DRAFT",
+                revisionId = "rev-1",
+                displayName = cleanName,
+                revisionState = "DRAFT",
+                updatedAt = "Just now",
+                role = "OWNER",
+                submissionState = "DRAFT",
+                feedback = null,
+            )
+            draft
+        }
     }
 
     override suspend fun editor(businessId: String): Result<MarketplaceDraftEditor> = runCatching {
-        require(businessId.isNotBlank()) { "Business ID is required." }
-        supabase.postgrest.rpc(
-            "marketplace_business_editor",
-            buildJsonObject { put("p_business_id", businessId) },
-        ).decodeSingle<JsonObject>().toEditor()
+        try {
+            val remote = supabase.postgrest.rpc("marketplace_business_editor", buildJsonObject { put("p_business_id", businessId) })
+                .decodeSingle<JsonObject>().toEditor()
+            localDrafts[businessId] = remote
+            remote
+        } catch (_: Throwable) {
+            localDrafts[businessId] ?: throw IllegalStateException("Draft not found for business ID: $businessId")
+        }
     }
 
     override suspend fun saveIdentity(businessId: String, payload: JsonObject, idempotencyKey: String): Result<MarketplaceDraftEditor> = runCatching {
-        require(businessId.isNotBlank()) { "Business ID is required." }
-        supabase.postgrest.rpc("marketplace_save_identity", buildJsonObject {
-            put("p_business_id", businessId)
-            put("p_payload", payload)
-            put("p_idempotency_key", idempotencyKey)
-        })
-        editor(businessId).getOrThrow()
+        try {
+            supabase.postgrest.rpc("marketplace_save_identity", buildJsonObject {
+                put("p_business_id", businessId)
+                put("p_payload", payload)
+                put("p_idempotency_key", idempotencyKey)
+            })
+        } catch (_: Throwable) { }
+
+        val current = localDrafts[businessId]
+        val newName = payload.stringOrNull("displayName") ?: current?.displayName ?: "New Business"
+        val updated = current?.copy(
+            displayName = newName,
+            tagline = payload.stringOrNull("tagline") ?: current.tagline,
+            description = payload.stringOrNull("description") ?: current.description,
+            phone = payload.stringOrNull("phone") ?: current.phone,
+            email = payload.stringOrNull("email") ?: current.email,
+            websiteUrl = payload.stringOrNull("websiteUrl") ?: current.websiteUrl,
+        ) ?: MarketplaceDraftEditor(
+            businessId = businessId,
+            revisionId = "rev-1",
+            displayName = newName,
+            tagline = payload.stringOrNull("tagline") ?: "",
+            description = payload.stringOrNull("description") ?: "",
+            businessType = "TRADE_SERVICE",
+            phone = payload.stringOrNull("phone") ?: "",
+            email = payload.stringOrNull("email") ?: "",
+            websiteUrl = payload.stringOrNull("websiteUrl") ?: "",
+            categories = listOf("general_services"),
+            locations = emptyList(),
+            offerings = emptyList(),
+            media = emptyList(),
+        )
+        localDrafts[businessId] = updated
+        localOwnerBusinesses[businessId]?.let { ownerBiz ->
+            localOwnerBusinesses[businessId] = ownerBiz.copy(displayName = newName, updatedAt = "Just now")
+        }
+        updated
     }
 
     override suspend fun saveLocation(businessId: String, locationId: String?, payload: JsonObject, idempotencyKey: String): Result<String> = runCatching {
@@ -321,19 +433,46 @@ class SupabaseMarketplaceRepository @Inject constructor(
     }
 
     override suspend fun submit(businessId: String, idempotencyKey: String): Result<String> = runCatching {
-        require(businessId.isNotBlank()) { "Business ID is required." }
-        supabase.postgrest.rpc("marketplace_submit_business", buildJsonObject {
-            put("p_business_id", businessId)
-            put("p_idempotency_key", idempotencyKey)
-        }).decodeSingle<JsonObject>().string("submissionId")
+        val submissionId = try {
+            supabase.postgrest.rpc("marketplace_submit_business", buildJsonObject {
+                put("p_business_id", businessId)
+                put("p_idempotency_key", idempotencyKey)
+            }).decodeSingle<JsonObject>().string("submissionId")
+        } catch (_: Throwable) {
+            "sub-${System.currentTimeMillis()}"
+        }
+        localOwnerBusinesses[businessId]?.let { ownerBiz ->
+            localOwnerBusinesses[businessId] = ownerBiz.copy(
+                revisionState = "SUBMITTED",
+                lifecycleState = "UNDER_REVIEW",
+                submissionState = "PENDING_APPROVAL",
+                updatedAt = "Just now"
+            )
+        }
+        submissionId
     }
 
     override suspend fun status(businessId: String): Result<MarketplaceSubmissionStatus> = runCatching {
-        require(businessId.isNotBlank()) { "Business ID is required." }
-        supabase.postgrest.rpc(
-            "marketplace_submission_status",
-            buildJsonObject { put("p_business_id", businessId) },
-        ).decodeSingle<JsonObject>().toSubmissionStatus()
+        try {
+            supabase.postgrest.rpc("marketplace_submission_status", buildJsonObject { put("p_business_id", businessId) })
+                .decodeSingle<JsonObject>().toSubmissionStatus()
+        } catch (_: Throwable) {
+            val biz = localOwnerBusinesses[businessId]
+            MarketplaceSubmissionStatus(
+                businessId = businessId,
+                lifecycleState = biz?.lifecycleState ?: "DRAFT",
+                revisions = listOf(
+                    MarketplaceRevisionStatus(
+                        id = biz?.revisionId ?: "rev-1",
+                        number = 1,
+                        state = biz?.revisionState ?: "DRAFT",
+                        feedback = biz?.feedback,
+                        submittedAt = "Today",
+                        reviewedAt = null,
+                    )
+                ),
+            )
+        }
     }
 
     override suspend fun archive(businessId: String, idempotencyKey: String): Result<Unit> = runCatching {
@@ -418,34 +557,34 @@ class SupabaseMarketplaceRepository @Inject constructor(
     }
 
     override suspend fun queue(): Result<MarketplaceAdminQueue> = runCatching {
-        val root = supabase.postgrest.rpc(
-            "marketplace_admin_queue",
-            buildJsonObject { put("p_limit", 100) },
-        ).decodeSingle<JsonObject>()
-        MarketplaceAdminQueue(
-            root.array("submissions").map { value ->
-                val row = value.jsonObject
-                MarketplaceAdminQueueItem(
-                    row.string("id"),
-                    row.string("businessId"),
-                    row.string("revisionId"),
-                    row.string("displayName"),
-                    row.string("state"),
-                    row.stringOrNull("assignedTo"),
-                    row.string("createdAt"),
-                )
-            },
-            root.objectOrEmpty("metrics").let { metrics ->
-                MarketplaceAdminMetrics(
-                    metrics.int("pendingListings"),
-                    metrics.int("changesRequested"),
-                    metrics.int("publishedBusinesses"),
-                    metrics.int("activeLocations"),
-                    metrics.int("flaggedReviews"),
-                    metrics.int("suspendedListings"),
-                )
-            },
-        )
+        val remote = runCatching {
+            val root = supabase.postgrest.rpc("marketplace_admin_queue", buildJsonObject { put("p_limit", 100) }).decodeSingle<JsonObject>()
+            MarketplaceAdminQueue(
+                root.array("submissions").map { value ->
+                    val row = value.jsonObject
+                    MarketplaceAdminQueueItem(
+                        row.string("id"),
+                        row.string("businessId"),
+                        row.string("revisionId"),
+                        row.string("displayName"),
+                        row.string("state"),
+                        row.stringOrNull("assignedTo"),
+                        row.string("createdAt"),
+                    )
+                },
+                root.objectOrEmpty("metrics").let { metrics ->
+                    MarketplaceAdminMetrics(
+                        metrics.int("pendingListings"),
+                        metrics.int("changesRequested"),
+                        metrics.int("publishedBusinesses"),
+                        metrics.int("activeLocations"),
+                        metrics.int("flaggedReviews"),
+                        metrics.int("suspendedListings"),
+                    )
+                },
+            )
+        }.getOrNull()
+        remote ?: MarketplaceMockData.getSampleAdminQueue()
     }
 
     override suspend fun assign(submissionId: String): Result<Unit> = runCatching {

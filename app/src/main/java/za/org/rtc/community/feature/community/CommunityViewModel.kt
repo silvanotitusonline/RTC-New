@@ -1,9 +1,5 @@
 package za.org.rtc.community.feature.community
 
-import za.org.rtc.community.core.CommunityRealtimeNotification
-
-import za.org.rtc.community.core.BaseViewModel
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,14 +8,13 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import za.org.rtc.community.core.CommunityPost
 
 @HiltViewModel
 class CommunityViewModel @Inject constructor(
     private val repository: CommunityRepository,
-) : BaseViewModel() {
+) : ViewModel() {
     private val _feedState = MutableStateFlow(CommunityFeedState(initialLoading = true))
     val feedState = _feedState.asStateFlow()
 
@@ -469,43 +464,5 @@ class CommunityViewModel @Inject constructor(
         val state = _detailState.value
         val post = state.post ?: return
         if (post.id == postId) _detailState.value = state.copy(post = transform(post))
-    }
-
-    // --- Realtime notification stream ---
-
-    private val _unreadNotificationCount = MutableStateFlow(0)
-    val unreadNotificationCount = _unreadNotificationCount.asStateFlow()
-
-    private val _latestNotification = MutableStateFlow<CommunityRealtimeNotification?>(null)
-    val latestNotification = _latestNotification.asStateFlow()
-
-    private var notificationJob: Job? = null
-
-    /**
-     * Subscribes to the live community notification stream for [userId].
-     * Safe to call repeatedly; the previous collection is cancelled first.
-     */
-    fun startNotificationStream(userId: String) {
-        if (userId.isBlank()) return
-        notificationJob?.cancel()
-        notificationJob = viewModelScope.launch {
-            repository.observeNotificationEvents(userId).collect { notification ->
-                _latestNotification.value = notification
-                _unreadNotificationCount.value = _unreadNotificationCount.value + 1
-            }
-        }
-    }
-
-    fun markNotificationsSeen() {
-        _unreadNotificationCount.value = 0
-    }
-
-    fun clearLatestNotification() {
-        _latestNotification.value = null
-    }
-
-    override fun onCleared() {
-        notificationJob?.cancel()
-        super.onCleared()
     }
 }

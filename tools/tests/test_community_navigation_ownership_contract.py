@@ -44,7 +44,7 @@ def test_community_feed_navigation_does_not_accept_legacy_feed_state_or_reaction
         assert obsolete not in feed_signature, obsolete
 
     community_route = re.search(
-        r"composable\(RtcRoute\.COMMUNITY_FEED\)\s*\{(.*?)\n\s*\}\n\s*marketplaceNavBindings\(",
+        r"composable\(RtcRoute\.COMMUNITY_FEED\) \{(.*?)\n        \}\n        composable\(RtcRoute\.MARKETPLACE_HOME\)",
         NAV,
         re.S,
     )

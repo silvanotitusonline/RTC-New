@@ -6,27 +6,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.handleDeeplinks
 import javax.inject.Inject
 import za.org.rtc.community.app.RtcViewModel
-import za.org.rtc.community.core.UserRole
-import za.org.rtc.community.feature.dailypost.presentation.DailyPostGlobalHost
 import za.org.rtc.community.ui.config.RtcConfiguredAppRoot
+import za.org.rtc.community.ui.navigation.ServiceCentreDeepLinkScope
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var supabase: SupabaseClient
     private val rtcViewModel: RtcViewModel by viewModels()
-    private val pendingDailyPostId = mutableStateOf<String?>(null)
+    private val pendingServiceCentreBookingId = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -40,21 +34,16 @@ class MainActivity : ComponentActivity() {
         handleCommunityAlertIntent(intent)
         handleCommunityPostIntent(intent)
         handlePublicReportIntent(intent)
-        handleDailyPostIntent(intent)
+        handleServiceCentreIntent(intent)
         applyDebugSessionIntent(intent)
         setTheme(R.style.Theme_RtcCommunity)
         enableEdgeToEdge()
         setContent {
-            val session by rtcViewModel.session.collectAsStateWithLifecycle()
-            Box(modifier = Modifier.fillMaxSize()) {
+            ServiceCentreDeepLinkScope(
+                bookingId = pendingServiceCentreBookingId.value,
+                onConsumed = { pendingServiceCentreBookingId.value = null },
+            ) {
                 RtcConfiguredAppRoot(rtcViewModel)
-                if (session.role != UserRole.ANONYMOUS_PUBLIC) {
-                    DailyPostGlobalHost(
-                        currentUserId = session.id,
-                        requestedPostId = pendingDailyPostId.value,
-                        onRequestedPostConsumed = { pendingDailyPostId.value = null },
-                    )
-                }
             }
         }
     }
@@ -68,7 +57,7 @@ class MainActivity : ComponentActivity() {
         handleCommunityAlertIntent(intent)
         handleCommunityPostIntent(intent)
         handlePublicReportIntent(intent)
-        handleDailyPostIntent(intent)
+        handleServiceCentreIntent(intent)
         applyDebugSessionIntent(intent)
     }
 
@@ -114,29 +103,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun handleDailyPostIntent(intent: Intent?) {
-        val postId = intent?.getStringExtra(EXTRA_DAILY_POST_ID)
+    private fun handleServiceCentreIntent(intent: Intent?) {
+        val bookingId = intent?.getStringExtra(EXTRA_SERVICE_BOOKING_ID)
             ?: intent?.data
-                ?.takeIf {
-                    it.scheme == "rtc" && it.host == "community" &&
-                        it.pathSegments.firstOrNull() == "daily-post"
-                }
+                ?.takeIf { it.scheme == "rtc" && it.host == "service-centre" && it.pathSegments.firstOrNull() == "booking" }
                 ?.pathSegments?.getOrNull(1)
-        if (intent?.action == ACTION_OPEN_DAILY_POST || !postId.isNullOrBlank()) {
-            pendingDailyPostId.value = postId?.takeIf(::isSafeExternalId)
+        if (intent?.action == ACTION_OPEN_SERVICE_BOOKING || !bookingId.isNullOrBlank()) {
+            pendingServiceCentreBookingId.value = bookingId?.takeIf { value ->
+                value.length <= 128 && value.all { it.isLetterOrDigit() || it in "-_" }
+            }
         }
     }
-
-    private fun isSafeExternalId(value: String): Boolean =
-        value.length in 1..128 && value.all { it.isLetterOrDigit() || it in "-_" }
 
     companion object {
         const val ACTION_OPEN_COMMUNITY_ALERT = "za.org.rtc.community.OPEN_COMMUNITY_ALERT"
         const val EXTRA_COMMUNITY_ALERT_ID = "community_alert_id"
         const val ACTION_OPEN_PUBLIC_REPORT = "za.org.rtc.community.OPEN_PUBLIC_REPORT"
         const val EXTRA_PUBLIC_REPORT_ID = "public_report_id"
-        const val ACTION_OPEN_DAILY_POST = "za.org.rtc.community.OPEN_DAILY_POST"
-        const val EXTRA_DAILY_POST_ID = "daily_post_id"
+        const val ACTION_OPEN_SERVICE_BOOKING = "za.org.rtc.community.OPEN_SERVICE_BOOKING"
+        const val EXTRA_SERVICE_BOOKING_ID = "service_booking_id"
         const val EXTRA_DEBUG_SESSION_ROLE = "za.org.rtc.community.DEBUG_SESSION_ROLE"
         private const val DEBUG_RESIDENT_A = "RESIDENT_A"
     }

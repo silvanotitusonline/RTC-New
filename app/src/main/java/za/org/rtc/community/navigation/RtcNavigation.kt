@@ -11,11 +11,9 @@ object RtcRoute {
     const val SUPPORT = "resident_support"
     const val SUPPORT_CASE_DETAIL = "support_case/{caseId}"
     const val ACCOUNT = "account"
-    const val ACCOUNT_SETTINGS = "account/settings"
-    const val ACCOUNT_MESSAGES = "inbox?tab=messages"
     const val SERVICES = "services"
-    const val DAILY_POST_DETAIL = "daily-post/{postId}"
-    const val ADMIN_DAILY_POST = "admin/daily-post"
+    const val EVENTS = "events"
+    const val ADMIN_EVENTS = "admin/events"
     const val NOTIFICATIONS = "notifications"
     const val SEARCH = "search"
     const val HELP = "help"
@@ -65,13 +63,28 @@ object RtcRoute {
     const val ADMIN_MARKETPLACE_FEATURED = "admin/marketplace/featured"
     const val ADMIN_MARKETPLACE_ANALYTICS = "admin/marketplace/analytics"
 
-    fun dailyPost(postId: String) = "daily-post/$postId"
-    fun marketplaceDirections(businessId: String, locationId: String = "primary") =
-        "community/marketplace/business/${android.net.Uri.encode(businessId)}/directions/${android.net.Uri.encode(locationId)}"
+    const val SERVICE_CENTRE_HOME = "community/service-centre"
+    const val SERVICE_CENTRE_REQUEST = "community/service-centre/request/{providerId}"
+    const val SERVICE_CENTRE_REQUEST_PATTERN = "community/service-centre/request/{providerId}?businessId={businessId}&offeringId={offeringId}"
+    const val SERVICE_CENTRE_PROVIDER = "account/service-centre/provider"
+    const val SERVICE_CENTRE_BOOKINGS = "account/service-centre/bookings"
+    const val SERVICE_CENTRE_BOOKING = "account/service-centre/booking/{bookingId}"
+    const val SERVICE_CENTRE_CHAT = "account/service-centre/chat/{bookingId}"
+
     fun marketplaceBusiness(idOrSlug: String) = "community/marketplace/business/$idOrSlug"
     fun marketplaceReviews(businessId: String) = "community/marketplace/business/$businessId/reviews"
     fun marketplaceEdit(businessId: String) = "account/marketplace/business/$businessId/edit"
     fun marketplaceStatus(businessId: String) = "account/marketplace/business/$businessId/status"
+    fun serviceCentreRequest(providerId: String, businessId: String? = null, offeringId: String? = null): String = buildString {
+        append("community/service-centre/request/").append(providerId)
+        val query = listOfNotNull(
+            businessId?.let { "businessId=$it" },
+            offeringId?.let { "offeringId=$it" },
+        )
+        if (query.isNotEmpty()) append('?').append(query.joinToString("&"))
+    }
+    fun serviceCentreBooking(bookingId: String) = "account/service-centre/booking/$bookingId"
+    fun serviceCentreChat(bookingId: String) = "account/service-centre/chat/$bookingId"
     fun alertDetail(alertId: String) = "community_alert/$alertId"
     fun supportCaseDetail(caseId: String) = "support_case/$caseId"
     fun publicReportDetail(reportId: String) = "public-report/$reportId"

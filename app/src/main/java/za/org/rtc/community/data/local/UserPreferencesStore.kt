@@ -21,7 +21,6 @@ data class LocalUserPreferences(
     val theme: ThemePreference = ThemePreference.SYSTEM,
     val dynamicColor: Boolean = true,
     val simplifiedReading: Boolean = false,
-    val onboardingLanguage: String = "en",
 )
 
 /**
@@ -39,8 +38,6 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         val theme = stringPreferencesKey("theme")
         val dynamicColor = booleanPreferencesKey("dynamic_color")
         val reading = booleanPreferencesKey("simplified_reading")
-        val onboardingLanguage = stringPreferencesKey("onboarding_language")
-        val residentEntryGranted = booleanPreferencesKey("resident_entry_granted")
         val globalUiConfiguration = stringPreferencesKey("global_ui_configuration")
         val globalUiConfigurationVersion = stringPreferencesKey("global_ui_configuration_version")
         val rememberedEmail = stringPreferencesKey("remembered_email")
@@ -50,14 +47,18 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         val cachedIsAdmin = booleanPreferencesKey("cached_is_admin")
     }
 
-    val cachedUserId: Flow<String> = context.rtcPreferences.data.map { values -> values[Keys.cachedUserId] ?: "" }
+    val cachedUserId: Flow<String> = context.rtcPreferences.data.map { values ->
+        values[Keys.cachedUserId] ?: ""
+    }
 
     val cachedUserRole: Flow<UserRole> = context.rtcPreferences.data.map { values ->
         val name = values[Keys.cachedUserRole] ?: UserRole.ANONYMOUS_PUBLIC.name
         runCatching { UserRole.valueOf(name) }.getOrDefault(UserRole.ANONYMOUS_PUBLIC)
     }
 
-    val cachedIsAdmin: Flow<Boolean> = context.rtcPreferences.data.map { values -> values[Keys.cachedIsAdmin] ?: false }
+    val cachedIsAdmin: Flow<Boolean> = context.rtcPreferences.data.map { values ->
+        values[Keys.cachedIsAdmin] ?: false
+    }
 
     suspend fun cacheUserRoles(userId: String, role: UserRole, isAdmin: Boolean) {
         context.rtcPreferences.edit { values ->
@@ -75,28 +76,22 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         }
     }
 
-    val rememberedEmail: Flow<String> = context.rtcPreferences.data.map { values -> values[Keys.rememberedEmail] ?: "" }
-    val isRememberMeEnabled: Flow<Boolean> = context.rtcPreferences.data.map { values -> values[Keys.rememberMe] ?: false }
+    val rememberedEmail: Flow<String> = context.rtcPreferences.data.map { values ->
+        values[Keys.rememberedEmail] ?: ""
+    }
+
+    val isRememberMeEnabled: Flow<Boolean> = context.rtcPreferences.data.map { values ->
+        values[Keys.rememberMe] ?: false
+    }
 
     val preferences: Flow<LocalUserPreferences> = context.rtcPreferences.data.map { values ->
         LocalUserPreferences(
-            theme = runCatching { ThemePreference.valueOf(values[Keys.theme] ?: ThemePreference.SYSTEM.name) }.getOrDefault(ThemePreference.SYSTEM),
+            theme = runCatching {
+                ThemePreference.valueOf(values[Keys.theme] ?: ThemePreference.SYSTEM.name)
+            }.getOrDefault(ThemePreference.SYSTEM),
             dynamicColor = values[Keys.dynamicColor] ?: true,
             simplifiedReading = values[Keys.reading] ?: false,
-            onboardingLanguage = values[Keys.onboardingLanguage].takeIf { it in SUPPORTED_ONBOARDING_LANGUAGES } ?: "en",
         )
-    }
-
-    val onboardingLanguage: Flow<String> = context.rtcPreferences.data.map { values ->
-        values[Keys.onboardingLanguage].takeIf { it in SUPPORTED_ONBOARDING_LANGUAGES } ?: "en"
-    }
-
-    /**
-     * Local UX preference only. This never upgrades the Supabase session, role or authority.
-     * It records that the resident explicitly chose to enter the public read-only experience.
-     */
-    val residentEntryGranted: Flow<Boolean> = context.rtcPreferences.data.map { values ->
-        values[Keys.residentEntryGranted] ?: false
     }
 
     val cachedGlobalUiConfiguration: Flow<CachedGlobalUiConfiguration> = context.rtcPreferences.data.map { values ->
@@ -106,17 +101,16 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         )
     }
 
-    suspend fun setTheme(value: ThemePreference) { context.rtcPreferences.edit { it[Keys.theme] = value.name } }
-    suspend fun setDynamicColor(enabled: Boolean) { context.rtcPreferences.edit { it[Keys.dynamicColor] = enabled } }
-    suspend fun setReadingMode(enabled: Boolean) { context.rtcPreferences.edit { it[Keys.reading] = enabled } }
-
-    suspend fun setOnboardingLanguage(language: String) {
-        require(language in SUPPORTED_ONBOARDING_LANGUAGES) { "Unsupported onboarding language." }
-        context.rtcPreferences.edit { it[Keys.onboardingLanguage] = language }
+    suspend fun setTheme(value: ThemePreference) {
+        context.rtcPreferences.edit { it[Keys.theme] = value.name }
     }
 
-    suspend fun setResidentEntryGranted(granted: Boolean) {
-        context.rtcPreferences.edit { values -> values[Keys.residentEntryGranted] = granted }
+    suspend fun setDynamicColor(enabled: Boolean) {
+        context.rtcPreferences.edit { it[Keys.dynamicColor] = enabled }
+    }
+
+    suspend fun setReadingMode(enabled: Boolean) {
+        context.rtcPreferences.edit { it[Keys.reading] = enabled }
     }
 
     suspend fun setCommunityGuidelinesAccepted(userId: String, accepted: Boolean) {
@@ -141,7 +135,9 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
 
     suspend fun saveLastKnownGoodGlobalUiConfiguration(versionId: String, rawConfiguration: String): Boolean {
         val configuration = GlobalUiConfiguration.decodeOrNull(rawConfiguration) ?: return false
-        val safeVersionId = versionId.trim().takeIf { value -> value.length in 1..128 && value.all { it.isLetterOrDigit() || it == '-' } } ?: return false
+        val safeVersionId = versionId.trim().takeIf { value ->
+            value.length in 1..128 && value.all { it.isLetterOrDigit() || it == '-' }
+        } ?: return false
         context.rtcPreferences.edit { values ->
             values[Keys.globalUiConfigurationVersion] = safeVersionId
             values[Keys.globalUiConfiguration] = GlobalUiConfiguration.encode(configuration)
@@ -152,7 +148,11 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
     suspend fun setRememberedEmail(email: String, remember: Boolean) {
         context.rtcPreferences.edit { values ->
             values[Keys.rememberMe] = remember
-            if (remember) values[Keys.rememberedEmail] = email.trim() else values.remove(Keys.rememberedEmail)
+            if (remember) {
+                values[Keys.rememberedEmail] = email.trim()
+            } else {
+                values.remove(Keys.rememberedEmail)
+            }
         }
     }
 
@@ -161,9 +161,5 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
             values[Keys.rememberMe] = false
             values.remove(Keys.rememberedEmail)
         }
-    }
-
-    companion object {
-        val SUPPORTED_ONBOARDING_LANGUAGES = setOf("en", "af", "zu", "xh", "st", "tn")
     }
 }

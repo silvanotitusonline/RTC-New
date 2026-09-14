@@ -20,7 +20,6 @@ import za.org.rtc.community.data.local.CachedPostDao
 import za.org.rtc.community.data.local.CachedReportDao
 import za.org.rtc.community.data.local.CachedSessionDao
 import za.org.rtc.community.data.local.CachedUserProfileDao
-import za.org.rtc.community.data.local.VerifiedPublicReportDao
 import za.org.rtc.community.data.local.RtcDatabase
 import za.org.rtc.community.data.local.LocalDraftDao
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_1_2
@@ -29,10 +28,9 @@ import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_3_4
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_4_5
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_5_6
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_6_7
-import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_7_8
 import javax.inject.Singleton
-import za.org.rtc.community.feature.community.AuthoritativeCommunityRepository
 import za.org.rtc.community.feature.community.CommunityRepository
+import za.org.rtc.community.feature.community.SupabaseCommunityRepository
 import za.org.rtc.community.feature.marketplace.data.remote.SupabaseMarketplaceRepository
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceAdminRepository
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceDiscoveryRepository
@@ -40,6 +38,10 @@ import za.org.rtc.community.feature.marketplace.domain.MarketplaceOwnerRepositor
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceReviewRepository
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceLocationRepository
 import za.org.rtc.community.core.location.MarketplaceLocationProvider
+import za.org.rtc.community.feature.servicecentre.data.remote.SupabaseServiceCentreRepository
+import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBookingRepository
+import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreDiscoveryRepository
+import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreProviderRepository
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -68,7 +70,6 @@ object AppModule {
                 RTC_DATABASE_MIGRATION_4_5,
                 RTC_DATABASE_MIGRATION_5_6,
                 RTC_DATABASE_MIGRATION_6_7,
-                RTC_DATABASE_MIGRATION_7_8,
             )
             .fallbackToDestructiveMigration(true)
             .build()
@@ -78,9 +79,6 @@ object AppModule {
 
     @Provides
     fun provideCachedReportDao(database: RtcDatabase): CachedReportDao = database.cachedReportDao()
-
-    @Provides
-    fun provideVerifiedPublicReportDao(database: RtcDatabase): VerifiedPublicReportDao = database.verifiedPublicReportDao()
 
     @Provides
     fun provideCachedAppStateDao(database: RtcDatabase): CachedAppStateDao = database.cachedAppStateDao()
@@ -104,7 +102,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideCommunityRepository(repository: AuthoritativeCommunityRepository): CommunityRepository = repository
+    fun provideCommunityRepository(repository: SupabaseCommunityRepository): CommunityRepository = repository
 
     @Provides
     @Singleton
@@ -125,4 +123,16 @@ object AppModule {
     @Provides
     @Singleton
     fun provideMarketplaceAdminRepository(repository: SupabaseMarketplaceRepository): MarketplaceAdminRepository = repository
+
+    @Provides
+    @Singleton
+    fun provideServiceCentreDiscoveryRepository(repository: SupabaseServiceCentreRepository): ServiceCentreDiscoveryRepository = repository
+
+    @Provides
+    @Singleton
+    fun provideServiceCentreProviderRepository(repository: SupabaseServiceCentreRepository): ServiceCentreProviderRepository = repository
+
+    @Provides
+    @Singleton
+    fun provideServiceCentreBookingRepository(repository: SupabaseServiceCentreRepository): ServiceCentreBookingRepository = repository
 }

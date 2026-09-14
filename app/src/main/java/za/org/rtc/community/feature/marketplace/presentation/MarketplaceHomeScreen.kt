@@ -1,217 +1,166 @@
 package za.org.rtc.community.feature.marketplace.presentation
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceHome
 import za.org.rtc.community.navigation.RtcRoute
+import za.org.rtc.community.ui.components.RtcCard
 import za.org.rtc.community.ui.theme.RtcSpacing
 
 @Composable
-fun MarketplaceHomeRoute(
+fun MarketplaceHomeScreen(
     onNavigate: (String) -> Unit,
+    onSwitchToServices: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
     viewModel: MarketplaceDiscoveryViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.home.collectAsStateWithLifecycle()
-    val area by viewModel.area.collectAsStateWithLifecycle()
-
-    LaunchedEffect(Unit) {
-        if (state is MarketplaceLoadState.Idle) viewModel.loadHome()
-    }
-
-    MarketplaceHomeScreen(
-        state = state,
-        area = area,
-        onRetry = viewModel::loadHome,
-        onSearch = { onNavigate(RtcRoute.MARKETPLACE_SEARCH) },
-        onMap = { onNavigate(RtcRoute.MARKETPLACE_MAP) },
-        onOpenBusiness = { businessId -> onNavigate(RtcRoute.marketplaceBusiness(businessId)) },
+    MarketplaceHomeRoute(
+        onNavigate = onNavigate,
+        onSwitchToServices = onSwitchToServices,
+        modifier = modifier,
+        viewModel = viewModel,
     )
 }
 
 @Composable
-internal fun MarketplaceHomeScreen(
-    state: MarketplaceLoadState<MarketplaceHome>,
-    area: String?,
-    onRetry: () -> Unit,
-    onSearch: () -> Unit,
-    onMap: () -> Unit,
-    onOpenBusiness: (String) -> Unit,
+fun MarketplaceHomeRoute(
+    onNavigate: (String) -> Unit,
+    onSwitchToServices: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    viewModel: MarketplaceDiscoveryViewModel = hiltViewModel(),
 ) {
-    when (state) {
-        MarketplaceLoadState.Idle,
-        MarketplaceLoadState.Loading -> Column(
+    val homeState by viewModel.home.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.loadHome() }
+
+    MarketplaceLoadContainer(
+        state = homeState,
+        onRetry = viewModel::loadHome,
+        modifier = modifier.testTag("marketplace_home_screen"),
+    ) { home: MarketplaceHome ->
+        LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            contentPadding = PaddingValues(vertical = RtcSpacing.pageGutter),
+            verticalArrangement = Arrangement.spacedBy(RtcSpacing.contentGroup),
         ) {
-            CircularProgressIndicator()
-            Text(
-                text = "Loading trusted local businesses…",
-                modifier = Modifier.padding(top = RtcSpacing.small),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-
-        is MarketplaceLoadState.Failure -> Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(RtcSpacing.pageGutter),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = "Marketplace could not be loaded",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = state.message,
-                modifier = Modifier.padding(top = RtcSpacing.compact, bottom = RtcSpacing.standard),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Button(onClick = onRetry) { Text("Try again") }
-        }
-
-        is MarketplaceLoadState.Data -> MarketplaceHomeContent(
-            home = state.value,
-            area = area,
-            onSearch = onSearch,
-            onMap = onMap,
-            onOpenBusiness = onOpenBusiness,
-        )
-    }
-}
-
-@Composable
-private fun MarketplaceHomeContent(
-    home: MarketplaceHome,
-    area: String?,
-    onSearch: () -> Unit,
-    onMap: () -> Unit,
-    onOpenBusiness: (String) -> Unit,
-) {
-    val featured = (home.featured + home.topRated + home.newest).distinctBy { it.id }.take(8)
-    val nearby = home.nearby.distinctBy { it.id }.take(10)
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            horizontal = RtcSpacing.pageGutter,
-            vertical = RtcSpacing.contentGroup,
-        ),
-        verticalArrangement = Arrangement.spacedBy(RtcSpacing.contentGroup),
-    ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
-                Text(
-                    text = "Marketplace",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = area?.let { "Discover trusted businesses in $it" }
-                        ?: "Discover trusted businesses in your community",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
-            ) {
-                Button(onClick = onSearch, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.Search, contentDescription = null)
-                    Text(" Search")
-                }
-                OutlinedButton(onClick = onMap, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.LocationOn, contentDescription = null)
-                    Text(" Map")
-                }
-            }
-        }
-
-        if (home.categories.isNotEmpty()) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
-                    Text("Browse categories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = RtcSpacing.pageGutter),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text("Marketplace", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        Text("Discover trusted local businesses & services", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            // Quick Service Centre bridge button
+            item {
+                RtcCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = RtcSpacing.pageGutter),
+                    onClick = {
+                        if (onSwitchToServices != null) {
+                            onSwitchToServices()
+                        } else {
+                            onNavigate(RtcRoute.SERVICE_CENTRE_HOME)
+                        }
+                    },
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Filled.Build, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Column {
+                                Text("Need a service provider?", fontWeight = FontWeight.SemiBold)
+                                Text("Open Service Centre", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (home.categories.isNotEmpty()) {
+                item {
+                    AppStoreSectionHeader(
+                        title = "Categories",
+                        onSeeAll = { onNavigate(RtcRoute.MARKETPLACE_SEARCH) },
+                    )
+                }
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = RtcSpacing.pageGutter),
+                        horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
+                    ) {
                         items(home.categories, key = { it.id }) { category ->
-                            AssistChip(
-                                onClick = onSearch,
+                            FilterChip(
+                                selected = false,
+                                onClick = { onNavigate("${RtcRoute.MARKETPLACE_SEARCH}?category=${category.slug}") },
                                 label = { Text(category.name) },
                             )
                         }
                     }
                 }
             }
-        }
 
-        if (featured.isNotEmpty()) {
-            item { Text("Featured near you", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
-            itemsIndexed(featured, key = { _, business -> business.id }) { index, business ->
-                AppStoreBusinessRowCard(
-                    business = business,
-                    rankingNumber = index + 1,
-                    onOpen = { onOpenBusiness(business.slug.ifBlank { business.id }) },
-                )
-            }
-        }
-
-        if (nearby.isNotEmpty()) {
-            item { Text("Nearby", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
-            items(nearby, key = { it.id }) { business ->
-                AppStoreBusinessRowCard(
-                    business = business,
-                    onOpen = { onOpenBusiness(business.slug.ifBlank { business.id }) },
-                )
-            }
-        }
-
-        if (featured.isEmpty() && nearby.isEmpty()) {
-            item {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(
-                        Modifier.padding(RtcSpacing.standard),
-                        verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
+            if (home.featured.isNotEmpty()) {
+                item {
+                    AppStoreSectionHeader(
+                        title = "Featured Businesses",
+                        subtitle = "Hand-picked local experts",
+                        onSeeAll = { onNavigate(RtcRoute.MARKETPLACE_SEARCH) },
+                    )
+                }
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = RtcSpacing.pageGutter),
+                        horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
                     ) {
-                        Text("No businesses to show yet", fontWeight = FontWeight.Bold)
-                        Text(
-                            "Try search, change your area, or check again later.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        OutlinedButton(onClick = onSearch) { Text("Search Marketplace") }
+                        items(home.featured, key = { it.id }) { business ->
+                            AppStoreMediumCard(
+                                business = business,
+                                onClick = { onNavigate("community/marketplace/business/${business.slug}") },
+                            )
+                        }
                     }
+                }
+            }
+
+            if (home.topRated.isNotEmpty()) {
+                item {
+                    AppStoreSectionHeader(
+                        title = "Top Rated in Your Area",
+                        onSeeAll = { onNavigate(RtcRoute.MARKETPLACE_SEARCH) },
+                    )
+                }
+                items(home.topRated.take(5), key = { it.id }) { business ->
+                    AppStoreBusinessRowCard(
+                        business = business,
+                        modifier = Modifier.padding(horizontal = RtcSpacing.pageGutter),
+                        onClick = { onNavigate("community/marketplace/business/${business.slug}") },
+                    )
                 }
             }
         }

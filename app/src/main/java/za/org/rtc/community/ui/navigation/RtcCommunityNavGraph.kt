@@ -31,6 +31,7 @@ import za.org.rtc.community.core.HomeLayout
 import za.org.rtc.community.core.NoticeStatus
 import za.org.rtc.community.core.RtcSession
 import za.org.rtc.community.core.SessionAuthority
+import za.org.rtc.community.core.UserRole
 import za.org.rtc.community.feature.account.AccountScreen
 import za.org.rtc.community.feature.account.NotificationsScreen
 import za.org.rtc.community.feature.administration.AccessManagementScreen
@@ -60,6 +61,8 @@ import za.org.rtc.community.feature.explore.SearchScreen
 import za.org.rtc.community.feature.home.HomeScreen
 import za.org.rtc.community.feature.home.HomePublicReportViewModel
 import za.org.rtc.community.feature.publicreports.domain.PublicReportScope
+import za.org.rtc.community.feature.marketplace.presentation.*
+import za.org.rtc.community.feature.servicecentre.presentation.*
 import za.org.rtc.community.feature.support.HelpCentreScreen
 import za.org.rtc.community.feature.support.SupportCaseDetailScreen
 import za.org.rtc.community.feature.support.SupportScreen
@@ -225,9 +228,117 @@ internal fun RtcCommunityNavGraph(
                 )
             }
         }
-        marketplaceNavBindings(navController, session)
+        composable(RtcRoute.MARKETPLACE_HOME) {
+            MarketplaceHomeRoute(
+                onNavigate = { navController.navigateOverlay(it) },
+                onSwitchToServices = { navController.navigateOverlay(RtcRoute.SERVICE_CENTRE_HOME) },
+            )
+        }
         publicReportRoutes(navController, session)
         residentModernisationBindings(navController, session)
+        composable(RtcRoute.MARKETPLACE_SEARCH) { MarketplaceSearchRoute(onNavigate = { navController.navigateOverlay(it) }) }
+        composable(RtcRoute.MARKETPLACE_MAP) {
+            MarketplaceMapRoute(
+                onBack = { navController.popBackStack() },
+                onNavigate = { route -> navController.navigateOverlay(route) },
+            )
+        }
+        composable(route = RtcRoute.MARKETPLACE_BUSINESS, arguments = listOf(navArgument("businessIdOrSlug") { type = NavType.StringType })) { entry ->
+            MarketplaceDetailRoute(id = entry.arguments?.getString("businessIdOrSlug").orEmpty(), onNavigate = { navController.navigateOverlay(it) })
+        }
+        composable(RtcRoute.SERVICE_CENTRE_HOME) { ServiceCentreHomeRoute(onNavigate = { navController.navigateOverlay(it) }) }
+        composable(
+            route = RtcRoute.SERVICE_CENTRE_REQUEST_PATTERN,
+            arguments = listOf(
+                navArgument("providerId") { type = NavType.StringType },
+                navArgument("businessId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("offeringId") { type = NavType.StringType; nullable = true; defaultValue = null },
+            ),
+        ) { entry ->
+            ServiceCentreRequestBookingRoute(
+                providerReference = entry.arguments?.getString("providerId").orEmpty(),
+                marketplaceBusinessId = entry.arguments?.getString("businessId"),
+                marketplaceOfferingId = entry.arguments?.getString("offeringId"),
+                onNavigate = { navController.navigateOverlay(it) },
+            )
+        }
+        composable(RtcRoute.SERVICE_CENTRE_PROVIDER) { ServiceCentreProviderProfileRoute() }
+        composable(RtcRoute.SERVICE_CENTRE_BOOKINGS) { ServiceCentreBookingHubRoute(onNavigate = { navController.navigateOverlay(it) }) }
+        composable(route = RtcRoute.SERVICE_CENTRE_BOOKING, arguments = listOf(navArgument("bookingId") { type = NavType.StringType })) { entry ->
+            ServiceCentreBookingDetailRoute(bookingId = entry.arguments?.getString("bookingId").orEmpty(), onNavigate = { navController.navigateOverlay(it) })
+        }
+        composable(
+            route = RtcRoute.SERVICE_CENTRE_CHAT,
+            arguments = listOf(navArgument("bookingId") { type = NavType.StringType }),
+        ) { entry -> ServiceCentreChatRoute(entry.arguments?.getString("bookingId").orEmpty()) }
+        composable(route = RtcRoute.MARKETPLACE_REVIEWS, arguments = listOf(navArgument("businessId") { type = NavType.StringType })) { entry ->
+            MarketplaceReviewsRoute(businessId = entry.arguments?.getString("businessId").orEmpty(), onBack = { navController.popBackStack() })
+        }
+        composable(route = RtcRoute.MARKETPLACE_DIRECTIONS, arguments = listOf(navArgument("businessId") { type = NavType.StringType }, navArgument("locationId") { type = NavType.StringType })) { MarketplaceMapRoute(onBack = { navController.popBackStack() }) }
+        composable(route = RtcRoute.MARKETPLACE_NAVIGATION, arguments = listOf(navArgument("locationId") { type = NavType.StringType })) { MarketplaceMapRoute(onBack = { navController.popBackStack() }) }
+        composable(RtcRoute.MARKETPLACE_MY_BUSINESSES) { MarketplaceOwnerRoute(onNavigate = { navController.navigateOverlay(it) }) }
+        composable(RtcRoute.MARKETPLACE_SAVED) { MarketplaceSavedRoute(onNavigate = { route -> navController.navigateOverlay(route) }) }
+        composable(RtcRoute.MARKETPLACE_INVITATIONS) { MarketplaceInvitationsRoute() }
+        composable(RtcRoute.MARKETPLACE_MY_REVIEWS) { MarketplaceMyReviewsRoute() }
+        composable(RtcRoute.MARKETPLACE_BUSINESS_NEW) {
+            MarketplaceOwnerWizardRoute(
+                businessId = null,
+                onNavigate = { navController.navigateOverlay(it) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(route = RtcRoute.MARKETPLACE_BUSINESS_EDIT, arguments = listOf(navArgument("businessId") { type = NavType.StringType })) { entry ->
+            MarketplaceOwnerWizardRoute(businessId = entry.arguments?.getString("businessId"), onNavigate = { navController.navigateOverlay(it) }, onBack = { navController.popBackStack() })
+        }
+        composable(route = RtcRoute.MARKETPLACE_BUSINESS_PREVIEW, arguments = listOf(navArgument("businessId") { type = NavType.StringType })) { entry -> MarketplaceOwnerPreviewRoute(entry.arguments?.getString("businessId").orEmpty()) }
+        composable(route = RtcRoute.MARKETPLACE_BUSINESS_STATUS, arguments = listOf(navArgument("businessId") { type = NavType.StringType })) { entry -> MarketplaceStatusRoute(entry.arguments?.getString("businessId").orEmpty()) }
+        composable(RtcRoute.ADMIN_MARKETPLACE) {
+            ProtectedRoute(RtcRoute.ADMIN_MARKETPLACE, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
+                MarketplaceAdminRoute(onNavigate = { navController.navigateOverlay(it) })
+            }
+        }
+        composable(
+            route = RtcRoute.ADMIN_MARKETPLACE_BUSINESS,
+            arguments = listOf(navArgument("submissionId") { type = NavType.StringType }),
+        ) { entry ->
+            ProtectedRoute(RtcRoute.ADMIN_MARKETPLACE_BUSINESS, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
+                MarketplaceAdminSubmissionRoute(
+                    submissionId = entry.arguments?.getString("submissionId").orEmpty(),
+                    canModerateLifecycle = session.role == UserRole.SYSTEM_ADMIN,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+        }
+        composable(RtcRoute.ADMIN_MARKETPLACE_REVIEWS) {
+            ProtectedRoute(RtcRoute.ADMIN_MARKETPLACE_REVIEWS, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
+                MarketplaceAdminReviewsRoute(
+                    onBack = { navController.popBackStack() },
+                    onNavigate = { route -> navController.navigateOverlay(route) },
+                )
+            }
+        }
+        composable(RtcRoute.ADMIN_MARKETPLACE_CATEGORIES) {
+            ProtectedRoute(RtcRoute.ADMIN_MARKETPLACE_CATEGORIES, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
+                MarketplaceAdminCategoriesRoute(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+        }
+        composable(RtcRoute.ADMIN_MARKETPLACE_FEATURED) {
+            ProtectedRoute(RtcRoute.ADMIN_MARKETPLACE_FEATURED, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
+                MarketplaceAdminFeaturedRoute(
+                    onBack = { navController.popBackStack() },
+                    onNavigate = { route -> navController.navigateOverlay(route) },
+                )
+            }
+        }
+        composable(RtcRoute.ADMIN_MARKETPLACE_ANALYTICS) {
+            ProtectedRoute(RtcRoute.ADMIN_MARKETPLACE_ANALYTICS, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
+                MarketplaceAdminAnalyticsRoute(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+        }
         composable(RtcRoute.EXPLORE) {
             ExploreScreen(
                 projects = projectsPage.items,

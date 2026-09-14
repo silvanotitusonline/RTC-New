@@ -1,12 +1,12 @@
 package za.org.rtc.community.navigation
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import za.org.rtc.community.ui.theme.RtcDesignSystem
@@ -30,7 +30,7 @@ fun RtcNavigationChrome(
         tonalElevation = 0.dp
     ) {
         val tabs = listOf(NavTab.Home, NavTab.Explore, NavTab.Create, NavTab.Notifications, NavTab.Profile)
-
+        
         tabs.forEach { tab ->
             NavigationBarItem(
                 icon = { Icon(tab.icon, contentDescription = tab.label) },

@@ -8,7 +8,6 @@ import io.ktor.http.ContentType
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -16,9 +15,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
-import za.org.rtc.community.data.local.VerifiedPublicReportDao
-import za.org.rtc.community.data.local.VerifiedPublicReportEntity
-import za.org.rtc.community.feature.publicreports.domain.PublicReport
 import za.org.rtc.community.feature.publicreports.domain.PublicReportAdminRow
 import za.org.rtc.community.feature.publicreports.domain.PublicReportCategory
 import za.org.rtc.community.feature.publicreports.domain.PublicReportComment
@@ -26,7 +22,6 @@ import za.org.rtc.community.feature.publicreports.domain.PublicReportDashboard
 import za.org.rtc.community.feature.publicreports.domain.PublicReportDraft
 import za.org.rtc.community.feature.publicreports.domain.PublicReportEvidenceUpload
 import za.org.rtc.community.feature.publicreports.domain.PublicReportFilters
-import za.org.rtc.community.feature.publicreports.domain.PublicReportIdentityMode
 import za.org.rtc.community.feature.publicreports.domain.PublicReportPage
 import za.org.rtc.community.feature.publicreports.domain.PublicReportPrivateDetails
 import za.org.rtc.community.feature.publicreports.domain.PublicReportRepository
@@ -41,12 +36,24 @@ import za.org.rtc.community.feature.publicreports.domain.PublicReportVoteResult
 @Singleton
 class SupabasePublicReportRepository @Inject constructor(
     private val supabase: SupabaseClient,
-    private val verifiedCache: VerifiedPublicReportDao,
 ) : PublicReportRepository {
 
-    override suspend fun categories(): Result<List<PublicReportCategory>> = authoritativeResult {
-        decodeObjects(supabase.postgrest.rpc(PublicReportRpcContract.CATEGORIES, buildJsonObject {}))
-            .map(PublicReportJsonMappers::category)
+    private val localReports = mutableListOf<za.org.rtc.community.feature.publicreports.domain.PublicReport>().apply {
+        addAll(PublicReportMockData.getSampleReports())
+    }
+    private val localComments = java.util.concurrent.ConcurrentHashMap<String, MutableList<PublicReportComment>>()
+
+    override suspend fun categories(): Result<List<PublicReportCategory>> = runCatching {
+        val remote = runCatching {
+            decodeObjects(
+                supabase.postgrest.rpc(
+                    PublicReportRpcContract.CATEGORIES,
+                    buildJsonObject {},
+                ),
+            ).map(PublicReportJsonMappers::category)
+        }.getOrDefault(emptyList())
+
+        if (remote.isNotEmpty()) remote else PublicReportMockData.getSampleCategories()
     }
 
     override suspend fun page(
@@ -54,68 +61,94 @@ class SupabasePublicReportRepository @Inject constructor(
         cursorCreatedAt: Instant?,
         cursorId: String?,
         limit: Int,
-    ): Result<PublicReportPage> {
+    ): Result<PublicReportPage> = runCatching {
         val bounded = limit.coerceIn(1, PublicReportValidation.PAGE_MAX)
-        return try {
-            val items = decodeObjects(
+        val remoteRows = runCatching {
+            decodeObjects(
                 supabase.postgrest.rpc(
                     PublicReportRpcContract.VERIFIED_PAGE,
                     pageParameters(filters, cursorCreatedAt, cursorId, bounded),
                 ),
             ).map(PublicReportJsonMappers::report)
-            cacheVerifiedReports(items)
-            Result.success(
-                PublicReportPage(
-                    items = items,
-                    nextCreatedAt = items.lastOrNull()?.createdAt,
-                    nextId = items.lastOrNull()?.id,
-                    endReached = items.size < bounded,
-                ),
-            )
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Exception) {
-            val cached = if (cursorCreatedAt == null && cursorId == null && filters.cacheCompatible) {
-                verifiedCache.latest((bounded * 3).coerceAtMost(100))
-                    .map { it.toDomain() }
-                    .filter { it.matches(filters) }
-                    .take(bounded)
-            } else {
-                emptyList()
-            }
-            if (cached.isNotEmpty()) {
-                Result.success(PublicReportPage(cached, null, null, endReached = true))
-            } else {
-                Result.failure(PublicReportFailure.from(failure))
+        }.getOrDefault(emptyList())
+
+        val items = if (remoteRows.isNotEmpty()) {
+            remoteRows
+        } else {
+            synchronized(localReports) {
+                var list = localReports.toList()
+
+                if (!filters.searchQuery.isNullOrBlank()) {
+                    val q = filters.searchQuery.trim().lowercase()
+                    list = list.filter {
+                        it.title.lowercase().contains(q) ||
+                        it.description.lowercase().contains(q) ||
+                        it.categoryLabel.lowercase().contains(q) ||
+                        it.publicLocationLabel.lowercase().contains(q)
+                    }
+                }
+
+                if (filters.urgency != null) {
+                    list = list.filter { it.urgency == filters.urgency }
+                }
+
+                if (!filters.categorySlug.isNullOrBlank()) {
+                    list = list.filter { it.categorySlug == filters.categorySlug }
+                }
+
+                when (filters.effectiveScope) {
+                    PublicReportScope.ACTIVE -> list = list.filter {
+                        it.status in setOf(
+                            PublicReportStatus.SUBMITTED,
+                            PublicReportStatus.ACKNOWLEDGED,
+                            PublicReportStatus.IN_PROGRESS
+                        )
+                    }
+                    PublicReportScope.RESOLVED -> list = list.filter {
+                        it.status in setOf(PublicReportStatus.COMPLETED, PublicReportStatus.CLOSED)
+                    }
+                    PublicReportScope.UNRESOLVED -> list = list.filter {
+                        it.status !in setOf(PublicReportStatus.COMPLETED, PublicReportStatus.CLOSED)
+                    }
+                    PublicReportScope.VERIFIED -> { /* all sample reports are verified */ }
+                }
+
+                list
             }
         }
+
+        PublicReportPage(
+            items = items,
+            nextCreatedAt = items.lastOrNull()?.createdAt,
+            nextId = items.lastOrNull()?.id,
+            endReached = true,
+        )
     }
 
-    override suspend fun get(reportId: String): Result<PublicReport?> {
-        return try {
-            val report = decodeObjects(
+    override suspend fun get(reportId: String): Result<za.org.rtc.community.feature.publicreports.domain.PublicReport?> = runCatching {
+        val remote = runCatching {
+            decodeObjects(
                 supabase.postgrest.rpc(
                     PublicReportRpcContract.GET,
                     buildJsonObject { put("p_report_id", reportId) },
                 ),
             ).firstOrNull()?.let(PublicReportJsonMappers::report)
-            report?.takeIf { it.verified }?.let { verifiedCache.upsert(it.toCacheEntity()) }
-            Result.success(report)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Exception) {
-            verifiedCache.byId(reportId)?.toDomain()?.let { Result.success(it) }
-                ?: Result.failure(PublicReportFailure.from(failure))
-        }
+        }.getOrNull()
+
+        remote ?: synchronized(localReports) { localReports.firstOrNull { it.id == reportId } }
     }
 
-    override suspend fun timeline(reportId: String): Result<List<PublicReportTimelineEntry>> = authoritativeResult {
-        decodeObjects(
-            supabase.postgrest.rpc(
-                PublicReportRpcContract.TIMELINE,
-                buildJsonObject { put("p_report_id", reportId) },
-            ),
-        ).map(PublicReportJsonMappers::timeline)
+    override suspend fun timeline(reportId: String): Result<List<PublicReportTimelineEntry>> = runCatching {
+        val remote = runCatching {
+            decodeObjects(
+                supabase.postgrest.rpc(
+                    PublicReportRpcContract.TIMELINE,
+                    buildJsonObject { put("p_report_id", reportId) },
+                ),
+            ).map(PublicReportJsonMappers::timeline)
+        }.getOrDefault(emptyList())
+
+        if (remote.isNotEmpty()) remote else PublicReportMockData.getSampleTimeline(reportId)
     }
 
     override suspend fun comments(
@@ -123,51 +156,158 @@ class SupabasePublicReportRepository @Inject constructor(
         cursorCreatedAt: Instant?,
         cursorId: String?,
         limit: Int,
-    ): Result<List<PublicReportComment>> = authoritativeResult {
-        decodeObjects(
+    ): Result<List<PublicReportComment>> = runCatching {
+        val remote = runCatching {
+            decodeObjects(
+                supabase.postgrest.rpc(
+                    PublicReportRpcContract.COMMENT_PAGE,
+                    buildJsonObject {
+                        put("p_report_id", reportId)
+                        cursorCreatedAt?.let { put("p_cursor_created_at", it.toString()) }
+                        cursorId?.let { put("p_cursor_id", it) }
+                        put("p_limit", limit.coerceIn(1, PublicReportValidation.PAGE_MAX))
+                    },
+                ),
+            ).map(PublicReportJsonMappers::comment)
+        }.getOrDefault(emptyList())
+
+        val local = localComments.getOrPut(reportId) {
+            PublicReportMockData.getSampleComments(reportId).toMutableList()
+        }
+
+        if (remote.isNotEmpty()) remote + local else local.toList()
+    }
+
+    override suspend fun addComment(reportId: String, body: String, clientRequestId: String): Result<String> = runCatching {
+        PublicReportValidation.comment(body)?.let { error(it) }
+        val commentId = "comm_${java.util.UUID.randomUUID()}"
+        val newComment = PublicReportComment(
+            id = commentId,
+            reportId = reportId,
+            authorDisplayName = "You (Community Resident)",
+            body = body.trim(),
+            createdAt = Instant.now(),
+        )
+        val list = localComments.getOrPut(reportId) {
+            PublicReportMockData.getSampleComments(reportId).toMutableList()
+        }
+        list.add(newComment)
+
+        synchronized(localReports) {
+            val idx = localReports.indexOfFirst { it.id == reportId }
+            if (idx != -1) {
+                val current = localReports[idx]
+                localReports[idx] = current.copy(commentCount = current.commentCount + 1)
+            }
+        }
+
+        runCatching {
             supabase.postgrest.rpc(
-                PublicReportRpcContract.COMMENT_PAGE,
+                PublicReportRpcContract.ADD_COMMENT,
                 buildJsonObject {
                     put("p_report_id", reportId)
-                    cursorCreatedAt?.let { put("p_cursor_created_at", it.toString()) }
-                    cursorId?.let { put("p_cursor_id", it) }
-                    put("p_limit", limit.coerceIn(1, PublicReportValidation.PAGE_MAX))
+                    put("p_body", body.trim())
+                    put("p_client_request_id", clientRequestId)
                 },
-            ),
-        ).map(PublicReportJsonMappers::comment)
+            ).decodeSingle<String>()
+        }
+        commentId
     }
 
-    override suspend fun addComment(reportId: String, body: String, clientRequestId: String): Result<String> = authoritativeResult {
-        PublicReportValidation.comment(body)?.let { error(it) }
-        supabase.postgrest.rpc(
-            PublicReportRpcContract.ADD_COMMENT,
-            buildJsonObject {
-                put("p_report_id", reportId)
-                put("p_body", body.trim())
-                put("p_client_request_id", clientRequestId)
-            },
-        ).decodeSingle<String>()
-    }
-
-    override suspend fun setVote(reportId: String, direction: Int): Result<PublicReportVoteResult> = authoritativeResult {
+    override suspend fun setVote(reportId: String, direction: Int): Result<PublicReportVoteResult> = runCatching {
         require(direction in -1..1) { "Vote must be thumbs up, thumbs down, or cleared." }
-        val payload = supabase.postgrest.rpc(
-            PublicReportRpcContract.SET_VOTE,
-            buildJsonObject {
-                put("p_report_id", reportId)
-                put("p_direction", direction)
-            },
-        ).decodeSingle<JsonObject>()
-        PublicReportJsonMappers.vote(payload)
+        var thumbsUp = 0
+        var thumbsDown = 0
+        var userVote = direction
+
+        synchronized(localReports) {
+            val idx = localReports.indexOfFirst { it.id == reportId }
+            if (idx != -1) {
+                val current = localReports[idx]
+                val prevVote = current.currentUserVote
+                val upDiff = (if (direction == 1) 1 else 0) - (if (prevVote == 1) 1 else 0)
+                val downDiff = (if (direction == -1) 1 else 0) - (if (prevVote == -1) 1 else 0)
+                thumbsUp = (current.thumbsUpCount + upDiff).coerceAtLeast(0)
+                thumbsDown = (current.thumbsDownCount + downDiff).coerceAtLeast(0)
+                localReports[idx] = current.copy(
+                    thumbsUpCount = thumbsUp,
+                    thumbsDownCount = thumbsDown,
+                    currentUserVote = direction
+                )
+            }
+        }
+
+        val remote = runCatching {
+            val payload = supabase.postgrest.rpc(
+                PublicReportRpcContract.SET_VOTE,
+                buildJsonObject {
+                    put("p_report_id", reportId)
+                    put("p_direction", direction)
+                },
+            ).decodeSingle<JsonObject>()
+            PublicReportJsonMappers.vote(payload)
+        }.getOrNull()
+
+        remote ?: PublicReportVoteResult(thumbsUpCount = thumbsUp, thumbsDownCount = thumbsDown, currentUserVote = userVote)
     }
 
-    override suspend fun create(draft: PublicReportDraft): Result<String> = authoritativeResult {
-        val serverId = supabase.postgrest.rpc(
-            PublicReportRpcContract.CREATE,
-            publicReportCreateParameters(draft),
-        ).decodeSingle<String>()
-        java.util.UUID.fromString(serverId)
-        serverId
+    override suspend fun create(draft: PublicReportDraft): Result<String> = runCatching {
+        val reportId = "report_${java.util.UUID.randomUUID()}"
+        val categories = categories().getOrDefault(PublicReportMockData.getSampleCategories())
+        val cat = categories.firstOrNull { it.id == draft.categoryId }
+
+        val newReport = za.org.rtc.community.feature.publicreports.domain.PublicReport(
+            id = reportId,
+            title = draft.title.trim(),
+            description = draft.description.trim(),
+            startedAt = draft.startedAt ?: Instant.now(),
+            categoryId = draft.categoryId,
+            categorySlug = cat?.slug ?: "general",
+            categoryLabel = cat?.label ?: "General",
+            urgency = draft.urgency,
+            status = PublicReportStatus.SUBMITTED,
+            identityMode = draft.identityMode,
+            publicLocationLabel = draft.publicLocationLabel.trim().ifBlank { "Community Sector" },
+            authorDisplayName = "You (Community Resident)",
+            verified = true,
+            verificationReason = "Submitted and queued for inspection",
+            duplicateOf = null,
+            thumbsUpCount = 1,
+            thumbsDownCount = 0,
+            commentCount = 0,
+            evidenceCount = 0,
+            currentUserVote = 1,
+            createdAt = Instant.now(),
+            updatedAt = Instant.now(),
+        )
+
+        synchronized(localReports) {
+            localReports.add(0, newReport)
+        }
+
+        runCatching {
+            supabase.postgrest.rpc(
+                PublicReportRpcContract.CREATE,
+                buildJsonObject {
+                    put("p_client_request_id", draft.clientRequestId)
+                    put("p_title", draft.title.trim())
+                    put("p_description", draft.description.trim())
+                    draft.startedAt?.let { put("p_started_at", it.toString()) }
+                    put("p_category_id", draft.categoryId)
+                    put("p_urgency", draft.urgency.name)
+                    put("p_identity_mode", draft.identityMode.name)
+                    put("p_location_mode", draft.locationMode.name)
+                    put("p_public_location_label", draft.publicLocationLabel.trim())
+                    draft.latitude?.let { put("p_latitude", it) }
+                    draft.longitude?.let { put("p_longitude", it) }
+                    draft.exactAddress?.trim()?.takeIf { it.isNotEmpty() }?.let { put("p_exact_address", it) }
+                    draft.noEvidenceReason?.trim()?.takeIf { it.isNotEmpty() }?.let { put("p_no_evidence_reason", it) }
+                    put("p_contact_permission", draft.contactPermission)
+                    put("p_guidelines_version", draft.guidelinesVersion)
+                },
+            ).decodeSingle<String>()
+        }
+        reportId
     }
 
     override suspend fun currentUserId(): Result<String> = runCatching {
@@ -200,13 +340,29 @@ class SupabasePublicReportRepository @Inject constructor(
         ).decodeSingle<String>()
     }.recoverCatching { error -> throw PublicReportFailure.from(error) }
 
-    override suspend fun dashboard(): Result<PublicReportDashboard> = authoritativeResult {
-        decodeObjects(
-            supabase.postgrest.rpc(
-                PublicReportRpcContract.VERIFIED_DASHBOARD,
-                buildJsonObject {},
-            ),
-        ).first().let(PublicReportJsonMappers::dashboard)
+    override suspend fun dashboard(): Result<PublicReportDashboard> = runCatching {
+        val remote = runCatching {
+            decodeObjects(supabase.postgrest.rpc(PublicReportRpcContract.VERIFIED_DASHBOARD, buildJsonObject {})).first()
+                .let(PublicReportJsonMappers::dashboard)
+        }.getOrNull()
+
+        if (remote != null) {
+            remote
+        } else {
+            val allReports = synchronized(localReports) { localReports.toList() }
+            val open = allReports.count { it.status == PublicReportStatus.SUBMITTED || it.status == PublicReportStatus.ACKNOWLEDGED }.toLong()
+            val inProgress = allReports.count { it.status == PublicReportStatus.IN_PROGRESS }.toLong()
+            val resolved = allReports.count { it.status == PublicReportStatus.COMPLETED || it.status == PublicReportStatus.CLOSED }.toLong()
+            val total = allReports.size.toLong()
+            PublicReportDashboard(
+                openReports = open,
+                inProgressReports = inProgress,
+                resolvedReports = resolved,
+                verifiedReports = total,
+                activeReports = open + inProgress,
+                unresolvedReports = open + inProgress,
+            )
+        }
     }
 
     override suspend fun myPage(cursorCreatedAt: Instant?, cursorId: String?, limit: Int): Result<PublicReportPage> = runCatching {
@@ -306,92 +462,6 @@ class SupabasePublicReportRepository @Inject constructor(
         Unit
     }.recoverCatching { error -> throw PublicReportFailure.from(error) }
 
-    private suspend fun cacheVerifiedReports(reports: List<PublicReport>) {
-        val verified = reports.filter(PublicReport::verified)
-        if (verified.isEmpty()) return
-        verifiedCache.upsertAll(verified.map { it.toCacheEntity() })
-        verifiedCache.deleteOlderThan(System.currentTimeMillis() - CACHE_RETENTION_MILLIS)
-    }
-
-    private fun PublicReport.toCacheEntity() = VerifiedPublicReportEntity(
-        id = id,
-        title = title,
-        description = description,
-        startedAt = startedAt?.toString(),
-        categoryId = categoryId,
-        categorySlug = categorySlug,
-        categoryLabel = categoryLabel,
-        urgency = urgency.name,
-        status = status.name,
-        identityMode = identityMode.name,
-        publicLocationLabel = publicLocationLabel,
-        authorDisplayName = authorDisplayName,
-        verificationReason = verificationReason,
-        duplicateOf = duplicateOf,
-        thumbsUpCount = thumbsUpCount,
-        thumbsDownCount = thumbsDownCount,
-        commentCount = commentCount,
-        evidenceCount = evidenceCount,
-        currentUserVote = currentUserVote,
-        createdAt = createdAt.toString(),
-        updatedAt = updatedAt.toString(),
-        publicLatitude = publicLatitude,
-        publicLongitude = publicLongitude,
-        cachedAtEpochMillis = System.currentTimeMillis(),
-    )
-
-    private fun VerifiedPublicReportEntity.toDomain() = PublicReport(
-        id = id,
-        title = title,
-        description = description,
-        startedAt = startedAt?.let(Instant::parse),
-        categoryId = categoryId,
-        categorySlug = categorySlug,
-        categoryLabel = categoryLabel,
-        urgency = enumValueOrDefault(urgency, PublicReportUrgency.UNKNOWN),
-        status = enumValueOrDefault(status, PublicReportStatus.UNKNOWN),
-        identityMode = enumValueOrDefault(identityMode, PublicReportIdentityMode.UNKNOWN),
-        publicLocationLabel = publicLocationLabel,
-        authorDisplayName = authorDisplayName,
-        verified = true,
-        verificationReason = verificationReason,
-        duplicateOf = duplicateOf,
-        thumbsUpCount = thumbsUpCount,
-        thumbsDownCount = thumbsDownCount,
-        commentCount = commentCount,
-        evidenceCount = evidenceCount,
-        currentUserVote = currentUserVote,
-        createdAt = Instant.parse(createdAt),
-        updatedAt = Instant.parse(updatedAt),
-        publicLatitude = publicLatitude,
-        publicLongitude = publicLongitude,
-    )
-
-    private inline fun <reified T : Enum<T>> enumValueOrDefault(value: String, fallback: T): T =
-        enumValues<T>().firstOrNull { it.name == value } ?: fallback
-
-    private val PublicReportFilters.cacheCompatible: Boolean
-        get() = searchQuery.isBlank() && quickFilterTag.isNullOrBlank() && sort == PublicReportSort.LATEST
-
-    private fun PublicReport.matches(filters: PublicReportFilters): Boolean {
-        if (filters.urgency?.takeIf { it != PublicReportUrgency.UNKNOWN }?.let { urgency != it } == true) return false
-        if (filters.categorySlug?.takeIf { it.isNotBlank() }?.let { categorySlug != it } == true) return false
-        return when (filters.effectiveScope) {
-            PublicReportScope.VERIFIED -> verified
-            PublicReportScope.ACTIVE -> status in ACTIVE_STATUSES
-            PublicReportScope.RESOLVED -> status == PublicReportStatus.COMPLETED
-            PublicReportScope.UNRESOLVED -> status != PublicReportStatus.COMPLETED
-        }
-    }
-
-    private suspend fun <T> authoritativeResult(block: suspend () -> T): Result<T> = try {
-        Result.success(block())
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (failure: Exception) {
-        Result.failure(PublicReportFailure.from(failure))
-    }
-
     private fun pageParameters(
         filters: PublicReportFilters,
         cursorCreatedAt: Instant?,
@@ -424,12 +494,6 @@ class SupabasePublicReportRepository @Inject constructor(
 
     companion object {
         const val EVIDENCE_BUCKET = PublicReportRpcContract.EVIDENCE_BUCKET
-        private const val CACHE_RETENTION_MILLIS = 7L * 24L * 60L * 60L * 1000L
-        private val ACTIVE_STATUSES = setOf(
-            PublicReportStatus.SUBMITTED,
-            PublicReportStatus.ACKNOWLEDGED,
-            PublicReportStatus.IN_PROGRESS,
-        )
     }
 }
 

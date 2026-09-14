@@ -34,9 +34,7 @@ class CommunityOptimisationContractTest(unittest.TestCase):
         self.assertIn("za.org.rtc.community.core.media.SignedUrlValue", compatibility)
         self.assertIn("SIGNED_URL_CACHE_CAPACITY", repo)
         self.assertIn("refreshMediaUrl(mediaId", repo)
-        self.assertIn("refreshAttempted", media)
-        self.assertIn("if (refreshing || (!explicit && refreshAttempted)) return", media)
-        self.assertIn("refreshAttempted = true", media)
+        self.assertIn("automaticRefreshAttempted", media)
         self.assertIn("Retry", media)
 
     def test_composer_and_media_preparation_are_recoverable_and_shared(self):

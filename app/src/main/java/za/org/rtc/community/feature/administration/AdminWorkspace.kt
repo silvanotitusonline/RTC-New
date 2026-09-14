@@ -8,15 +8,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,7 +51,6 @@ import za.org.rtc.community.ui.components.RtcEmptyState
 import za.org.rtc.community.ui.components.RtcScreenScaffold
 import za.org.rtc.community.ui.theme.RtcContentDensity
 import za.org.rtc.community.ui.theme.RtcSpacing
-import java.time.Instant
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -64,280 +68,63 @@ internal fun AdminWorkspace(
     val workItems by viewModel.operationsWorkQueue.collectAsStateWithLifecycle()
     val pendingApprovals by viewModel.accessRoleChangeRequests.collectAsStateWithLifecycle()
     val operationsUi by viewModel.operationsUi.collectAsStateWithLifecycle()
-
     var selectedQueueFilter by rememberSaveable { mutableStateOf("All") }
-    var toolQuery by rememberSaveable { mutableStateOf("") }
-
+    val visibleWorkItems = when (selectedQueueFilter) {
+        "Urgent" -> workItems.filter { it.priority in setOf("URGENT", "HIGH") }
+        "Mine" -> workItems.filter { it.assignedToMe }
+        "Unassigned" -> workItems.filter { it.isUnassigned }
+        else -> workItems
+    }
+    val needsLiveAdministratorMfa = session.role == UserRole.SYSTEM_ADMIN && session.authority == SessionAuthority.SUPABASE_AUTH && session.administratorMfaStatus != AdministratorMfaStatus.VERIFIED
     if (!session.role.isStaff) {
-        PurposefulEmptyState(
-            "This workspace is available only to authorised staff.",
-            "Return to Home",
-            {},
-        )
+        PurposefulEmptyState("This workspace is available only to authorised staff.", "Return to Home", {})
         return
     }
-
-    val needsLiveAdministratorMfa = session.role == UserRole.SYSTEM_ADMIN &&
-        session.authority == SessionAuthority.SUPABASE_AUTH &&
-        session.administratorMfaStatus != AdministratorMfaStatus.VERIFIED
-
-    val roleDestinations = adminWorkspaceDestinations(session.role)
-    val visibleDestinations = filterAdminWorkspaceDestinations(roleDestinations, toolQuery)
-    val visibleWorkItems = workItems.filter { item ->
-        when (selectedQueueFilter) {
-            "Urgent" -> item.priority in setOf("URGENT", "HIGH")
-            "Mine" -> item.assignedToMe
-            "Unassigned" -> item.isUnassigned
-            "Review" -> item.state == "READY_FOR_REVIEW"
-            "Overdue" -> item.dueAt?.let { dueAt ->
-                runCatching { Instant.parse(dueAt).isBefore(Instant.now()) }.getOrDefault(false)
-            } ?: false
-            else -> true
-        }
-    }
-
     LaunchedEffect(session.id, session.role) {
         viewModel.refreshOperationsHub()
-        dashboardViewModel.refreshCounts()
         if (session.role == UserRole.SYSTEM_ADMIN) viewModel.refreshAccessManagement()
     }
-
     RtcScreenScaffold(density = RtcContentDensity.ADMIN_COMPACT) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
-                Text(
-                    "OPERATIONS HUB",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    when (session.role) {
-                        UserRole.SYSTEM_ADMIN -> "Administrator workspace"
-                        UserRole.MODERATOR, UserRole.EVIDENCE_REVIEWER -> "Safety & moderation workspace"
-                        UserRole.CONTENT_EDITOR -> "Content & alerts workspace"
-                        UserRole.CASE_STAFF -> "Case work workspace"
-                        else -> "Staff workspace"
-                    },
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Black,
-                )
-                Text(
-                    "Handle what needs attention first, then move directly to the tool you need. Destinations are limited to your authorised role.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Text(if (session.role == UserRole.SYSTEM_ADMIN) "PROTECTED WORKSPACE" else "STAFF WORKSPACE", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text(if (session.role == UserRole.SYSTEM_ADMIN) "Administrator" else "Work Queue", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                Text(if (session.role == UserRole.SYSTEM_ADMIN) "Protected administration is deliberate: confirmed actions, verified MFA where configured, and immutable audit records." else "Resume assigned work, use role-specific tools, or manage your own work preferences.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-
-        if (session.role == UserRole.SYSTEM_ADMIN) {
-            item {
-                RtcCard(protected = true) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
-                    ) {
-                        androidx.compose.material3.Icon(
-                            if (needsLiveAdministratorMfa) Icons.Filled.Lock else Icons.Filled.Shield,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                if (needsLiveAdministratorMfa) "Protected tools locked" else "Protected tools ready",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                if (needsLiveAdministratorMfa)
-                                    "Verify your authenticator once before opening System Administration tools."
-                                else
-                                    "MFA is verified for this session. Server authorization and audit logging still apply.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        if (needsLiveAdministratorMfa) {
-                            TextButton(onClick = { onOpenTool(RtcRoute.ADMIN_MFA) }) { Text("Verify") }
-                        }
-                    }
-                }
-            }
-        }
-
         item {
-            AdminNeedsAttentionCard(
-                state = dashboardState,
-                pendingApprovals = if (session.role == UserRole.SYSTEM_ADMIN) pendingApprovals.size else 0,
+            AdminPendingModerationSummary(
+                dashboardState = dashboardState,
                 onRefresh = dashboardViewModel::refreshCounts,
-                onOpenHighPriority = { selectedQueueFilter = "Urgent" },
-                onOpenOverdue = { selectedQueueFilter = "Overdue" },
-                onOpenReview = { selectedQueueFilter = "Review" },
-                onOpenApprovals = {
-                    onOpenTool(if (needsLiveAdministratorMfa) RtcRoute.ADMIN_MFA else RtcRoute.ACCESS_MANAGEMENT)
-                },
+                onOpenReports = { onOpenTool(RtcRoute.MODERATION) },
+                onOpenBusiness = { onOpenTool(RtcRoute.ADMIN_MARKETPLACE) },
+                onOpenSupport = { onOpenTool(RtcRoute.MY_WORK) },
             )
         }
-
-        operationsUi.message?.let { message ->
-            item {
-                CommunityActionFeedback(
-                    message = message,
-                    isError = !operationsUi.isSuccess,
-                    onDismiss = viewModel::dismissOperationsMessage,
-                )
-            }
+        if (session.role == UserRole.SYSTEM_ADMIN) {
+            item { RtcCard(protected = true) { Text("Protected administration", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text(if (needsLiveAdministratorMfa) "Verify your authenticator before opening protected administration tools." else "Protected tools require explicit confirmation, server authorization, and immutable audit records.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+            item { Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) { AdminReferenceToolTile("Access Management", "Verified accounts, roles and approvals", Icons.Filled.AdminPanelSettings, Modifier.weight(1f)) { onOpenTool(if (needsLiveAdministratorMfa) RtcRoute.ADMIN_MFA else RtcRoute.ACCESS_MANAGEMENT) }; AdminReferenceToolTile("Operational Controls", "Guarded production proposals", Icons.Filled.Settings, Modifier.weight(1f)) { onOpenTool(if (needsLiveAdministratorMfa) RtcRoute.ADMIN_MFA else RtcRoute.OPERATIONAL_CONTROLS) } } }
+            item { Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) { AdminReferenceToolTile("Privacy Analytics", "Aggregate metrics and audit trail", Icons.Filled.Visibility, Modifier.weight(1f)) { onOpenTool(if (needsLiveAdministratorMfa) RtcRoute.ADMIN_MFA else RtcRoute.ANALYTICS_DASHBOARD) }; AdminReferenceToolTile("RTC AI", "Reviewable administrative proposals", Icons.Filled.Psychology, Modifier.weight(1f)) { onOpenAi() } } }
+            item { Text("Pending Administrator approvals", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+            item { if (pendingApprovals.isEmpty()) RtcEmptyState("No pending approvals", "Administrator changes requiring a second decision will appear here.") else AdminReferenceListRow(title = "${pendingApprovals.size} Administrator approval${if (pendingApprovals.size == 1) "" else "s"} pending", detail = "Open Access Management to review the server-recorded requests.", icon = Icons.Filled.Shield) { onOpenTool(if (needsLiveAdministratorMfa) RtcRoute.ADMIN_MFA else RtcRoute.ACCESS_MANAGEMENT) } }
         }
-
-        draft?.let { savedDraft ->
-            item {
-                ContinueDraftCard(
-                    draft = savedDraft,
-                    onResume = {
-                        onOpenTool(
-                            if (savedDraft.area == DraftArea.STAFF_MODERATION) RtcRoute.MODERATION else RtcRoute.CONTENT,
-                        )
-                    },
-                    onDiscard = { onDiscardDraft(savedDraft) },
-                )
-            }
+        operationsUi.message?.let { message -> item { CommunityActionFeedback(message = message, isError = !operationsUi.isSuccess, onDismiss = viewModel::dismissOperationsMessage) } }
+        draft?.let { savedDraft -> item { ContinueDraftCard(draft = savedDraft, onResume = { onOpenTool(if (savedDraft.area == DraftArea.STAFF_MODERATION) RtcRoute.MODERATION else RtcRoute.CONTENT) }, onDiscard = { onDiscardDraft(savedDraft) }) } }
+        if (pendingSyncCount > 0) item { PendingSyncIndicator(pendingSyncCount, "Saved local staff work will stay on this device until it can be submitted through the protected workflow.") }
+        item { Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) { AdminWorkspaceMetricTile(workItems.count { it.assignedToMe }.toString(), "Assigned", Modifier.weight(1f)) { selectedQueueFilter = "Mine" }; AdminWorkspaceMetricTile(workItems.count { it.priority in setOf("URGENT", "HIGH") }.toString(), "High priority", Modifier.weight(1f)) { selectedQueueFilter = "Urgent" }; AdminWorkspaceMetricTile(workItems.count { it.isUnassigned }.toString(), "Unassigned", Modifier.weight(1f)) { selectedQueueFilter = "Unassigned" } } }
+        item { Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("Assigned work", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); TextButton(enabled = !operationsUi.isWorking, onClick = viewModel::refreshOperationsHub) { Text("Refresh") } } }
+        item { FlowRow(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact), verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) { listOf("All", "Urgent", "Mine", "Unassigned").forEach { filter -> FilterChip(selected = selectedQueueFilter == filter, onClick = { selectedQueueFilter = filter }, label = { Text(filter) }) } } }
+        if (operationsUi.isWorking && workItems.isEmpty()) item { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
+        if (!operationsUi.isWorking && visibleWorkItems.isEmpty()) item { RtcEmptyState("No live work matches this filter.", "Change the filter or refresh the assigned-work queue.") }
+        items(visibleWorkItems, key = { it.id }) { workItem -> OperationsWorkItemCard(item = workItem, canReassign = session.role == UserRole.SYSTEM_ADMIN, onClaim = { viewModel.claimOperationsWorkItem(workItem.id) }, onRelease = { reason -> viewModel.releaseOperationsWorkItem(workItem.id, reason) }, onReadyForReview = { note -> viewModel.markOperationsWorkReadyForReview(workItem.id, note) }, onReassign = { ownerId, reason -> viewModel.reassignOperationsWorkItem(workItem.id, ownerId, reason) }, onOpen = { onOpenTool(when (workItem.sourceType) { "MODERATION_REPORT" -> RtcRoute.MODERATION; "NOTICE_REVIEW" -> RtcRoute.CONTENT; "SUPPORT_CASE" -> RtcRoute.MY_WORK; "COMMUNITY_ALERT" -> RtcRoute.STAFF_ALERTS; else -> RtcRoute.WORK_QUEUE }) }) }
+        item { Text("Role tools", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (session.role in setOf(UserRole.CONTENT_EDITOR, UserRole.SYSTEM_ADMIN)) { item { AdminReferenceListRow("Community Alerts", "Create resident alerts and inspect server-confirmed delivery follow-up.", Icons.Filled.Notifications) { onOpenTool(RtcRoute.STAFF_ALERTS) } }; item { AdminReferenceListRow("Content Management", "Draft, submit, review, publish, correct, or retire official notices.", Icons.Filled.Campaign) { onOpenTool(RtcRoute.CONTENT) } }; item { AdminReferenceListRow("Event Moderation", "Create, edit, publish, cancel or delete community calendar events.", Icons.Filled.Event) { onOpenTool(RtcRoute.ADMIN_EVENTS) } } }
+        if (session.role in setOf(UserRole.MODERATOR, UserRole.SYSTEM_ADMIN)) {
+            item { AdminReferenceListRow("Public Reports & Timeline Moderation", "Review community reports, publish official timeline updates, verify issues, and moderate comments.", Icons.Filled.Timeline) { onOpenTool(RtcRoute.PUBLIC_REPORTS_ADMIN) } }
+            item { AdminReferenceListRow("Moderation dashboard", "Review reports, appeals, and safeguarded moderator decisions.", Icons.Filled.Shield) { onOpenTool(RtcRoute.MODERATION) } }
         }
-
-        if (pendingSyncCount > 0) {
-            item {
-                PendingSyncIndicator(
-                    pendingSyncCount,
-                    "Saved staff work remains on this device until the protected workflow can submit it.",
-                )
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text("Work queue", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Role-scoped operational work assigned or available to you.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(enabled = !operationsUi.isWorking, onClick = viewModel::refreshOperationsHub) {
-                    Text("Refresh")
-                }
-            }
-        }
-
-        item {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
-                verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
-            ) {
-                listOf("All", "Urgent", "Mine", "Unassigned", "Review", "Overdue").forEach { filter ->
-                    FilterChip(
-                        selected = selectedQueueFilter == filter,
-                        onClick = { selectedQueueFilter = filter },
-                        label = { Text(filter) },
-                    )
-                }
-            }
-        }
-
-        if (operationsUi.isWorking && workItems.isEmpty()) {
-            item { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
-        }
-        if (!operationsUi.isWorking && visibleWorkItems.isEmpty()) {
-            item { RtcEmptyState("No work matches this view", "Choose another filter or refresh the queue.") }
-        }
-        items(visibleWorkItems, key = { it.id }) { workItem ->
-            val eligibleAssignees = dashboardState.eligibleAssigneesByWorkItem[workItem.id].orEmpty()
-            val assigneesLoading = dashboardState.assigneeLoadingWorkItemId == workItem.id
-            val assigneesError = dashboardState.assigneeErrorByWorkItem[workItem.id]
-            OperationsWorkItemCard(
-                item = workItem,
-                canReassign = session.role == UserRole.SYSTEM_ADMIN,
-                onClaim = { viewModel.claimOperationsWorkItem(workItem.id) },
-                onRelease = { reason -> viewModel.releaseOperationsWorkItem(workItem.id, reason) },
-                onReadyForReview = { note -> viewModel.markOperationsWorkReadyForReview(workItem.id, note) },
-                eligibleAssignees = eligibleAssignees,
-                assigneesLoading = assigneesLoading,
-                assigneesError = assigneesError,
-                onLoadEligibleAssignees = { dashboardViewModel.loadEligibleAssignees(workItem.id) },
-                onRetryEligibleAssignees = { dashboardViewModel.retryEligibleAssignees(workItem.id) },
-                onClearEligibleAssignees = { dashboardViewModel.invalidateEligibleAssignees(workItem.id) },
-                onReassign = { ownerId, reason -> viewModel.reassignOperationsWorkItem(workItem.id, ownerId, reason) },
-                onOpen = {
-                    onOpenTool(
-                        when (workItem.sourceType) {
-                            "MODERATION_REPORT" -> RtcRoute.MODERATION
-                            "NOTICE_REVIEW" -> RtcRoute.CONTENT
-                            "SUPPORT_CASE" -> RtcRoute.MY_WORK
-                            "COMMUNITY_ALERT", "ALERT_DELIVERY_FAILURE" -> RtcRoute.STAFF_ALERTS
-                            else -> RtcRoute.WORK_QUEUE
-                        },
-                    )
-                },
-            )
-        }
-
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
-                Text("Tools & work areas", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    "Search by task instead of hunting through menus.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OutlinedTextField(
-                    value = toolQuery,
-                    onValueChange = { toolQuery = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    leadingIcon = { androidx.compose.material3.Icon(Icons.Filled.Search, contentDescription = null) },
-                    label = { Text("Find an admin tool") },
-                    placeholder = { Text("Try ‘alerts’, ‘audit’, ‘reports’…") },
-                )
-            }
-        }
-
-        AdminWorkspaceArea.entries
-            .filter { it != AdminWorkspaceArea.NEEDS_ATTENTION }
-            .forEach { area ->
-                val destinations = visibleDestinations.filter { it.area == area }
-                if (destinations.isNotEmpty()) {
-                    item {
-                        Text(area.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    }
-                    items(destinations, key = { it.id }) { destination ->
-                        AdminDestinationRow(
-                            destination = destination,
-                            locked = destination.requiresMfa && needsLiveAdministratorMfa,
-                            onClick = {
-                                onOpenTool(resolveAdminDestinationRoute(destination, needsLiveAdministratorMfa))
-                            },
-                        )
-                    }
-                }
-            }
-
-        if (toolQuery.isNotBlank() && visibleDestinations.isEmpty()) {
-            item { RtcEmptyState("No matching admin tool", "Try a broader task name or clear the search.") }
-        }
-
-        if (session.role.canUseAi) {
-            item {
-                AdminReferenceListRow(
-                    "RTC AI assistant",
-                    "Draft reviewable administrative proposals; protected actions still require human confirmation.",
-                    Icons.Filled.Psychology,
-                    onOpenAi,
-                )
-            }
-        }
+        item { AdminReferenceListRow("My Work Profile", "Manage availability, work notifications, profile settings, and session sign-out.", Icons.Filled.Person) { onOpenTool(RtcRoute.MY_WORK) } }
+        if (session.role == UserRole.SYSTEM_ADMIN && needsLiveAdministratorMfa) item { AdminReferenceListRow("Verify administrator MFA", "Open the protected authenticator verification screen before using System Administrator tools.", Icons.Filled.Shield) { onOpenTool(RtcRoute.ADMIN_MFA) } }
+        item { AdminWorkspaceNavigation(role = session.role, requiresMfa = needsLiveAdministratorMfa, onNavigate = onOpenTool) }
     }
 }

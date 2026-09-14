@@ -31,7 +31,7 @@ create type subscription_tier as enum ('FREE', 'PREMIUM', 'ENTERPRISE');
 
 alter table public.profiles 
 add column if not exists subscription_tier subscription_tier default 'FREE',
-add column if not exists java_id text; -- For external payment IDs
+add column if not java_id text; -- For external payment IDs
 
 create table if not exists public.promoted_content (
     id uuid primary key default gen_random_uuid(),

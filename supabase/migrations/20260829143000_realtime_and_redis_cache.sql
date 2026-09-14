@@ -38,13 +38,9 @@ create index if not exists idx_notification_events_recipient
 
 alter table public.notification_events enable row level security;
 
--- This table may already exist in the reconstructed production baseline. Reconcile policy names
--- before recreating them so a fresh migration replay remains deterministic.
-drop policy if exists notification_events_select_own on public.notification_events;
 create policy notification_events_select_own on public.notification_events
     for select to authenticated using (recipient_id = auth.uid());
 
-drop policy if exists notification_events_update_own on public.notification_events;
 create policy notification_events_update_own on public.notification_events
     for update to authenticated using (recipient_id = auth.uid());
 
