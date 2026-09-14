@@ -151,6 +151,7 @@ class RtcViewModel @Inject constructor(
     fun dismissAdministratorMfaUi() = authenticationCoordinator.dismissAdministratorMfaUi()
     fun uploadProfilePhoto(uri: Uri) = authenticationCoordinator.uploadProfilePhoto(uri)
     fun deleteProfilePhoto() = authenticationCoordinator.deleteProfilePhoto()
+    fun continueAsGuest() = authenticationCoordinator.continueAsGuest()
     fun switchRole(role: UserRole) = authenticationCoordinator.switchRole(role)
     fun toggleReadingMode() = authenticationCoordinator.toggleReadingMode()
     fun setTheme(preference: ThemePreference) = authenticationCoordinator.setTheme(preference)

@@ -58,12 +58,28 @@ internal class RtcAuthenticationCoordinator(
 
     fun registerCurrentFcmToken() {
         runCatching { FirebaseApp.initializeApp(applicationContext) }.getOrNull() ?: return
-        runCatching { FirebaseMessaging.getInstance().token }
-            .onSuccess { task ->
-                task.addOnSuccessListener { token ->
-                    scope.launch { repository.registerFcmDevice(token, BuildConfig.VERSION_NAME) }
+        try {
+            val fcm = FirebaseMessaging.getInstance()
+            fcm.token.addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val token = task.result
+                    if (!token.isNullOrBlank()) {
+                        scope.launch { repository.registerFcmDevice(token, BuildConfig.VERSION_NAME) }
+                    }
+                } else {
+                    val ex = task.exception
+                    val isTooManyRegistrations = ex?.message?.contains("TOO_MANY_REGISTRATIONS", ignoreCase = true) == true ||
+                        ex?.cause?.message?.contains("TOO_MANY_REGISTRATIONS", ignoreCase = true) == true
+                    if (isTooManyRegistrations) {
+                        scope.launch {
+                            runCatching { fcm.deleteToken() }
+                        }
+                    }
                 }
             }
+        } catch (e: Exception) {
+            // FCM registration failure is non-fatal for primary application flows
+        }
     }
 
     fun consumeNotificationPermissionPrompt() {
@@ -143,12 +159,14 @@ internal class RtcAuthenticationCoordinator(
             repository.requestPasswordRecovery(email)
                 .onSuccess {
                     _passwordUi.value = PasswordUiState(
-                        message = "If this email is registered, a password-reset link has been sent."
+                        message = "If this email is registered, a password-reset link has been sent.",
+                        isSuccess = true,
                     )
                 }
                 .onFailure {
                     _passwordUi.value = PasswordUiState(
-                        message = "Password recovery could not be started. Check the email address and try again."
+                        message = "Password recovery could not be started. Check the email address and try again.",
+                        isSuccess = false,
                     )
                 }
         }
@@ -262,6 +280,10 @@ internal class RtcAuthenticationCoordinator(
                     )
                 }
         }
+    }
+
+    fun continueAsGuest() {
+        repository.continueAsGuest()
     }
 
     fun switchRole(role: UserRole) {

@@ -3,11 +3,20 @@ package za.org.rtc.community.feature.publicreports.data
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -42,6 +51,59 @@ class SupabasePublicReportRepository @Inject constructor(
         addAll(PublicReportMockData.getSampleReports())
     }
     private val localComments = java.util.concurrent.ConcurrentHashMap<String, MutableList<PublicReportComment>>()
+
+    private val _dashboardUpdates = kotlinx.coroutines.flow.MutableStateFlow<PublicReportDashboard?>(null)
+    override val dashboardUpdates: kotlinx.coroutines.flow.StateFlow<PublicReportDashboard?> = _dashboardUpdates.asStateFlow()
+
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        notifyDashboardChanged()
+        setupRealtimeSubscription()
+    }
+
+    private fun setupRealtimeSubscription() {
+        repositoryScope.launch {
+            runCatching {
+                val channel = supabase.realtime.channel("public-reports-db-changes")
+                val changeFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+                    table = "public_reports"
+                }
+                channel.subscribe()
+                changeFlow.collect {
+                    runCatching {
+                        dashboard().onSuccess { updatedDashboard ->
+                            _dashboardUpdates.value = updatedDashboard
+                        }.onFailure {
+                            notifyDashboardChanged()
+                        }
+                    }.getOrElse {
+                        notifyDashboardChanged()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun calculateDashboard(): PublicReportDashboard {
+        val allReports = synchronized(localReports) { localReports.toList() }
+        val open = allReports.count { it.status == PublicReportStatus.SUBMITTED || it.status == PublicReportStatus.ACKNOWLEDGED }.toLong()
+        val inProgress = allReports.count { it.status == PublicReportStatus.IN_PROGRESS }.toLong()
+        val resolved = allReports.count { it.status == PublicReportStatus.COMPLETED || it.status == PublicReportStatus.CLOSED }.toLong()
+        val total = allReports.size.toLong()
+        return PublicReportDashboard(
+            openReports = open,
+            inProgressReports = inProgress,
+            resolvedReports = resolved,
+            verifiedReports = total,
+            activeReports = open + inProgress,
+            unresolvedReports = open + inProgress,
+        )
+    }
+
+    private fun notifyDashboardChanged() {
+        _dashboardUpdates.value = calculateDashboard()
+    }
 
     override suspend fun categories(): Result<List<PublicReportCategory>> = runCatching {
         val remote = runCatching {
@@ -284,6 +346,7 @@ class SupabasePublicReportRepository @Inject constructor(
         synchronized(localReports) {
             localReports.add(0, newReport)
         }
+        notifyDashboardChanged()
 
         runCatching {
             supabase.postgrest.rpc(
@@ -307,6 +370,7 @@ class SupabasePublicReportRepository @Inject constructor(
                 },
             ).decodeSingle<String>()
         }
+        notifyDashboardChanged()
         reportId
     }
 
@@ -346,23 +410,9 @@ class SupabasePublicReportRepository @Inject constructor(
                 .let(PublicReportJsonMappers::dashboard)
         }.getOrNull()
 
-        if (remote != null) {
-            remote
-        } else {
-            val allReports = synchronized(localReports) { localReports.toList() }
-            val open = allReports.count { it.status == PublicReportStatus.SUBMITTED || it.status == PublicReportStatus.ACKNOWLEDGED }.toLong()
-            val inProgress = allReports.count { it.status == PublicReportStatus.IN_PROGRESS }.toLong()
-            val resolved = allReports.count { it.status == PublicReportStatus.COMPLETED || it.status == PublicReportStatus.CLOSED }.toLong()
-            val total = allReports.size.toLong()
-            PublicReportDashboard(
-                openReports = open,
-                inProgressReports = inProgress,
-                resolvedReports = resolved,
-                verifiedReports = total,
-                activeReports = open + inProgress,
-                unresolvedReports = open + inProgress,
-            )
-        }
+        val result = remote ?: calculateDashboard()
+        _dashboardUpdates.value = result
+        result
     }
 
     override suspend fun myPage(cursorCreatedAt: Instant?, cursorId: String?, limit: Int): Result<PublicReportPage> = runCatching {
@@ -381,6 +431,14 @@ class SupabasePublicReportRepository @Inject constructor(
     }.recoverCatching { error -> throw PublicReportFailure.from(error) }
 
     override suspend fun withdraw(reportId: String, reason: String, requestId: String): Result<Unit> = runCatching {
+        synchronized(localReports) {
+            val idx = localReports.indexOfFirst { it.id == reportId }
+            if (idx != -1) {
+                localReports[idx] = localReports[idx].copy(status = PublicReportStatus.CLOSED)
+            }
+        }
+        notifyDashboardChanged()
+
         supabase.postgrest.rpc(
             PublicReportRpcContract.WITHDRAW,
             buildJsonObject {
@@ -428,6 +486,14 @@ class SupabasePublicReportRepository @Inject constructor(
         reason: String,
         requestId: String,
     ): Result<Unit> = runCatching {
+        synchronized(localReports) {
+            val idx = localReports.indexOfFirst { it.id == reportId }
+            if (idx != -1) {
+                localReports[idx] = localReports[idx].copy(verified = verified, verificationReason = reason)
+            }
+        }
+        notifyDashboardChanged()
+
         supabase.postgrest.rpc(
             PublicReportRpcContract.ADMIN_VERIFY,
             buildJsonObject {
@@ -448,6 +514,14 @@ class SupabasePublicReportRepository @Inject constructor(
         duplicateOf: String?,
         requestId: String,
     ): Result<Unit> = runCatching {
+        synchronized(localReports) {
+            val idx = localReports.indexOfFirst { it.id == reportId }
+            if (idx != -1) {
+                localReports[idx] = localReports[idx].copy(status = toStatus)
+            }
+        }
+        notifyDashboardChanged()
+
         supabase.postgrest.rpc(
             PublicReportRpcContract.ADMIN_TRANSITION,
             buildJsonObject {

@@ -379,12 +379,13 @@ class RtcRepository @Inject constructor(
 
     suspend fun signInWithGoogleIdToken(idToken: String, nonce: String): Result<Unit> = runCatching {
         require(idToken.isNotBlank()) { "Google did not return an identity token." }
-        require(nonce.isNotBlank()) { "Google Sign-In verification nonce is missing." }
         
         supabase.auth.signInWith(IDToken) {
             this.idToken = idToken
             provider = Google
-            this.nonce = nonce
+            if (nonce.isNotBlank()) {
+                this.nonce = nonce
+            }
         }
         supabase.auth.startAutoRefreshForCurrentSession()
         hydrateSupabaseSession()
@@ -469,8 +470,13 @@ class RtcRepository @Inject constructor(
 
     /** The result is intentionally generic so email address ownership is not disclosed. */
     suspend fun requestPasswordRecovery(email: String): Result<Unit> = runCatching {
-        require(email.trim().contains('@')) { "Enter a valid email address." }
-        supabase.auth.resetPasswordForEmail(email = email.trim(), redirectUrl = "rtc://community")
+        val cleanEmail = email.trim()
+        require(cleanEmail.contains('@')) { "Enter a valid email address." }
+        try {
+            supabase.auth.resetPasswordForEmail(email = cleanEmail)
+        } catch (e: Exception) {
+            supabase.auth.resetPasswordForEmail(email = cleanEmail, redirectUrl = "rtc://community")
+        }
     }
 
     /** A recovery session may omit currentPassword; standard password changes must supply it. */
@@ -588,6 +594,16 @@ class RtcRepository @Inject constructor(
         repositoryScope.launch { preferencesStore.clearUserRoles() }
     }
 
+    /** Allows anonymous exploration of the application in guest mode. */
+    fun continueAsGuest() {
+        _session.value = _session.value.copy(
+            role = UserRole.RESIDENT_A,
+            displayName = "Guest Explorer",
+            handle = "@guest",
+            authority = SessionAuthority.PUBLIC
+        )
+    }
+
     /** Synthetic role switching is retained solely for debug builds. */
     fun setRole(role: UserRole) {
         if (!BuildConfig.DEBUG || _session.value.authority != SessionAuthority.DEVELOPMENT_ADAPTER) return
@@ -651,8 +667,11 @@ class RtcRepository @Inject constructor(
 
         val isAdmin = isAdminUserClaim || isAdminAppClaim || hasAdminRoleClaim || isAdminEmail || resolvedRoles.contains(UserRole.SYSTEM_ADMIN)
         val role = if (isAdmin) UserRole.SYSTEM_ADMIN else (resolvedRoles.singleOrNull() ?: UserRole.RESIDENT_A)
-        val displayName = user.userMetadata?.get("full_name")?.jsonPrimitive?.contentOrNull
-            ?.takeIf(String::isNotBlank)
+        val googleName = user.userMetadata?.get("full_name")?.jsonPrimitive?.contentOrNull
+            ?: user.userMetadata?.get("name")?.jsonPrimitive?.contentOrNull
+        val googleAvatar = user.userMetadata?.get("avatar_url")?.jsonPrimitive?.contentOrNull
+            ?: user.userMetadata?.get("picture")?.jsonPrimitive?.contentOrNull
+        val displayName = googleName?.takeIf(String::isNotBlank)
             ?: (if (isAdminEmail) "Silvano Titus (Admin)" else email.substringBefore("@"))
         val persistedProfile = productionUxRepository.ownPersistedProfile().getOrNull()
         val persistedExperience = productionUxRepository.ownExperiencePreferences().getOrNull()
@@ -660,7 +679,7 @@ class RtcRepository @Inject constructor(
         val communityNotifications = productionUxRepository.ownOrdinaryAlertPreference().getOrNull() ?: true
         val declaredLocality = productionUxRepository.ownDeclaredLocality().getOrNull()
         if (role != UserRole.CASE_STAFF) _assignedSupportCases.value = emptyList()
-        val resolvedAvatarUrl = productionUxRepository.resolveProfileAvatarUrl(user.id).getOrNull()
+        val resolvedAvatarUrl = productionUxRepository.resolveProfileAvatarUrl(user.id).getOrNull() ?: googleAvatar
         val finalDisplayName = persistedProfile?.displayName ?: displayName
         val finalBio = persistedProfile?.bio.orEmpty()
         val finalInterests = persistedProfile?.interests.orEmpty()

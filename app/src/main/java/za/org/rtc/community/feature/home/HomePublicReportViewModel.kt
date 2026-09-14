@@ -23,14 +23,28 @@ data class HomePublicReportState(
 class HomePublicReportViewModel @Inject constructor(
     private val repository: PublicReportRepository,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(HomePublicReportState())
+    private val _state = MutableStateFlow(HomePublicReportState(loading = true))
     val state = _state.asStateFlow()
 
-    private var loaded = false
+    init {
+        viewModelScope.launch {
+            repository.dashboardUpdates.collect { dashboard ->
+                if (dashboard != null) {
+                    _state.update {
+                        it.copy(
+                            dashboard = dashboard,
+                            loading = false,
+                            refreshing = false,
+                            message = null,
+                        )
+                    }
+                }
+            }
+        }
+        refresh()
+    }
 
     fun load() {
-        if (loaded) return
-        loaded = true
         refresh()
     }
 
@@ -46,7 +60,14 @@ class HomePublicReportViewModel @Inject constructor(
         viewModelScope.launch {
             repository.dashboard()
                 .onSuccess { dashboard ->
-                    _state.value = HomePublicReportState(dashboard = dashboard)
+                    _state.update {
+                        it.copy(
+                            dashboard = dashboard,
+                            loading = false,
+                            refreshing = false,
+                            message = null,
+                        )
+                    }
                 }
                 .onFailure { error ->
                     _state.update {

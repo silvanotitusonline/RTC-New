@@ -23,7 +23,21 @@ fun AccountScreen(
     onMarketplace: (String) -> Unit,
 ) {
     val session by viewModel.session.collectAsStateWithLifecycle()
+    val passwordUi by viewModel.passwordUi.collectAsStateWithLifecycle()
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showPasswordDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showPasswordDialog) {
+        PasswordUpdateDialog(
+            isRecoveryFlow = false,
+            passwordUi = passwordUi,
+            onUpdate = { newPw, curPw -> viewModel.updatePassword(newPw, curPw) },
+            onDismiss = {
+                showPasswordDialog = false
+                viewModel.dismissPasswordUi()
+            },
+        )
+    }
 
     ResidentPullToRefresh(isRefreshing = isRefreshing, onRefresh = onRefresh) {
         if (showSettings) {
@@ -42,7 +56,7 @@ fun AccountScreen(
                 item {
                     AccountSettingsMenu(
                         onOpenNotifications = {},
-                        onOpenSecurity = {},
+                        onOpenSecurity = { showPasswordDialog = true },
                         onOpenPrivacyAndData = {},
                         onOpenAccessibility = {},
                         onOpenMarketplaceBusiness = { onMarketplace(RtcRoute.MARKETPLACE_MY_BUSINESSES) },
@@ -55,7 +69,6 @@ fun AccountScreen(
                 session = session,
                 onOpenSettings = { showSettings = true },
                 onOpenSupport = onHelp,
-                onOpenProviderProfile = {},
                 onOpenMarketplaceBusiness = { onMarketplace(RtcRoute.MARKETPLACE_MY_BUSINESSES) },
             )
         }

@@ -3,6 +3,8 @@ package za.org.rtc.community.feature.publicreports.domain
 import java.time.Instant
 
 interface PublicReportRepository {
+    val dashboardUpdates: kotlinx.coroutines.flow.StateFlow<PublicReportDashboard?>
+
     suspend fun categories(): Result<List<PublicReportCategory>>
 
     suspend fun page(

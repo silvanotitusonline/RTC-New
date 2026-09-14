@@ -4,10 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -111,18 +113,6 @@ internal fun MarketplaceBusinessDetailContent(
                 ) {
                     Button(
                         onClick = {
-                            onNavigate(
-                                RtcRoute.serviceCentreRequest(
-                                    providerId = detail.card.id,
-                                    businessId = detail.card.id,
-                                    offeringId = detail.offerings.firstOrNull()?.id,
-                                ),
-                            )
-                        },
-                        modifier = Modifier.height(RtcSize.minimumTouchTarget),
-                    ) { Text(MarketplaceRequestBookingLabel) }
-                    OutlinedButton(
-                        onClick = {
                             val next = !isBookmarked
                             isBookmarked = next
                             onSaved(detail.card.id, next)
@@ -133,6 +123,7 @@ internal fun MarketplaceBusinessDetailContent(
                             if (isBookmarked) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
                             contentDescription = null,
                         )
+                        Spacer(Modifier.width(RtcSpacing.compact))
                         Text(if (isBookmarked) "Saved" else "Save")
                     }
                     OutlinedButton(
@@ -147,6 +138,7 @@ internal fun MarketplaceBusinessDetailContent(
                         modifier = Modifier.height(RtcSize.minimumTouchTarget),
                     ) {
                         Icon(Icons.Filled.LocationOn, contentDescription = null)
+                        Spacer(Modifier.width(RtcSpacing.compact))
                         Text("Directions")
                     }
                     OutlinedButton(
@@ -154,6 +146,7 @@ internal fun MarketplaceBusinessDetailContent(
                         modifier = Modifier.height(RtcSize.minimumTouchTarget),
                     ) {
                         Icon(Icons.Filled.Flag, contentDescription = null)
+                        Spacer(Modifier.width(RtcSpacing.compact))
                         Text("Report")
                     }
                 }
@@ -202,18 +195,6 @@ internal fun MarketplaceBusinessDetailContent(
                         Text(offering.title, fontWeight = FontWeight.Bold)
                         offering.description.takeIf(String::isNotBlank)?.let { Text(it) }
                         Text(offering.priceLabel, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                        Button(
-                            onClick = {
-                                onNavigate(
-                                    RtcRoute.serviceCentreRequest(
-                                        providerId = detail.card.id,
-                                        businessId = detail.card.id,
-                                        offeringId = offering.id,
-                                    ),
-                                )
-                            },
-                            modifier = Modifier.height(RtcSize.minimumTouchTarget),
-                        ) { Text(MarketplaceRequestBookingLabel) }
                     }
                 }
             }

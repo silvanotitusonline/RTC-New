@@ -27,11 +27,11 @@ fun AccountHubScreen(
     session: RtcSession,
     onOpenSettings: () -> Unit,
     onOpenSupport: () -> Unit,
-    onOpenProviderProfile: () -> Unit,
+    onOpenProviderProfile: (() -> Unit)? = null,
     onOpenMarketplaceBusiness: (() -> Unit)? = null,
 ) {
     RtcScreenScaffold {
-        item { RtcSectionHeader("Account", "Identity, provider tools, marketplace, support and settings.") }
+        item { RtcSectionHeader("Account", "Identity, marketplace, support and settings.") }
         item {
             RtcCard {
                 Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.small)) {
@@ -60,14 +60,6 @@ fun AccountHubScreen(
         }
         item {
             AccountHubAction(
-                title = "Provider profile",
-                description = "Become a provider or manage your Service Centre provider profile.",
-                icon = { Icon(Icons.Filled.Build, contentDescription = null) },
-                onClick = onOpenProviderProfile,
-            )
-        }
-        item {
-            AccountHubAction(
                 title = "Support",
                 description = "Contact Support and track your existing support cases.",
                 icon = { Icon(Icons.Filled.HelpOutline, contentDescription = null) },
@@ -86,7 +78,7 @@ fun AccountHubScreen(
             RtcCard {
                 Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
                     Icon(Icons.Filled.Person, contentDescription = null)
-                    Text("Provider status and account identity remain attached to this same resident account.")
+                    Text("Account identity and settings remain attached to this resident account.")
                 }
             }
         }

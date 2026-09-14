@@ -95,14 +95,13 @@ fun BusinessActivitySection(
     detail: MarketplaceBusinessDetail,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     var posts by remember(detail) {
         val list = mutableListOf<ActivityPostData>()
         list.add(
             ActivityPostData(
                 id = "act-1",
                 title = "Welcome to ${detail.card.displayName}!",
-                body = "We're active on RTC Community Marketplace! Explore our offerings, view location directions, or submit a booking request directly from our profile.",
+                body = "We're active on RTC Community Marketplace! Explore our offerings, view location directions, or connect directly with our team.",
                 dateLabel = "Recently",
                 categoryBadge = "ANNOUNCEMENT",
                 initialLikes = 14,
@@ -112,8 +111,8 @@ fun BusinessActivitySection(
             list.add(
                 ActivityPostData(
                     id = "act-2",
-                    title = "Verified Community Provider",
-                    body = "Our business listing has been confirmed and verified by RTC community admins. We are dedicated to providing trusted and high quality local service.",
+                    title = "Verified Community Business",
+                    body = "Our business listing has been confirmed and verified by RTC community admins. We are dedicated to providing trusted and high quality local products and services.",
                     dateLabel = "Verified Status",
                     categoryBadge = "VERIFIED",
                     initialLikes = 32,
@@ -125,8 +124,8 @@ fun BusinessActivitySection(
             list.add(
                 ActivityPostData(
                     id = "act-3",
-                    title = "Featured Service: ${firstOffering.title}",
-                    body = "${firstOffering.description.ifBlank { "Now accepting direct community requests for " + firstOffering.title }}. Pricing: ${firstOffering.priceLabel}.",
+                    title = "Featured Offering: ${firstOffering.title}",
+                    body = "${firstOffering.description.ifBlank { "Discover our offering: " + firstOffering.title }}. Pricing: ${firstOffering.priceLabel}.",
                     dateLabel = "2 days ago",
                     categoryBadge = "SERVICE UPDATE",
                     initialLikes = 9,
@@ -135,9 +134,6 @@ fun BusinessActivitySection(
         }
         mutableStateOf(list.toList())
     }
-
-    var showPostDialog by remember { mutableStateOf(false) }
-    var notificationNoticeMessage by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -162,16 +158,6 @@ fun BusinessActivitySection(
                     text = "Activity & Announcements",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 )
-            }
-
-            OutlinedButton(
-                onClick = { showPostDialog = true },
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                modifier = Modifier.height(32.dp),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Post Update", style = MaterialTheme.typography.labelSmall)
             }
         }
 
@@ -214,41 +200,6 @@ fun BusinessActivitySection(
             }
         }
 
-        // Action Notice Banner when a Push Alert was dispatched
-        notificationNoticeMessage?.let { msg ->
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.tertiaryContainer,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.MarkEmailRead,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Text(
-                        text = msg,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(
-                        onClick = { notificationNoticeMessage = null },
-                        modifier = Modifier.size(24.dp),
-                    ) {
-                        Icon(Icons.Filled.Close, contentDescription = "Dismiss", modifier = Modifier.size(16.dp))
-                    }
-                }
-            }
-        }
-
         posts.forEach { post ->
             ActivityPostCard(
                 post = post,
@@ -258,130 +209,6 @@ fun BusinessActivitySection(
             )
         }
     }
-
-    if (showPostDialog) {
-        NewAnnouncementDialog(
-            businessName = detail.card.displayName,
-            onDismiss = { showPostDialog = false },
-            onSubmit = { title, body, badge ->
-                showPostDialog = false
-                val newPost = ActivityPostData(
-                    id = "act_${System.currentTimeMillis()}",
-                    title = title,
-                    body = body,
-                    dateLabel = "Just now",
-                    categoryBadge = badge,
-                    initialLikes = 1,
-                )
-                posts = listOf(newPost) + posts
-
-                // Dispatch actual Android device push notification for bookmarked users
-                dispatchBusinessAnnouncementNotification(
-                    context = context,
-                    businessName = detail.card.displayName,
-                    title = title,
-                    body = body,
-                )
-
-                notificationNoticeMessage = "📢 Announcement published! Instant push notification alert sent to residents who bookmarked ${detail.card.displayName}."
-            },
-        )
-    }
-}
-
-@Composable
-private fun NewAnnouncementDialog(
-    businessName: String,
-    onDismiss: () -> Unit,
-    onSubmit: (title: String, body: String, badge: String) -> Unit,
-) {
-    var title by remember { mutableStateOf("") }
-    var body by remember { mutableStateOf("") }
-    var selectedBadge by remember { mutableStateOf("ANNOUNCEMENT") }
-
-    val badges = listOf("ANNOUNCEMENT", "SPECIAL OFFER", "EVENT", "SERVICE UPDATE")
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Post Business Update", fontWeight = FontWeight.Bold)
-                Text(
-                    "Publish an announcement & alert bookmarked residents of $businessName",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Announcement Title") },
-                    placeholder = { Text("e.g. 20% Off Weekend Special / New Opening Hours") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-
-                OutlinedTextField(
-                    value = body,
-                    onValueChange = { body = it },
-                    label = { Text("Announcement Details") },
-                    placeholder = { Text("Write the update details for community residents...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
-                    maxLines = 5,
-                )
-
-                Text(
-                    text = "Category Badge:",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    badges.forEach { badge ->
-                        FilterChip(
-                            selected = selectedBadge == badge,
-                            onClick = { selectedBadge = badge },
-                            label = { Text(badge, style = MaterialTheme.typography.labelSmall) },
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (title.isNotBlank() && body.isNotBlank()) {
-                        onSubmit(title, body, selectedBadge)
-                    }
-                },
-                enabled = title.isNotBlank() && body.isNotBlank(),
-                shape = CircleShape,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Icon(Icons.Filled.Campaign, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Text("Publish & Alert Bookmarked")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-    )
 }
 
 @Composable

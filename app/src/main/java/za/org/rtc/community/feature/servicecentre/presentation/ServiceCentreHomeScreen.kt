@@ -111,11 +111,6 @@ fun ServiceCentreHomeRoute(
                         )
                     }
                 }
-                OutlinedButton(onClick = { onNavigate(RtcRoute.SERVICE_CENTRE_PROVIDER) }, modifier = Modifier.fillMaxWidth().height(RtcSize.minimumTouchTarget)) {
-                    Icon(Icons.Filled.PersonAdd, contentDescription = null)
-                    Spacer(Modifier.size(RtcSpacing.compact))
-                    Text("Become a Provider")
-                }
                 ServiceCentreMessageBanner(state.message, viewModel::dismissMessage)
                 if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 Text("Local Radar", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)

@@ -131,6 +131,7 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
             onDismissAuthenticationMessage = viewModel::dismissAuthenticationMessage,
             onRequestPasswordRecovery = viewModel::requestPasswordRecovery,
             onDismissPasswordMessage = viewModel::dismissPasswordUi,
+            onContinueAsGuest = viewModel::continueAsGuest,
         )
         return
     }

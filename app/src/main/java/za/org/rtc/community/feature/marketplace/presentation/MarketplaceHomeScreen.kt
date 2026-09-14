@@ -69,39 +69,6 @@ fun MarketplaceHomeRoute(
                 }
             }
 
-            // Quick Service Centre bridge button
-            item {
-                RtcCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = RtcSpacing.pageGutter),
-                    onClick = {
-                        if (onSwitchToServices != null) {
-                            onSwitchToServices()
-                        } else {
-                            onNavigate(RtcRoute.SERVICE_CENTRE_HOME)
-                        }
-                    },
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(Icons.Filled.Build, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Column {
-                                Text("Need a service provider?", fontWeight = FontWeight.SemiBold)
-                                Text("Open Service Centre", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                    }
-                }
-            }
-
             if (home.categories.isNotEmpty()) {
                 item {
                     AppStoreSectionHeader(

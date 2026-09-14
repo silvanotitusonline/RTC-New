@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -70,8 +72,8 @@ fun ServiceCentreRequestBookingRoute(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .androidx.compose.foundation.layout.imePadding()
-            .androidx.compose.foundation.layout.navigationBarsPadding(),
+            .imePadding()
+            .navigationBarsPadding(),
         contentPadding = PaddingValues(RtcSpacing.pageGutter),
         verticalArrangement = Arrangement.spacedBy(RtcSpacing.sectionGap),
     ) {

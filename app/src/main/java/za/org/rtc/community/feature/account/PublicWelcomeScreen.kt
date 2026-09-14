@@ -85,6 +85,7 @@ internal fun PublicWelcomeScreen(
     onDismissAuthenticationMessage: () -> Unit,
     onRequestPasswordRecovery: (String) -> Unit,
     onDismissPasswordMessage: () -> Unit,
+    onContinueAsGuest: () -> Unit = {},
 ) {
     val welcome = LocalRtcUiConfiguration.current.welcome
     var mode by rememberSaveable { mutableStateOf<String?>(null) }
@@ -241,13 +242,13 @@ internal fun PublicWelcomeScreen(
                                     indication = ripple(false, 220.dp, Color(0xFFE2E8F0)),
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        mode = "SIGN_IN"
+                                        mode = "CREATE"
                                     }
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = welcome.primaryActionLabel.ifBlank { "Log in" },
+                                text = welcome.primaryActionLabel.ifBlank { "Get started" },
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp),
                                 color = Color(0xFF09090B),
                             )
@@ -279,13 +280,13 @@ internal fun PublicWelcomeScreen(
                                     indication = ripple(false, 220.dp, Color.White.copy(alpha = 0.2f)),
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        mode = "CREATE"
+                                        mode = "SIGN_IN"
                                     }
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = welcome.secondaryActionLabel.ifBlank { "Sign up" },
+                                text = welcome.secondaryActionLabel.ifBlank { "Sign in" },
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
                                 color = Color.White,
                             )
@@ -319,9 +320,25 @@ internal fun PublicWelcomeScreen(
                             onFailure = onGoogleSignInError,
                             modifier = Modifier.fillMaxWidth().height(54.dp),
                         )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        TextButton(
+                            onClick = onContinueAsGuest,
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                        ) {
+                            Text(
+                                text = "Explore as Guest",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 15.sp,
+                                ),
+                                color = Color(0xFF94A3B8),
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(36.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             } else {
                 LazyColumn(
@@ -347,7 +364,6 @@ internal fun PublicWelcomeScreen(
                                     tint = Color.White,
                                 )
                             }
-                            Text("Back")
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (isForgotPassword) "Reset Password" else if (creatingAccount) "Create your RTC account" else "Sign in to RTC Community",

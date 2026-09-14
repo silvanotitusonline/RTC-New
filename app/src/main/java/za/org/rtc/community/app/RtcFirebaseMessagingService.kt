@@ -31,7 +31,13 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        serviceScope.launch { repository.registerFcmDevice(token, BuildConfig.VERSION_NAME) }
+        serviceScope.launch {
+            runCatching {
+                if (token.isNotBlank()) {
+                    repository.registerFcmDevice(token, BuildConfig.VERSION_NAME)
+                }
+            }
+        }
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
