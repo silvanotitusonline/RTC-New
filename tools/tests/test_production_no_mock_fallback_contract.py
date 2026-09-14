@@ -5,6 +5,7 @@ MAIN_SOURCE = ROOT / "app/src/main/java"
 RTC_REPOSITORY = MAIN_SOURCE / "za/org/rtc/community/data/RtcRepository.kt"
 PRODUCTION_UX_REPOSITORY = MAIN_SOURCE / "za/org/rtc/community/supabase/ProductionUxRepository.kt"
 EVENTS_REPOSITORY = MAIN_SOURCE / "za/org/rtc/community/feature/events/data/remote/SupabaseCommunityEventsRepository.kt"
+COMMUNITY_REPOSITORY = MAIN_SOURCE / "za/org/rtc/community/feature/community/SupabaseCommunityRepository.kt"
 
 
 def _text(path: Path) -> str:
@@ -85,6 +86,50 @@ def test_resident_mutations_never_manufacture_local_success_before_server_confir
     assert "productionUxRepository.reportCommunityPost" in report
     assert "CachedReportEntity" not in report
     assert "Result.success(Unit)" not in report
+
+
+def test_community_repository_mutations_are_server_confirmed_before_cache_changes():
+    community = _text(COMMUNITY_REPOSITORY)
+    boundaries = (
+        ("override suspend fun createComment", "override suspend fun updateComment"),
+        ("override suspend fun updateComment", "override suspend fun deleteComment"),
+        ("override suspend fun deleteComment", "override suspend fun deletePost"),
+        ("override suspend fun deletePost", "override suspend fun moderateComment"),
+        ("override suspend fun moderateComment", "override suspend fun toggleLike"),
+        ("override suspend fun toggleLike", "override suspend fun toggleReaction"),
+        ("override suspend fun toggleReaction", "override suspend fun repostPost"),
+        ("override suspend fun repostPost", "override suspend fun toggleBookmark"),
+        ("override suspend fun toggleBookmark", "override suspend fun searchPosts"),
+    )
+
+    for start, end in boundaries:
+        body = _function(community, start, end)
+        assert "optimistic" not in body.lower(), f"optimistic mutation remains in {start}"
+        assert "remoteOutcome ?:" not in body, f"local success fallback remains in {start}"
+
+    create = _function(community, "override suspend fun createComment", "override suspend fun updateComment")
+    assert create.index("supabase.postgrest.rpc") < create.index("cachedCommentDao.insertComment") if "cachedCommentDao.insertComment" in create else True
+    assert "UUID.randomUUID" not in create
+
+    delete_comment = _function(community, "override suspend fun deleteComment", "override suspend fun deletePost")
+    if "cachedCommentDao.deleteComment" in delete_comment:
+        assert delete_comment.index("supabase.from") < delete_comment.index("cachedCommentDao.deleteComment")
+
+    delete_post = _function(community, "override suspend fun deletePost", "override suspend fun moderateComment")
+    if "cachedPostDao.deletePost" in delete_post:
+        assert delete_post.index("supabase.from") < delete_post.index("cachedPostDao.deletePost")
+
+
+def test_system_admin_mfa_status_fails_closed_on_missing_factor_and_auth_errors():
+    rtc = _text(RTC_REPOSITORY)
+    mfa = _function(rtc, "private suspend fun administratorMfaStatus", "private fun requireStrongPassword")
+
+    assert "getOrDefault(emptyList())" not in mfa
+    assert ".getOrNull()" not in mfa
+    assert "ENROLLMENT_REQUIRED" in mfa
+    assert "VERIFICATION_REQUIRED" in mfa
+    assert "currentSessionOrNull()?.accessToken\n            ?: return AdministratorMfaStatus.VERIFICATION_REQUIRED" in mfa
+    assert "assurance.current == AuthenticatorAssuranceLevel.AAL2" in mfa
 
 
 def test_events_repository_starts_empty_and_does_not_manufacture_server_success():
