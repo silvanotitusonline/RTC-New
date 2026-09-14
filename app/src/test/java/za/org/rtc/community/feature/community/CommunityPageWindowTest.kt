@@ -35,6 +35,36 @@ class CommunityPageWindowTest {
         assertEquals(null, page.nextCursor)
     }
 
+    @Test
+    fun `cached fallback keeps only posts strictly after the composite cursor`() {
+        val posts = listOf(
+            post("d", "2026-08-28T12:00:00Z"),
+            post("c", "2026-08-28T11:00:00Z"),
+            post("b", "2026-08-28T11:00:00Z"),
+            post("a", "2026-08-28T10:00:00Z"),
+        )
+
+        val window = postsAfterCommunityCursor(
+            posts = posts,
+            cursor = CommunityCursor("2026-08-28T11:00:00Z", "c"),
+        )
+
+        assertEquals(listOf("b", "a"), window.map { it.id })
+    }
+
+    @Test
+    fun `cached fallback without a cursor preserves deterministic feed order`() {
+        val posts = listOf(
+            post("a", "2026-08-28T10:00:00Z"),
+            post("c", "2026-08-28T11:00:00Z"),
+            post("b", "2026-08-28T11:00:00Z"),
+        )
+
+        val window = postsAfterCommunityCursor(posts = posts, cursor = null)
+
+        assertEquals(listOf("c", "b", "a"), window.map { it.id })
+    }
+
     private fun post(id: String, createdAt: String) = CommunityPost(
         id = id,
         author = "Resident",
