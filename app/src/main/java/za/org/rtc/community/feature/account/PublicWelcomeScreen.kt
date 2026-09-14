@@ -241,13 +241,13 @@ internal fun PublicWelcomeScreen(
                                     indication = ripple(false, 220.dp, Color(0xFFE2E8F0)),
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        mode = "SIGN_IN"
+                                        mode = "CREATE"
                                     }
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = welcome.primaryActionLabel.ifBlank { "Log in" },
+                                text = welcome.primaryActionLabel.ifBlank { "Get started" },
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp),
                                 color = Color(0xFF09090B),
                             )
@@ -279,13 +279,13 @@ internal fun PublicWelcomeScreen(
                                     indication = ripple(false, 220.dp, Color.White.copy(alpha = 0.2f)),
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        mode = "CREATE"
+                                        mode = "SIGN_IN"
                                     }
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = welcome.secondaryActionLabel.ifBlank { "Sign up" },
+                                text = welcome.secondaryActionLabel.ifBlank { "Sign in" },
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
                                 color = Color.White,
                             )
