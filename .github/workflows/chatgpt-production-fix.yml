@@ -25,6 +25,9 @@ jobs:
       - name: Apply deterministic production patch
         run: python3 tools/chatgpt_apply_production_fix.py
 
+      - name: Install source-contract test runner
+        run: python -m pip install --disable-pip-version-check pytest
+
       - name: Run source regression contracts
         run: python -m pytest -q tools/tests
 
