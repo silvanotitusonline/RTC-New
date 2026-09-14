@@ -1,10 +1,10 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-
-RTC_REPOSITORY = ROOT / "app/src/main/java/za/org/rtc/community/data/RtcRepository.kt"
-PRODUCTION_UX_REPOSITORY = ROOT / "app/src/main/java/za/org/rtc/community/supabase/ProductionUxRepository.kt"
-EVENTS_REPOSITORY = ROOT / "app/src/main/java/za/org/rtc/community/feature/events/data/remote/SupabaseCommunityEventsRepository.kt"
+MAIN_SOURCE = ROOT / "app/src/main/java"
+RTC_REPOSITORY = MAIN_SOURCE / "za/org/rtc/community/data/RtcRepository.kt"
+PRODUCTION_UX_REPOSITORY = MAIN_SOURCE / "za/org/rtc/community/supabase/ProductionUxRepository.kt"
+EVENTS_REPOSITORY = MAIN_SOURCE / "za/org/rtc/community/feature/events/data/remote/SupabaseCommunityEventsRepository.kt"
 
 
 def _text(path: Path) -> str:
@@ -17,16 +17,22 @@ def _function(source: str, signature_fragment: str, next_signature_fragment: str
     return source[start:end]
 
 
-def test_production_repositories_do_not_substitute_mock_or_sample_records():
-    rtc = _text(RTC_REPOSITORY)
-    production = _text(PRODUCTION_UX_REPOSITORY)
-    events = _text(EVENTS_REPOSITORY)
+def test_runtime_source_does_not_depend_on_mock_or_sample_records():
+    forbidden_tokens = ("RtcMockData", "CommunityMockData", "SampleCommunityEvents")
+    violations: list[str] = []
 
-    assert "RtcMockData" not in rtc
-    assert "CommunityMockData" not in rtc
-    assert "SampleCommunityEvents" not in rtc
-    assert "RtcMockData" not in production
-    assert "SampleCommunityEvents" not in events
+    for path in MAIN_SOURCE.rglob("*.kt"):
+        source = _text(path)
+        definitions = {
+            "RtcMockData": "object RtcMockData" in source,
+            "CommunityMockData": "object CommunityMockData" in source,
+            "SampleCommunityEvents": "val SampleCommunityEvents" in source,
+        }
+        for token in forbidden_tokens:
+            if token in source and not definitions[token]:
+                violations.append(f"{path.relative_to(ROOT)} -> {token}")
+
+    assert not violations, "production runtime still depends on mock/sample records:\n" + "\n".join(violations)
 
 
 def test_production_repository_reads_propagate_backend_failures_instead_of_swallowing_them():
