@@ -3,14 +3,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 WELCOME = ROOT / "app/src/main/java/za/org/rtc/community/feature/account/PublicWelcomeScreen.kt"
 APP = ROOT / "app/src/main/java/za/org/rtc/community/ui/navigation/RtcCommunityApp.kt"
+AUTH_COORDINATOR = ROOT / "app/src/main/java/za/org/rtc/community/app/RtcAuthenticationCoordinator.kt"
 REPOSITORY = ROOT / "app/src/main/java/za/org/rtc/community/data/RtcRepository.kt"
 PREFERENCES = ROOT / "app/src/main/java/za/org/rtc/community/data/local/UserPreferencesStore.kt"
-
-
-def _function_body(source: str, start_marker: str, end_marker: str) -> str:
-    start = source.index(start_marker)
-    end = source.index(end_marker, start)
-    return source[start:end]
 
 
 def test_welcome_get_started_creates_account_and_sign_in_opens_login():
@@ -34,28 +29,11 @@ def test_tutorial_is_rendered_for_authenticated_accounts_only():
     assert "InteractiveOnboardingTutorial(" in source
 
 
-def test_first_login_tutorial_is_not_blocked_by_guidelines_refresh():
-    source = REPOSITORY.read_text()
+def test_first_login_tutorial_is_triggered_by_authentication_lifecycle():
+    source = AUTH_COORDINATOR.read_text()
 
-    email_sign_in = _function_body(
-        source,
-        "suspend fun signInWithEmail",
-        "suspend fun signInWithGoogleIdToken",
-    )
-    google_sign_in = _function_body(
-        source,
-        "suspend fun signInWithGoogleIdToken",
-        "/**\n     * Email confirmation remains enabled",
-    )
-    guidelines_refresh = _function_body(
-        source,
-        "private suspend fun refreshCommunityGuidelinesStatus",
-        "suspend fun checkAndTriggerOnboardingTutorial",
-    )
-
-    assert "checkAndTriggerOnboardingTutorial" in email_sign_in
-    assert "checkAndTriggerOnboardingTutorial" in google_sign_in
-    assert "checkAndTriggerOnboardingTutorial" not in guidelines_refresh
+    assert source.count("repository.checkAndTriggerOnboardingTutorial(repository.session.value.id)") >= 3
+    assert "if (restored)" in source
 
 
 def test_tutorial_completion_remains_account_scoped_and_persistent():
