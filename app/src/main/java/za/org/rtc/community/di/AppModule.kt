@@ -70,7 +70,6 @@ object AppModule {
                 RTC_DATABASE_MIGRATION_6_7,
                 RTC_DATABASE_MIGRATION_7_8,
             )
-            .fallbackToDestructiveMigration(true)
             .build()
 
     @Provides
