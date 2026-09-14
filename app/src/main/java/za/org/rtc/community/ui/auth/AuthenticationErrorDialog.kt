@@ -3,7 +3,7 @@ package za.org.rtc.community.ui.auth
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.spacedBy
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.NetworkCheck
@@ -20,13 +20,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import za.org.rtc.community.ui.animation.RtcMotionAlertDialog
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun AuthenticationErrorDialog(
     errorType: String, // "NETWORK", "CONFIGURATION", "NO_ACCOUNTS", "UNKNOWN", "PLAY_SERVICES_MISSING"
     errorMessageText: String,
+    rawExceptionMessage: String,
     onDismissRequest: () -> Unit,
     onRetry: () -> Unit,
 ) {
+    val safeMessage = when (errorType) {
+        "NETWORK" -> "Google sign-in could not reach the service. Check your connection and try again."
+        "CONFIGURATION" -> "Google sign-in is temporarily unavailable. Please use email sign-in or try again later."
+        "NO_ACCOUNTS" -> "No Google account is available on this device. Add an account or use email sign-in."
+        "PLAY_SERVICES_MISSING" -> "Google Play services needs attention before Google sign-in can continue."
+        else -> "Google sign-in could not be completed. Please try again."
+    }
+
     RtcMotionAlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
@@ -46,7 +56,7 @@ fun AuthenticationErrorDialog(
                         "CONFIGURATION", "PLAY_SERVICES_MISSING" -> MaterialTheme.colorScheme.tertiary
                         else -> MaterialTheme.colorScheme.error
                     },
-                    modifier = Modifier,
+                    modifier = Modifier.size(28.dp),
                 )
                 Text(
                     text = when (errorType) {
@@ -64,7 +74,7 @@ fun AuthenticationErrorDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = errorMessageText,
+                    text = safeMessage,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
