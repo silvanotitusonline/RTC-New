@@ -10,6 +10,13 @@
 -- after the forward-only Service Centre migration removed only service_centre_% functions:
 -- count=172, fingerprint=2caf400cd8c797769ff6d1448ea453da.
 --
+-- ANDROID_RUNTIME_ENGAGEMENT_RESTORED adds the intentionally reviewed
+-- public.toggle_community_post_reaction(uuid,text) client mutation. The RPC fixes search_path,
+-- binds authority to auth.uid()/the current session, requires accepted Community Guidelines,
+-- validates the reaction allowlist, verifies public-post visibility, revokes PUBLIC/anon execute,
+-- and grants execute only to authenticated clients. Clean replay review:
+-- count=173, fingerprint=529bebd7516054942fe721b9507309e7.
+--
 -- Disposition policy:
 -- INTENTIONAL = reviewed least-privilege use.
 -- HARDEN      = keep SECURITY DEFINER but narrow authority/input semantics forward-only.
@@ -20,7 +27,7 @@
 begin;
 set local search_path = extensions, public, pg_catalog;
 
-select plan(12);
+select plan(13);
 
 create temporary table approved_security_definer_baselines (
   exposed_count bigint not null,
@@ -40,7 +47,8 @@ values
   (170, 'bbf47cab25e2ff0e4c20a5917c8358dc', 'PUBLIC_REPORTS_RPC_READ_BOUNDARY'),
   (169, '42f7bc4ca9978dfe129a65cd0e6ded86', 'NO_PAYMENTS_SERVICE_CENTRE'),
   (188, '97400b5f6408be76b8fb3d6ee737f260', 'DAILY_POST_RECONCILED'),
-  (172, '2caf400cd8c797769ff6d1448ea453da', 'SERVICE_CENTRE_RETIRED');
+  (172, '2caf400cd8c797769ff6d1448ea453da', 'SERVICE_CENTRE_RETIRED'),
+  (173, '529bebd7516054942fe721b9507309e7', 'ANDROID_RUNTIME_ENGAGEMENT_RESTORED');
 
 create temporary table resident_security_definer_registry on commit drop as
 with exposed_definers as (
@@ -175,6 +183,19 @@ select is(
   (select count(*)::bigint from resident_security_definer_registry where disposition = 'HARDEN'),
   0::bigint,
   'no reviewed authenticated SECURITY DEFINER function remains marked for hardening'
+);
+
+select is(
+  (select count(*)::bigint
+   from resident_security_definer_registry
+   where schema_name = 'public'
+     and function_name = 'toggle_community_post_reaction'
+     and identity_arguments = 'p_post_id uuid, p_emoji text'
+     and fixed_search_path
+     and contains_caller_or_authority_guard
+     and not has_function_privilege('anon', function_oid, 'EXECUTE')),
+  1::bigint,
+  'restored emoji reaction SECURITY DEFINER RPC is caller-guarded, search-path fixed, and not executable by anon'
 );
 
 select is(
