@@ -105,7 +105,7 @@ internal object SafeUiError {
                 "The request took too long. Check your connection and try again."
             detail.contains("network", ignoreCase = true) || detail.contains("connect", ignoreCase = true) ->
                 "The service could not be reached. Check your connection and try again."
-            else -> "$fallback (${error.javaClass.simpleName}: $detail)"
+            else -> fallback
         }
     }
 }
