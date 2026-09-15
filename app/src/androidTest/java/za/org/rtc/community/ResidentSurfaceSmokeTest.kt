@@ -182,6 +182,25 @@ class ResidentSurfaceSmokeTest {
         override suspend fun toggleReaction(postId: String, emoji: String): Result<CommunityLikeOutcome> =
             Result.success(CommunityLikeOutcome(liked = true, reactionCount = 1))
 
+        override suspend fun repostPost(postId: String): Result<Pair<Boolean, Int>> = Result.success(true to 1)
+
+        override suspend fun toggleBookmark(postId: String): Result<Pair<Boolean, Int>> = Result.success(true to 1)
+
+        override suspend fun searchPosts(query: String, lastRank: Float?, lastId: String?, limit: Int): Result<List<CommunityPost>> = Result.success(emptyList())
+
+        override suspend fun getHashtagAutocomplete(prefix: String): Result<List<String>> = Result.success(emptyList())
+
+        override suspend fun getMentionAutocomplete(prefix: String): Result<List<String>> = Result.success(emptyList())
+
         override suspend fun refreshMediaUrl(mediaId: String): Result<String?> = Result.success(null)
+
+        override fun observeNotificationEvents(userId: String): kotlinx.coroutines.flow.Flow<za.org.rtc.community.core.CommunityRealtimeNotification> =
+            kotlinx.coroutines.flow.emptyFlow()
+
+        override fun observeCommunityFeedRealtime(): kotlinx.coroutines.flow.Flow<String> =
+            kotlinx.coroutines.flow.emptyFlow()
+
+        override fun observeCachedPosts(): kotlinx.coroutines.flow.Flow<List<CommunityPost>> =
+            kotlinx.coroutines.flow.emptyFlow()
     }
 }

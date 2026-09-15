@@ -219,7 +219,27 @@ internal fun CommunityScreen(
                                 communityViewModel.clearSearch()
                             }
                         },
-                        label = { Text("Latest") },
+                        label = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text("Latest")
+                                if (feedState.unreadCount > 0) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.error,
+                                    ) {
+                                        Text(
+                                            text = "${feedState.unreadCount}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onError,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        },
                         colors = if (tab == "Latest" && feedState.searchResults == null) AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer) else AssistChipDefaults.assistChipColors(),
                     )
                     AssistChip(
@@ -246,34 +266,47 @@ internal fun CommunityScreen(
                     )
                 }
             }
-            if (feedState.hasNewPosts) {
+            if (feedState.unreadCount > 0 || feedState.hasNewPosts) {
                 item {
                     Surface(
                         onClick = {
-                            communityViewModel.markNewPostsSeen()
+                            communityViewModel.markAllPostsAsRead()
                             communityViewModel.refresh()
                         },
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("community_unread_updates_badge"),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.Center,
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(
-                                Icons.Filled.Refresh,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "New posts published • Tap to refresh",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Refresh,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = if (feedState.unreadCount > 0) {
+                                        "${feedState.unreadCount} new update${if (feedState.unreadCount > 1) "s" else ""} since last visit • Tap to view"
+                                    } else {
+                                        "New posts published • Tap to refresh"
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                            RtcStatusChip("Mark read", RtcStatusTone.PROTECTED)
                         }
                     }
                 }
@@ -345,10 +378,14 @@ internal fun CommunityScreen(
                     (session.handle.isNotBlank() && post.handle == session.handle) ||
                     session.role in setOf(UserRole.SYSTEM_ADMIN, UserRole.MODERATOR)
                 )
+                val isUnread = post.id in feedState.unreadPostIds
                 CommunityPostCard(
                     post = post,
                     readingMode = readingMode,
-                    onOpenPost = onOpenPost,
+                    onOpenPost = { clickedPost ->
+                        communityViewModel.markPostAsRead(clickedPost.id)
+                        onOpenPost(clickedPost)
+                    },
                     onToggleLike = communityViewModel::toggleLike,
                     onToggleReaction = communityViewModel::toggleReaction,
                     onRepost = communityViewModel::repostPost,
@@ -358,6 +395,7 @@ internal fun CommunityScreen(
                     canDelete = isPostOwner,
                     onRefreshMediaUrl = communityViewModel::refreshMediaUrl,
                     isLikePending = post.id in pendingLikeIds,
+                    isUnread = isUnread,
                     syntheticAvatarRes = if (useSyntheticPortraits && post.authorAvatarUrl == null) syntheticAvatarResource(post.author) else null,
                     modifier = Modifier.parallaxScrollItem(index = index + 6, rate = 0.06f),
                 )

@@ -31,6 +31,7 @@ fun CommunityPostCard(
     onRefreshMediaUrl: (suspend (String) -> String?)? = null,
     isLikePending: Boolean = false,
     syntheticAvatarRes: Int? = null,
+    isUnread: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val timestampLabel = relativeTimeLabel(post.createdAt)
@@ -39,6 +40,7 @@ fun CommunityPostCard(
         onOpen = { onOpenPost(post) },
         syntheticAvatarRes = syntheticAvatarRes,
         timestampLabel = timestampLabel,
+        isUnread = isUnread,
         headerTrailing = {
             if (canDelete && onDeletePost != null) {
                 IconButton(onClick = { onDeletePost(post.id) }) {
@@ -48,6 +50,13 @@ fun CommunityPostCard(
         },
         modifier = modifier,
     ) {
+        if (post.media.isNotEmpty()) {
+            CommunityMediaPreview(
+                media = post.media,
+                onOpen = { onOpenPost(post) },
+                onRefreshMediaUrl = onRefreshMediaUrl ?: { null },
+            )
+        }
         if (!readingMode) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

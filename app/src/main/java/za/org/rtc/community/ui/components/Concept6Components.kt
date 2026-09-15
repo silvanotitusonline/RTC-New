@@ -113,17 +113,19 @@ fun RtcCard(
     protected: Boolean = false,
     onClick: (() -> Unit)? = null,
     density: RtcContentDensity? = null,
+    border: BorderStroke? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val metrics = (density ?: LocalRtcContentDensity.current).metrics()
     val outline = if (protected) RtcCivicGold.copy(alpha = .42f) else MaterialTheme.colorScheme.outlineVariant
+    val cardBorder = border ?: BorderStroke(RtcStroke.hairline, outline)
     val clickableModifier = if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier
     val targetModifier = if (onClick != null) modifier.sizeIn(minHeight = RtcSize.minimumTouchTarget) else modifier
     Card(
         modifier = targetModifier.fillMaxWidth().then(clickableModifier),
         shape = RoundedCornerShape(RtcRadius.large),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(RtcStroke.hairline, outline),
+        border = cardBorder,
         elevation = CardDefaults.cardElevation(defaultElevation = RtcElevation.flat),
     ) {
         Column(
@@ -320,16 +322,26 @@ fun RtcCommunityFeedCard(
     onOpen: () -> Unit,
     syntheticAvatarRes: Int? = null,
     timestampLabel: String = post.createdAt,
+    isUnread: Boolean = false,
     headerTrailing: @Composable (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit = {},
 ) {
-    RtcCard(onClick = onOpen, modifier = modifier) {
+    RtcCard(
+        onClick = onOpen,
+        border = if (isUnread) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+        modifier = modifier,
+    ) {
         Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
                 CommunityFeedAvatar(post.authorAvatarUrl, post.author, syntheticAvatarRes)
                 Column {
-                    Text(post.author, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
+                        Text(post.author, fontWeight = FontWeight.Bold)
+                        if (isUnread) {
+                            RtcStatusChip("NEW", RtcStatusTone.PROTECTED)
+                        }
+                    }
                     Text(timestampLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

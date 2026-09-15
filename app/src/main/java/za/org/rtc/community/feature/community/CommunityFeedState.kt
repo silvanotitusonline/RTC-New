@@ -51,12 +51,16 @@ data class CommunityFeedState(
     val searchResults: List<CommunityPost>? = null,
     val isSearching: Boolean = false,
     val hasNewPosts: Boolean = false,
+    val lastInteractionEpochMillis: Long = System.currentTimeMillis() - 300_000L,
+    val unreadPostIds: Set<String> = emptySet(),
     val publicReports: List<PublicReport> = emptyList(),
     val publicReportsDashboard: PublicReportDashboard? = null,
     val publicReportsLoading: Boolean = false,
     val publicReportsLastFetched: Instant? = null,
     val publicReportsError: String? = null,
 ) {
+    val unreadCount: Int get() = unreadPostIds.size
+
     fun withPage(page: CommunityFeedPage, append: Boolean): CommunityFeedState {
         val merged = if (append) {
             buildList {
@@ -68,6 +72,8 @@ data class CommunityFeedState(
             page.items.distinctBy(CommunityPost::id)
         }
 
+        val updatedUnread = computeUnreadPostIds(merged, lastInteractionEpochMillis, unreadPostIds)
+
         return copy(
             items = merged,
             nextCursor = page.nextCursor,
@@ -77,6 +83,23 @@ data class CommunityFeedState(
             appendLoading = false,
             initialError = null,
             appendError = null,
+            unreadPostIds = updatedUnread,
+            hasNewPosts = updatedUnread.isNotEmpty(),
         )
     }
+}
+
+internal fun computeUnreadPostIds(
+    posts: List<CommunityPost>,
+    lastInteractionEpochMillis: Long,
+    existingUnreadPostIds: Set<String> = emptySet(),
+): Set<String> {
+    val unread = existingUnreadPostIds.toMutableSet()
+    for (post in posts) {
+        val postCreatedEpoch = za.org.rtc.community.core.TimeFormatters.parseToEpochMillis(post.createdAt)
+        if (postCreatedEpoch > lastInteractionEpochMillis) {
+            unread.add(post.id)
+        }
+    }
+    return unread
 }

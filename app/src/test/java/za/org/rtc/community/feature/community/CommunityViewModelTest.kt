@@ -353,6 +353,37 @@ class CommunityViewModelTest {
 
         override fun observeCommunityFeedRealtime(): kotlinx.coroutines.flow.Flow<String> =
             kotlinx.coroutines.flow.emptyFlow()
+
+        override fun observeCachedPosts(): kotlinx.coroutines.flow.Flow<List<CommunityPost>> =
+            kotlinx.coroutines.flow.emptyFlow()
+    }
+
+    @Test
+    fun `unread post badges track unread count and can be marked as read`() = runTest(dispatcher) {
+        val repository = FakeCommunityRepository(
+            pages = ArrayDeque(
+                listOf(
+                    Result.success(
+                        CommunityFeedPage(
+                            items = listOf(post("unread1", "2099-01-01T12:00:00Z")),
+                            nextCursor = null,
+                            hasMore = false,
+                        )
+                    )
+                )
+            )
+        )
+
+        val viewModel = CommunityViewModel(repository)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.feedState.value.unreadCount > 0)
+        assertTrue("unread1" in viewModel.feedState.value.unreadPostIds)
+
+        viewModel.markPostAsRead("unread1")
+
+        assertEquals(0, viewModel.feedState.value.unreadCount)
+        assertFalse("unread1" in viewModel.feedState.value.unreadPostIds)
     }
 
     private fun post(id: String, createdAt: String) = CommunityPost(

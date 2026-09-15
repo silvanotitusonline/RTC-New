@@ -95,7 +95,22 @@ object TimeFormatters {
         return FULL_DATE_TIME.withZone(zoneId).format(instant)
     }
 
-    private fun parseStringToInstant(raw: String, zoneId: ZoneId): Instant? {
+    fun parseToEpochMillis(
+        raw: Any?,
+        zoneId: ZoneId = ZoneId.systemDefault()
+    ): Long {
+        if (raw == null) return 0L
+        return when (raw) {
+            is Instant -> raw.toEpochMilli()
+            is Long -> if (raw > 10_000_000_000L) raw else raw * 1000L
+            is LocalDateTime -> raw.atZone(zoneId).toInstant().toEpochMilli()
+            is LocalDate -> raw.atStartOfDay(zoneId).toInstant().toEpochMilli()
+            is String -> parseStringToInstant(raw, zoneId)?.toEpochMilli() ?: raw.toLongOrNull() ?: 0L
+            else -> 0L
+        }
+    }
+
+    fun parseStringToInstant(raw: String, zoneId: ZoneId = ZoneId.systemDefault()): Instant? {
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return null
 

@@ -84,6 +84,7 @@ private fun ThumbnailItem(
     modifier: Modifier = Modifier,
     overlayText: String? = null,
 ) {
+    val mediaUrl = item.signedUrl ?: item.storagePath.takeIf { it.isNotBlank() }
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -97,7 +98,7 @@ private fun ThumbnailItem(
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when {
-                item.signedUrl == null -> {
+                mediaUrl == null -> {
                     Icon(
                         Icons.Filled.ErrorOutline,
                         contentDescription = "Media unavailable",
@@ -107,7 +108,7 @@ private fun ThumbnailItem(
                 item.kind == MediaKind.IMAGE -> {
                     RecoverableSignedImage(
                         mediaId = item.id,
-                        initialUrl = item.signedUrl,
+                        initialUrl = mediaUrl,
                         contentDescription = item.caption ?: "Image attachment",
                         contentScale = ContentScale.Crop,
                         onRefreshUrl = onRefreshMediaUrl,
@@ -115,7 +116,7 @@ private fun ThumbnailItem(
                 }
                 else -> {
                     CommunityVideoPoster(
-                        url = item.signedUrl,
+                        url = mediaUrl,
                         contentDescription = item.caption ?: "Video attachment",
                     )
                     Surface(
@@ -429,6 +430,7 @@ internal fun FullScreenMediaGallery(
                     modifier = Modifier.fillMaxSize(),
                 ) { page ->
                     val item = ordered[page]
+                    val mediaUrl = item.signedUrl ?: item.storagePath.takeIf { it.isNotBlank() }
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -436,21 +438,21 @@ internal fun FullScreenMediaGallery(
                         contentAlignment = Alignment.Center,
                     ) {
                         when {
-                            item.signedUrl == null -> Text(
+                            mediaUrl == null -> Text(
                                 "This media item is no longer available.",
                                 color = Color.White.copy(alpha = 0.7f),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             item.kind == MediaKind.IMAGE -> RecoverableSignedImage(
                                 mediaId = item.id,
-                                initialUrl = item.signedUrl,
+                                initialUrl = mediaUrl,
                                 contentDescription = item.caption ?: "Full-screen image attachment",
                                 contentScale = ContentScale.Fit,
                                 onRefreshUrl = onRefreshMediaUrl,
                             )
                             else -> SignedVideoPlayer(
                                 mediaId = item.id,
-                                initialUrl = item.signedUrl,
+                                initialUrl = mediaUrl,
                                 onRefreshUrl = onRefreshMediaUrl,
                             )
                         }

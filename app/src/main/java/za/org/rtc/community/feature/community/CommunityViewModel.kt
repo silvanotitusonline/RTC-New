@@ -40,9 +40,12 @@ class CommunityViewModel @Inject constructor(
             repository.observeCachedPosts().collect { cachedPosts ->
                 if (cachedPosts.isNotEmpty()) {
                     _feedState.update { current ->
+                        val unread = computeUnreadPostIds(cachedPosts, current.lastInteractionEpochMillis, current.unreadPostIds)
                         current.copy(
                             items = cachedPosts,
-                            initialLoading = false
+                            initialLoading = false,
+                            unreadPostIds = unread,
+                            hasNewPosts = unread.isNotEmpty(),
                         )
                     }
                 }
@@ -433,7 +436,29 @@ class CommunityViewModel @Inject constructor(
     }
 
     fun markNewPostsSeen() {
-        _feedState.value = _feedState.value.copy(hasNewPosts = false)
+        markAllPostsAsRead()
+    }
+
+    fun markAllPostsAsRead() {
+        val now = System.currentTimeMillis()
+        _feedState.update { current ->
+            current.copy(
+                lastInteractionEpochMillis = now,
+                unreadPostIds = emptySet(),
+                hasNewPosts = false,
+            )
+        }
+    }
+
+    fun markPostAsRead(postId: String) {
+        if (postId.isBlank()) return
+        _feedState.update { current ->
+            val updated = current.unreadPostIds - postId
+            current.copy(
+                unreadPostIds = updated,
+                hasNewPosts = updated.isNotEmpty(),
+            )
+        }
     }
 
     fun loadNextPage() {
