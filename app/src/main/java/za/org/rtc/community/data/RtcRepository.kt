@@ -816,17 +816,17 @@ class RtcRepository @Inject constructor(
         val alerts = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
             productionUxRepository.communityAlertInbox()
         } else {
-            Result.success(RtcMockData.getSampleAlerts())
+            Result.success(emptyList<CommunityAlert>())
         }
         val supportCases = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH) {
             productionUxRepository.mySupportCases()
-        } else Result.success(RtcMockData.getSampleSupportCases())
+        } else Result.success(emptyList<SupportCase>())
         val alertDashboard = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH
             && _session.value.role in setOf(UserRole.CONTENT_EDITOR, UserRole.SYSTEM_ADMIN)
-        ) productionUxRepository.communityAlertDashboard() else Result.success(RtcMockData.getSampleAlertDashboard())
+        ) productionUxRepository.communityAlertDashboard() else Result.success(emptyList<CommunityAlertDashboardItem>())
         val assignedSupportCases = if (_session.value.authority == SessionAuthority.SUPABASE_AUTH
             && _session.value.role == UserRole.CASE_STAFF
-        ) productionUxRepository.listAssignedSupportCases() else Result.success(RtcMockData.getSampleAssignedCases())
+        ) productionUxRepository.listAssignedSupportCases() else Result.success(emptyList<AssignedSupportCase>())
         metrics.onSuccess { _dashboardMetrics.value = it }
         if (refreshGeneration == directoryGeneration) {
             projects.onSuccess { _projectsPage.value = it }
@@ -842,12 +842,10 @@ class RtcRepository @Inject constructor(
         val allRoomPosts = database.cachedPostDao().getAllPosts().map { it.toCommunityPost() }
         _posts.value = allRoomPosts
 
-        val loadedCases = supportCases.getOrDefault(emptyList()).ifEmpty {
-            RtcMockData.getSampleSupportCases()
-        }
+        val loadedCases = supportCases.getOrDefault(emptyList())
         _cases.value = loadedCases
         alerts.onSuccess { loaded ->
-            val effectiveAlerts = loaded.ifEmpty { RtcMockData.getSampleAlerts() }
+            val effectiveAlerts = loaded
             _communityAlerts.value = effectiveAlerts
             val alertNotifications = effectiveAlerts.map { alert ->
                 RtcNotification(
@@ -871,15 +869,13 @@ class RtcRepository @Inject constructor(
                     alertId = null,
                 )
             }
-            _notifications.value = (alertNotifications + caseNotifications).sortedByDescending { it.createdAt }.ifEmpty {
-                RtcMockData.getSampleNotifications()
-            }
+            _notifications.value = (alertNotifications + caseNotifications).sortedByDescending { it.createdAt }
         }
         alertDashboard.onSuccess { loaded ->
-            _communityAlertDashboard.value = loaded.ifEmpty { RtcMockData.getSampleAlertDashboard() }
+            _communityAlertDashboard.value = loaded
         }
         assignedSupportCases.onSuccess { loaded ->
-            _assignedSupportCases.value = loaded.ifEmpty { RtcMockData.getSampleAssignedCases() }
+            _assignedSupportCases.value = loaded
         }
         _liveContentMessage.value = null
         _isLiveContentLoading.value = false
@@ -1071,13 +1067,13 @@ class RtcRepository @Inject constructor(
     /** Refreshes aggregate-only metrics and the server-suppressed locality summary. */
     suspend fun refreshAdminPrivacyAnalytics(period: AdminAnalyticsPeriod): Result<Unit> = runCatching {
         val metrics = productionUxRepository.adminAnalyticsMetrics(period.wireValue).getOrElse {
-            RtcMockData.getSampleAdminAnalyticsDashboard().metrics
+            emptyList()
         }
         val localities = productionUxRepository.adminAnalyticsLocalities(period.wireValue).getOrElse {
-            RtcMockData.getSampleAdminLocalities()
+            emptyList()
         }
         val auditTrail = productionUxRepository.adminAnalyticsAuditTrail().getOrElse {
-            RtcMockData.getSampleAdminAuditEvents()
+            emptyList()
         }
         _adminAnalyticsDashboard.value = AdminAnalyticsDashboard(period = period, metrics = metrics)
         _adminAnalyticsLocalities.value = localities
@@ -1106,31 +1102,31 @@ class RtcRepository @Inject constructor(
      */
     suspend fun refreshOperationsHub(): Result<Unit> = runCatching {
         val queue = productionUxRepository.operationsWorkQueue().getOrElse {
-            RtcMockData.getSampleOperationsWorkQueue()
+            emptyList()
         }
         _operationsWorkQueue.value = queue
         _staffWorkPreferences.value = productionUxRepository.workPreferences().getOrElse { StaffWorkPreferences() }
 
         _moderationQueue.value = productionUxRepository.moderationQueue().getOrElse {
-            RtcMockData.getSampleModerationQueue()
+            emptyList()
         }
         _moderationAppeals.value = productionUxRepository.moderationAppeals().getOrElse {
-            RtcMockData.getSampleModerationAppeals()
+            emptyList()
         }
 
         _editorialNotices.value = productionUxRepository.editorialNotices().getOrElse {
-            RtcMockData.getSampleEditorialNotices()
+            emptyList()
         }
 
         _operationsControls.value = productionUxRepository.activeOperationsControls().getOrElse { OperationsControlState() }
         _operationalIncidents.value = productionUxRepository.operationalIncidents().getOrElse {
-            RtcMockData.getSampleOperationalIncidents()
+            emptyList()
         }
         _systemHealth.value = productionUxRepository.systemHealth().getOrElse {
-            RtcMockData.getSampleSystemHealth()
+            emptyList()
         }
         _administrativeActivity.value = productionUxRepository.administrativeActivity().getOrElse {
-            RtcMockData.getSampleAdministrativeActivity()
+            emptyList()
         }
     }
 

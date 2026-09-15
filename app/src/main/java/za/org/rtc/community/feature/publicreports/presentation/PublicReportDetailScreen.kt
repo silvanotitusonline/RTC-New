@@ -23,8 +23,8 @@ import za.org.rtc.community.feature.publicreports.domain.label
 import za.org.rtc.community.core.MediaItem
 import za.org.rtc.community.core.MediaKind
 import za.org.rtc.community.core.MediaTargetType
+import za.org.rtc.community.core.TimeFormatters
 import za.org.rtc.community.feature.community.FullScreenMediaGallery
-import za.org.rtc.community.feature.community.relativeTimeLabel
 import za.org.rtc.community.feature.publicreports.domain.PublicReportMediaKind
 import za.org.rtc.community.ui.components.RtcCard
 import za.org.rtc.community.ui.components.RtcScreenScaffold
@@ -58,7 +58,7 @@ fun PublicReportDetailScreen(
                         Text("${reportItem.urgency.label} · ${reportItem.status.label}${if (reportItem.verified) " · Verified" else ""}")
                         Text(reportItem.description)
                         Text(reportItem.publicLocationLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("${reportItem.authorDisplayName} · ${reportItem.createdAt}")
+                        Text("${reportItem.authorDisplayName} · ${TimeFormatters.formatRelativeTime(reportItem.createdAt)}")
                         Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText), modifier = Modifier.fillMaxWidth()) {
                             Button(onClick = { viewModel.vote(1) }, modifier = Modifier.heightIn(min = 48.dp).weight(1f)) {
                                 Text("Support ${reportItem.thumbsUpCount}")

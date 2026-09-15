@@ -19,7 +19,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceCoordinates
-import za.org.rtc.community.feature.servicecentre.data.ServiceCentreMockData
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBooking
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBookingDraft
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBookingRepository
@@ -46,7 +45,7 @@ class SupabaseServiceCentreRepository @Inject constructor(
                 .decodeSingle<JsonArray>()
                 .map { it.jsonObject.toServiceCentreCategory() }
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else ServiceCentreMockData.getSampleCategories()
+        remote.orEmpty()
     }
 
     override suspend fun localRadar(
@@ -73,31 +72,20 @@ class SupabaseServiceCentreRepository @Inject constructor(
                 put("p_limit", boundedLimit)
             }).decodeList<JsonObject>().map { it.toServiceCentreProvider() }
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else {
-            ServiceCentreMockData.getSampleProviders().filter { prov ->
-                categoryId.isNullOrBlank() || prov.categoryId.contains(categoryId, true)
-            }
-        }
+        remote.orEmpty()
     }
 
     override suspend fun provider(reference: String): Result<ServiceCentreProvider> = runCatching {
         require(reference.isNotBlank()) { "Choose a provider." }
-        val remote = runCatching {
-            supabase.postgrest.rpc("service_centre_provider_detail", buildJsonObject {
-                put("p_provider_reference", reference.trim())
-            }).decodeSingle<JsonObject>().toServiceCentreProvider()
-        }.getOrNull()
-        remote ?: (ServiceCentreMockData.getSampleProviders().firstOrNull { it.providerUserId == reference || it.displayName.contains(reference, true) }
-            ?: ServiceCentreMockData.getSampleProviders().first())
+        supabase.postgrest.rpc("service_centre_provider_detail", buildJsonObject {
+            put("p_provider_reference", reference.trim())
+        }).decodeSingle<JsonObject>().toServiceCentreProvider()
     }
 
     override suspend fun myProviderProfile(): Result<ServiceCentreProviderProfile?> = runCatching {
-        val remote = runCatching {
-            val response = supabase.postgrest.rpc("service_centre_my_provider_profile")
-            val element = json.parseToJsonElement(response.data)
-            if (element is JsonNull) null else element.jsonObject.toServiceCentreProviderProfile()
-        }.getOrNull()
-        remote ?: currentUserId()?.let { ServiceCentreMockData.getSampleProviderProfile(it) }
+        val response = supabase.postgrest.rpc("service_centre_my_provider_profile")
+        val element = json.parseToJsonElement(response.data)
+        if (element is JsonNull) null else element.jsonObject.toServiceCentreProviderProfile()
     }
 
     override suspend fun upsertProviderProfile(draft: ServiceCentreProviderDraft): Result<ServiceCentreProviderProfile> = runCatching {
@@ -138,18 +126,14 @@ class SupabaseServiceCentreRepository @Inject constructor(
                 .decodeSingle<JsonArray>()
                 .map { it.jsonObject.toServiceCentreBooking() }
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else ServiceCentreMockData.getSampleBookings()
+        remote.orEmpty()
     }
 
     override suspend fun bookingDetail(bookingId: String): Result<ServiceCentreBooking> = runCatching {
         require(bookingId.isNotBlank()) { "Choose a booking." }
-        val remote = runCatching {
-            supabase.postgrest.rpc("service_centre_booking_detail", buildJsonObject {
-                put("p_booking_id", bookingId)
-            }).decodeSingle<JsonObject>().toServiceCentreBooking()
-        }.getOrNull()
-        remote ?: (ServiceCentreMockData.getSampleBookings().firstOrNull { it.id == bookingId }
-            ?: ServiceCentreMockData.getSampleBookings().first())
+        supabase.postgrest.rpc("service_centre_booking_detail", buildJsonObject {
+            put("p_booking_id", bookingId)
+        }).decodeSingle<JsonObject>().toServiceCentreBooking()
     }
 
     override suspend fun acceptBooking(bookingId: String, idempotencyKey: String): Result<ServiceCentreBooking> =
@@ -172,7 +156,7 @@ class SupabaseServiceCentreRepository @Inject constructor(
                 put("p_limit", limit.coerceIn(1, 200))
             }).decodeSingle<JsonArray>().map { it.jsonObject.toServiceCentreMessage() }
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else ServiceCentreMockData.getSampleMessages(bookingId)
+        remote.orEmpty()
     }
 
     override suspend fun sendMessage(bookingId: String, body: String, idempotencyKey: String): Result<ServiceCentreMessage> = runCatching {

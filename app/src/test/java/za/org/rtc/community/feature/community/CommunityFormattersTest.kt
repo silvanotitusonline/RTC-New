@@ -18,12 +18,12 @@ class CommunityFormattersTest {
     )
 
     @Test fun `minutes render deterministically`() = assertEquals(
-        "5 min ago",
+        "5m ago",
         relativeTimeLabel("2026-08-28T09:55:00Z", clock, zone),
     )
 
     @Test fun `hours render deterministically`() = assertEquals(
-        "2 hr ago",
+        "2h ago",
         relativeTimeLabel("2026-08-28T08:00:00Z", clock, zone),
     )
 
@@ -32,8 +32,8 @@ class CommunityFormattersTest {
         relativeTimeLabel("2026-08-27T22:00:00Z", clock, zone),
     )
 
-    @Test fun `older date in same year uses compact absolute form`() = assertEquals(
-        "Aug 25",
+    @Test fun `older date within week uses relative days`() = assertEquals(
+        "3d ago",
         relativeTimeLabel("2026-08-25T10:00:00Z", clock, zone),
     )
 

@@ -99,7 +99,6 @@ import za.org.rtc.community.core.CommunityAlertCategory
 import za.org.rtc.community.core.CommunityAlertDashboardItem
 import za.org.rtc.community.core.CommunityAlertState
 import za.org.rtc.community.core.ThemePreference
-import za.org.rtc.community.data.RtcMockData
 import za.org.rtc.community.data.local.MediaPreparation
 import za.org.rtc.community.data.local.RtcDatabase
 import za.org.rtc.community.data.local.UploadOutboxEntity
@@ -730,7 +729,7 @@ class ProductionUxRepository @Inject constructor(
         val remote = runCatching {
             supabase.postgrest.rpc("list_my_support_cases").decodeList<SupportCaseRow>().map { it.toSupportCase() }
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleSupportCases()
+        remote.orEmpty()
     }
 
     /**
@@ -753,7 +752,7 @@ class ProductionUxRepository @Inject constructor(
                     )
                 }
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleAssignedCases()
+        remote.orEmpty()
     }
 
     suspend fun updateAssignedSupportCaseState(caseId: String, state: String, note: String): Result<Unit> = runCatching {
@@ -782,7 +781,7 @@ class ProductionUxRepository @Inject constructor(
                 SupportCaseMessage(row.id, caseId, row.authorId, row.body, row.createdAt)
             }
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleSupportCaseMessages(caseId)
+        remote.orEmpty()
     }
 
     suspend fun addSupportCaseMessage(caseId: String, body: String): Result<String> = runCatching {
@@ -826,7 +825,7 @@ class ProductionUxRepository @Inject constructor(
                     )
                 }
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleNotices()
+        remote.orEmpty()
     }
 
     suspend fun publishedHelpArticles(): Result<List<HelpArticle>> = runCatching {
@@ -837,7 +836,7 @@ class ProductionUxRepository @Inject constructor(
                 .filter { it.publishedAt != null }
                 .map { row -> HelpArticle(row.id, row.slug, row.title, row.summary, row.body, row.category, row.publishedAt) }
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleHelpArticles()
+        remote.orEmpty()
     }
 
     suspend fun publishedCommunityPosts(): Result<List<CommunityPost>> = runCatching {
@@ -1033,7 +1032,7 @@ class ProductionUxRepository @Inject constructor(
                 order(column = "inbox_created_at", order = Order.DESCENDING)
             }.decodeList<CommunityAlertInboxRow>().map(::toCommunityAlert)
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleAlerts()
+        remote.orEmpty()
     }
 
     suspend fun communityAlert(alertId: String): Result<CommunityAlert?> = runCatching {
@@ -1043,7 +1042,7 @@ class ProductionUxRepository @Inject constructor(
                 limit(1)
             }.decodeList<CommunityAlertInboxRow>().firstOrNull()?.let(::toCommunityAlert)
         }.getOrNull()
-        remote ?: RtcMockData.getSampleAlerts().firstOrNull { it.id == alertId }
+        remote
     }
 
     suspend fun markCommunityAlertRead(notificationId: String): Result<Unit> = runCatching {
@@ -1073,7 +1072,7 @@ class ProductionUxRepository @Inject constructor(
                 .decodeList<CommunityAlertDashboardRow>()
                 .map(::toCommunityAlertDashboardItem)
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleAlertDashboard()
+        remote.orEmpty()
     }
 
     suspend fun createCommunityAlert(
@@ -1181,7 +1180,7 @@ class ProductionUxRepository @Inject constructor(
                 buildJsonObject { put("p_period", period) },
             ).decodeList<AdminAnalyticsMetric>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleAdminAnalyticsDashboard().metrics
+        remote.orEmpty()
     }
 
     suspend fun adminAnalyticsLocalities(period: String): Result<List<AdminLocalitySummary>> = runCatching {
@@ -1191,7 +1190,7 @@ class ProductionUxRepository @Inject constructor(
                 buildJsonObject { put("p_period", period) },
             ).decodeList<AdminLocalitySummary>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleAdminLocalities()
+        remote.orEmpty()
     }
 
     suspend fun adminAnalyticsExactAccountLookup(
@@ -1219,14 +1218,14 @@ class ProductionUxRepository @Inject constructor(
                 buildJsonObject { put("maximum_rows", limit.coerceIn(1, 500)) },
             ).decodeList<AdminAuditTrailEvent>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleAdminAuditEvents()
+        remote.orEmpty()
     }
 
     suspend fun operationsWorkQueue(): Result<List<OperationsWorkItem>> = runCatching {
         val remote = runCatching {
             supabase.postgrest.rpc("ops_list_work_queue").decodeList<OperationsWorkItem>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleOperationsWorkQueue()
+        remote.orEmpty()
     }
 
     suspend fun claimOperationsWorkItem(workItemId: String): Result<Unit> = runCatching {
@@ -1266,7 +1265,7 @@ class ProductionUxRepository @Inject constructor(
         val remote = runCatching {
             supabase.postgrest.rpc("ops_list_system_health").decodeList<SystemHealthStatus>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleSystemHealth()
+        remote.orEmpty()
     }
 
     suspend fun administrativeActivity(
@@ -1281,14 +1280,14 @@ class ProductionUxRepository @Inject constructor(
                 category?.takeIf { it.isNotBlank() }?.let { put("p_category", it.trim().uppercase()) }
             }).decodeList<AdministrativeActivityEvent>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleAdministrativeActivity()
+        remote.orEmpty()
     }
 
     suspend fun operationalIncidents(): Result<List<OperationalIncident>> = runCatching {
         val remote = runCatching {
             supabase.postgrest.rpc("ops_list_incidents").decodeList<OperationalIncident>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleOperationalIncidents()
+        remote.orEmpty()
     }
 
     suspend fun createOperationalIncident(
@@ -1342,7 +1341,7 @@ class ProductionUxRepository @Inject constructor(
                 put("p_limit", 100)
             }).decodeList<ModerationQueueItem>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleModerationQueue()
+        remote.orEmpty()
     }
 
     suspend fun moderationDecideReport(reportId: String, decision: String, reason: String): Result<Unit> = runCatching {
@@ -1359,7 +1358,7 @@ class ProductionUxRepository @Inject constructor(
             supabase.postgrest.rpc("moderation_list_appeals", buildJsonObject { put("p_limit", 100) })
                 .decodeList<ModerationAppeal>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleModerationAppeals()
+        remote.orEmpty()
     }
 
     suspend fun moderationDecideAppeal(appealId: String, decision: String, reason: String): Result<Unit> = runCatching {
@@ -1377,7 +1376,7 @@ class ProductionUxRepository @Inject constructor(
                 order(column = "updated_at", order = Order.DESCENDING)
             }.decodeList<EditorialNoticeRecord>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else RtcMockData.getSampleEditorialNotices()
+        remote.orEmpty()
     }
 
     suspend fun editorialCreateDraft(
@@ -1473,7 +1472,12 @@ class ProductionUxRepository @Inject constructor(
         val remote = runCatching {
             supabase.postgrest.rpc("get_public_directory_metrics").decodeSingle<DashboardMetrics>()
         }.getOrNull()
-        remote ?: RtcMockData.getSampleMetrics()
+        remote ?: DashboardMetrics(
+            overallProjectProgress = 0.0,
+            activeProjectCount = 0,
+            centreCount = 0,
+            opportunityCount = 0,
+        )
     }
 
     suspend fun listProjects(offset: Int, pageSize: Int = DIRECTORY_PAGE_SIZE): Result<DirectoryPage<ProjectRecord>> = runCatching {
@@ -1484,10 +1488,7 @@ class ProductionUxRepository @Inject constructor(
             }.decodeList<ProjectRecord>()
             rows.toDirectoryPage(offset, pageSize)
         }.getOrNull()
-        if (remote != null && remote.items.isNotEmpty()) remote else {
-            val sample = RtcMockData.getSampleProjects()
-            sample.drop(offset).take(pageSize).toDirectoryPage(offset, pageSize)
-        }
+        remote ?: DirectoryPage(items = emptyList(), offset = offset, canLoadMore = false)
     }
 
     suspend fun listCentres(offset: Int, pageSize: Int = DIRECTORY_PAGE_SIZE): Result<DirectoryPage<CentreRecord>> = runCatching {
@@ -1498,10 +1499,7 @@ class ProductionUxRepository @Inject constructor(
             }.decodeList<CentreRecord>()
             rows.toDirectoryPage(offset, pageSize)
         }.getOrNull()
-        if (remote != null && remote.items.isNotEmpty()) remote else {
-            val sample = RtcMockData.getSampleCentres()
-            sample.drop(offset).take(pageSize).toDirectoryPage(offset, pageSize)
-        }
+        remote ?: DirectoryPage(items = emptyList(), offset = offset, canLoadMore = false)
     }
 
     suspend fun listOpportunities(offset: Int, pageSize: Int = DIRECTORY_PAGE_SIZE): Result<DirectoryPage<OpportunityRecord>> = runCatching {
@@ -1512,10 +1510,7 @@ class ProductionUxRepository @Inject constructor(
             }.decodeList<OpportunityRecord>()
             rows.toDirectoryPage(offset, pageSize)
         }.getOrNull()
-        if (remote != null && remote.items.isNotEmpty()) remote else {
-            val sample = RtcMockData.getSampleOpportunities()
-            sample.drop(offset).take(pageSize).toDirectoryPage(offset, pageSize)
-        }
+        remote ?: DirectoryPage(items = emptyList(), offset = offset, canLoadMore = false)
     }
 
     suspend fun searchPublicContent(
@@ -1534,9 +1529,7 @@ class ProductionUxRepository @Inject constructor(
                 }
             ).decodeList<PublicSearchResult>()
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else {
-            RtcMockData.getSamplePublicSearchResults(query).drop(offset).take(pageSize)
-        }
+        remote.orEmpty()
     }
 
     /** Returns a short-lived signed URL for the signed-in user's private profile-media object. */

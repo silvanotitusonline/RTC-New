@@ -29,6 +29,10 @@ import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_4_5
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_5_6
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_6_7
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_7_8
+import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_8_9
+import za.org.rtc.community.feature.dailypost.data.DailyPostDao
+import za.org.rtc.community.feature.dailypost.data.DailyPostRepository
+import za.org.rtc.community.feature.dailypost.data.RoomDailyPostRepository
 import javax.inject.Singleton
 import za.org.rtc.community.feature.community.CommunityRepository
 import za.org.rtc.community.feature.community.SupabaseCommunityRepository
@@ -72,12 +76,20 @@ object AppModule {
                 RTC_DATABASE_MIGRATION_5_6,
                 RTC_DATABASE_MIGRATION_6_7,
                 RTC_DATABASE_MIGRATION_7_8,
+                RTC_DATABASE_MIGRATION_8_9,
             )
             .fallbackToDestructiveMigration(true)
             .build()
 
     @Provides
     fun provideLocalDraftDao(database: RtcDatabase): LocalDraftDao = database.localDraftDao()
+
+    @Provides
+    fun provideDailyPostDao(database: RtcDatabase): DailyPostDao = database.dailyPostDao()
+
+    @Provides
+    @Singleton
+    fun provideDailyPostRepository(repository: RoomDailyPostRepository): DailyPostRepository = repository
 
     @Provides
     fun provideCachedReportDao(database: RtcDatabase): CachedReportDao = database.cachedReportDao()

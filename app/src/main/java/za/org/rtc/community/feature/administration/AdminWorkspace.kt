@@ -270,10 +270,10 @@ internal fun AdminWorkspace(
                             colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                         )
                         AssistChip(
-                            onClick = { onOpenTool(RtcRoute.EVENTS) },
-                            label = { Text("Events Calendar", style = MaterialTheme.typography.labelSmall) },
-                            leadingIcon = { Icon(Icons.Filled.Event, contentDescription = null, modifier = Modifier.size(14.dp)) },
-                            colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                            onClick = { onOpenTool(RtcRoute.DAILY_POST_STUDIO) },
+                            label = { Text("Daily Post Studio", style = MaterialTheme.typography.labelSmall) },
+                            leadingIcon = { Icon(Icons.Filled.Assignment, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                            colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f))
                         )
                     }
                 }
@@ -540,13 +540,21 @@ internal fun AdminWorkspace(
             }
         }
 
-        // --- 7. TAB 3: NOTICES & EVENTS ---
+        // --- 7. TAB 3: NOTICES & DAILY POSTS ---
         if (selectedTabIndex == 3) {
             item {
-                Text("Notices & Event Management", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Editorial & Daily Post Management", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             }
 
             if (session.role in setOf(UserRole.CONTENT_EDITOR, UserRole.SYSTEM_ADMIN)) {
+                item {
+                    AdminReferenceListRow(
+                        title = "Daily Post Studio (Canva & Blog Templates)",
+                        detail = "Compose, preview with Canva and blog templates, and publish official administrator articles to the resident Daily Post feed.",
+                        icon = Icons.Filled.Assignment
+                    ) { onOpenTool(RtcRoute.DAILY_POST_STUDIO) }
+                }
+
                 item {
                     AdminReferenceListRow(
                         title = "Community Resident Alerts",
@@ -561,14 +569,6 @@ internal fun AdminWorkspace(
                         detail = "Draft, review, publish, correct, or archive official municipal/community notices.",
                         icon = Icons.Filled.Campaign
                     ) { onOpenTool(RtcRoute.CONTENT) }
-                }
-
-                item {
-                    AdminReferenceListRow(
-                        title = "Community Events Moderation",
-                        detail = "Create, edit, publish, schedule, or cancel public community calendar events.",
-                        icon = Icons.Filled.Event
-                    ) { onOpenTool(RtcRoute.ADMIN_EVENTS) }
                 }
             } else {
                 item {

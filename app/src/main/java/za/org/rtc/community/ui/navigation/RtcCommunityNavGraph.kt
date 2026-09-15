@@ -52,6 +52,10 @@ import za.org.rtc.community.feature.alerts.StaffCommunityAlertsScreen
 import za.org.rtc.community.feature.community.CommunityPostDetailScreen
 import za.org.rtc.community.feature.community.CommunityScreen
 import za.org.rtc.community.feature.communityhub.CommunityHubScreen
+import za.org.rtc.community.feature.dailypost.domain.DailyPostArticle
+import za.org.rtc.community.feature.dailypost.ui.DailyPostDetailScreen
+import za.org.rtc.community.feature.dailypost.ui.DailyPostStudioScreen
+import za.org.rtc.community.feature.dailypost.ui.DailyPostViewModel
 import za.org.rtc.community.feature.explore.DirectoryRecordDetailScreen
 import za.org.rtc.community.feature.explore.ExploreDirectoryScreen
 import za.org.rtc.community.feature.explore.ExploreScreen
@@ -102,6 +106,8 @@ internal fun RtcCommunityNavGraph(
     val publicSearchResults by viewModel.publicSearchResults.collectAsStateWithLifecycle()
     val isLiveContentLoading by viewModel.isLiveContentLoading.collectAsStateWithLifecycle()
     val communityActionUi by viewModel.communityActionUi.collectAsStateWithLifecycle()
+    val dailyPostViewModel: DailyPostViewModel = hiltViewModel()
+    val dailyPosts by dailyPostViewModel.publishedArticles.collectAsStateWithLifecycle()
 
     val reducedMotion = LocalReducedMotion.current
 
@@ -186,9 +192,16 @@ internal fun RtcCommunityNavGraph(
             val openCommunityComposer = remember(entry) {
                 entry.savedStateHandle.remove<Boolean>(ResidentComposerPrefill.COMMUNITY_OPEN_COMPOSER) == true
             }
+            val isAdmin = session.role.isStaff || session.role in setOf(
+                za.org.rtc.community.core.UserRole.MODERATOR,
+                za.org.rtc.community.core.UserRole.SYSTEM_ADMIN,
+                za.org.rtc.community.core.UserRole.CASE_STAFF,
+                za.org.rtc.community.core.UserRole.EVIDENCE_REVIEWER,
+            )
             CommunityHubScreen(
                 initialSection = initialSection,
                 initialReportScope = initialReportScope,
+                isAdmin = isAdmin,
                 discussions = { onNavigateToReports ->
                     CommunityScreen(
                         readingMode = session.readingMode,
@@ -210,6 +223,7 @@ internal fun RtcCommunityNavGraph(
                 },
                 onOpenReport = { reportId -> navController.navigateOverlay(RtcRoute.publicReportDetail(reportId)) },
                 onComposeReport = { navController.navigateOverlay(RtcRoute.PUBLIC_REPORT_NEW) },
+                onOpenAdminWorkspace = { navController.navigateOverlay(RtcRoute.PUBLIC_REPORTS_ADMIN) },
             )
         }
         composable(RtcRoute.COMMUNITY_FEED) {
@@ -348,12 +362,18 @@ internal fun RtcCommunityNavGraph(
                 projects = projectsPage.items,
                 opportunities = opportunitiesPage.items,
                 notices = notices,
-                events = events,
+                dailyPosts = dailyPosts,
                 isRefreshing = isLiveContentLoading,
                 onRefresh = viewModel::refreshLiveContent,
                 onOpenDirectory = { directory -> navController.navigateOverlay(exploreDirectoryRoute(directory)) },
-                onToggleRsvp = { eventId -> viewModel.toggleEventRsvp(eventId) },
+                onOpenDailyPost = { article ->
+                    dailyPostViewModel.selectArticle(article)
+                    navController.navigateOverlay(RtcRoute.dailyPostDetail(article.id))
+                },
+                onToggleDailyPostLike = { articleId -> dailyPostViewModel.toggleLike(articleId) },
+                onOpenDailyPostStudio = { navController.navigateOverlay(RtcRoute.DAILY_POST_STUDIO) },
                 onOpenReport = { reportId -> navController.navigateOverlay(RtcRoute.publicReportDetail(reportId)) },
+                canManageDailyPosts = session.role.isStaff || session.role in setOf(UserRole.CONTENT_EDITOR, UserRole.SYSTEM_ADMIN),
             )
         }
         composable(
@@ -573,6 +593,44 @@ internal fun RtcCommunityNavGraph(
         }
         composable(RtcRoute.MY_WORK) {
             ProtectedRoute(RtcRoute.MY_WORK, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) { MyWorkProfileScreen(viewModel = viewModel, onOpenAccount = { navController.navigateOverlay(RtcRoute.ACCOUNT) }) }
+        }
+        composable(RtcRoute.DAILY_POST_STUDIO) {
+            ProtectedRoute(RtcRoute.DAILY_POST_STUDIO, session, onDenied = { navController.returnToSafeWorkspace(session.role.isStaff) }) {
+                DailyPostStudioScreen(
+                    viewModel = dailyPostViewModel,
+                    onBack = { navController.popBackStack() },
+                    onOpenPublishedPost = { article: DailyPostArticle ->
+                        dailyPostViewModel.selectArticle(article)
+                        navController.navigateOverlay(RtcRoute.dailyPostDetail(article.id))
+                    },
+                    adminAuthorName = session.displayName.ifBlank { "Office of the Administrator" },
+                    adminRoleName = session.role.name.replace('_', ' '),
+                )
+            }
+        }
+        composable(
+            route = RtcRoute.DAILY_POST_DETAIL,
+            arguments = listOf(navArgument("articleId") { type = NavType.StringType }),
+        ) { entry ->
+            val articleId = entry.arguments?.getString("articleId").orEmpty()
+            androidx.compose.runtime.LaunchedEffect(articleId) {
+                dailyPostViewModel.loadArticleById(articleId)
+            }
+            val selectedArticle by dailyPostViewModel.selectedArticle.collectAsStateWithLifecycle()
+            DailyPostDetailScreen(
+                article = selectedArticle,
+                onBack = { navController.popBackStack() },
+                onToggleLike = { id -> dailyPostViewModel.toggleLike(id) },
+                onShare = { article ->
+                    val sendIntent = android.content.Intent().apply {
+                        action = android.content.Intent.ACTION_SEND
+                        putExtra(android.content.Intent.EXTRA_TEXT, "${article.title}\n\n${article.content}")
+                        type = "text/plain"
+                    }
+                    val shareIntent = android.content.Intent.createChooser(sendIntent, "Share Daily Post")
+                    context.startActivity(shareIntent)
+                }
+            )
         }
     }
     }

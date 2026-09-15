@@ -14,7 +14,7 @@ object RouteAccessPolicy {
     private val staffRoutes = setOf(
         RtcRoute.WORK_QUEUE, RtcRoute.MY_WORK, RtcRoute.STAFF_ALERTS,
         RtcRoute.CONTENT, RtcRoute.MODERATION, RtcRoute.AI,
-        RtcRoute.PUBLIC_REPORTS_ADMIN,
+        RtcRoute.PUBLIC_REPORTS_ADMIN, RtcRoute.DAILY_POST_STUDIO,
     )
     private val adminRoutes = setOf(
         RtcRoute.ACCESS_MANAGEMENT, RtcRoute.OPERATIONAL_CONTROLS,

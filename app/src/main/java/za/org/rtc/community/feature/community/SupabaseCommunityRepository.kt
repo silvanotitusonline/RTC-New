@@ -70,7 +70,7 @@ class SupabaseCommunityRepository @Inject constructor(
         val visibleLimit = limit.coerceIn(1, MAX_VISIBLE_PAGE_SIZE)
         val serverLimit = (visibleLimit + 1).coerceAtMost(MAX_SERVER_PAGE_SIZE)
 
-        val remotePosts = runCatching {
+        val remotePosts: List<CommunityPost> = runCatching {
             val rows = supabase.postgrest.rpc(
                 function = "community_post_page_v3",
                 parameters = buildJsonObject {
@@ -101,16 +101,18 @@ class SupabaseCommunityRepository @Inject constructor(
                 }
             }.getOrElse {
                 // Range query fallback using Supabase range
-                val rows = supabase.from("community_post_feed")
-                    .select {
-                        order(column = "created_at", order = Order.DESCENDING)
-                        range(0, (serverLimit - 1).toLong())
-                    }.decodeList<CommunityFeedRow>()
-                coroutineScope {
-                    rows.map { row -> async { row.toCommunityPost() } }.awaitAll()
-                }
+                runCatching {
+                    val rows = supabase.from("community_post_feed")
+                        .select {
+                            order(column = "created_at", order = Order.DESCENDING)
+                            range(0, (serverLimit - 1).toLong())
+                        }.decodeList<CommunityFeedRow>()
+                    coroutineScope {
+                        rows.map { row -> async { row.toCommunityPost() } }.awaitAll()
+                    }
+                }.getOrDefault(emptyList())
             }
-        }.getOrDefault(emptyList())
+        }
 
         if (remotePosts.isNotEmpty()) {
             cachedPostDao.insertPosts(remotePosts.map { it.toCachedEntity() })

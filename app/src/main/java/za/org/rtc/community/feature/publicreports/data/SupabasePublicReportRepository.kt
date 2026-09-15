@@ -81,7 +81,7 @@ class SupabasePublicReportRepository @Inject constructor(
             ).map(PublicReportJsonMappers::category)
         }.getOrDefault(emptyList())
 
-        if (remote.isNotEmpty()) remote else PublicReportMockData.getSampleCategories()
+        remote
     }
 
     override suspend fun page(
@@ -291,7 +291,7 @@ class SupabasePublicReportRepository @Inject constructor(
 
     override suspend fun create(draft: PublicReportDraft): Result<String> = runCatching {
         val reportId = "report_${java.util.UUID.randomUUID()}"
-        val categories = categories().getOrDefault(PublicReportMockData.getSampleCategories())
+        val categories = categories().getOrDefault(emptyList())
         val cat = categories.firstOrNull { it.id == draft.categoryId }
 
         val newReport = za.org.rtc.community.feature.publicreports.domain.PublicReport(

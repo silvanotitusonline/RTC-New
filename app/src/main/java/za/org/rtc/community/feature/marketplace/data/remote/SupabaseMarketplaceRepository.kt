@@ -21,7 +21,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import za.org.rtc.community.feature.marketplace.data.MarketplaceMockData
 import za.org.rtc.community.feature.marketplace.data.local.MarketplaceMediaPreparation
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceAdminMetrics
 import za.org.rtc.community.feature.marketplace.domain.MarketplaceAdminQueue
@@ -69,7 +68,13 @@ class SupabaseMarketplaceRepository @Inject constructor(
                 origin?.let { put("p_lat", it.latitude); put("p_lon", it.longitude) }
             }).decodeSingle<JsonObject>().toMarketplaceHome()
         }.getOrNull()
-        remote ?: MarketplaceMockData.getSampleHome()
+        remote ?: MarketplaceHome(
+            featured = emptyList(),
+            nearby = emptyList(),
+            newest = emptyList(),
+            topRated = emptyList(),
+            categories = emptyList(),
+        )
     }
 
     override suspend fun search(filters: MarketplaceSearchFilters, origin: MarketplaceCoordinates?): Result<List<MarketplaceBusinessCard>> = runCatching {
@@ -89,12 +94,7 @@ class SupabaseMarketplaceRepository @Inject constructor(
                 }
             }).decodeSingle<JsonArray>().map { it.jsonObject.toBusinessCard() }
         }.getOrNull()
-        if (!remote.isNullOrEmpty()) remote else {
-            MarketplaceMockData.getSampleBusinesses().filter { card ->
-                (filters.query.isBlank() || card.displayName.contains(filters.query, true) || card.tagline.contains(filters.query, true)) &&
-                    (filters.categoryId.isNullOrBlank() || card.category.contains(filters.categoryId, true))
-            }
-        }
+        remote.orEmpty()
     }
 
     override suspend fun searchPage(
@@ -128,35 +128,23 @@ class SupabaseMarketplaceRepository @Inject constructor(
             )
         }.getOrNull()
 
-        remote ?: run {
-            val sampleItems = MarketplaceMockData.getSampleBusinesses().filter { card ->
-                (filters.query.isBlank() || card.displayName.contains(filters.query, true) || card.tagline.contains(filters.query, true)) &&
-                    (filters.categoryId.isNullOrBlank() || card.category.contains(filters.categoryId, true))
-            }
-            MarketplaceSearchPage(items = sampleItems, nextOffset = null, hasMore = false)
-        }
+        remote ?: MarketplaceSearchPage(items = emptyList(), nextOffset = null, hasMore = false)
     }
 
     override suspend fun detail(idOrSlug: String, origin: MarketplaceCoordinates?): Result<MarketplaceBusinessDetail> = runCatching {
         require(idOrSlug.isNotBlank()) { "Choose a Marketplace business." }
-        val remote = runCatching {
-            supabase.postgrest.rpc("marketplace_business_detail", buildJsonObject {
-                put("p_business_id_or_slug", idOrSlug)
-                origin?.let { put("p_lat", it.latitude); put("p_lon", it.longitude) }
-            }).decodeSingle<JsonObject>().toBusinessDetail()
-        }.getOrNull()
-        remote ?: MarketplaceMockData.getSampleDetail(idOrSlug)
+        supabase.postgrest.rpc("marketplace_business_detail", buildJsonObject {
+            put("p_business_id_or_slug", idOrSlug)
+            origin?.let { put("p_lat", it.latitude); put("p_lon", it.longitude) }
+        }).decodeSingle<JsonObject>().toBusinessDetail()
     }
 
     override suspend fun reviews(businessId: String): Result<Pair<List<MarketplaceReview>, MarketplaceRating>> = runCatching {
-        val remote = runCatching {
-            val root = supabase.postgrest.rpc("marketplace_business_reviews", buildJsonObject {
-                put("p_business_id", businessId)
-                put("p_limit", 50)
-            }).decodeSingle<JsonObject>()
-            root.array("items").map { it.jsonObject.toReview() } to root.objectOrEmpty("rating").toRating()
-        }.getOrNull()
-        remote ?: MarketplaceMockData.getSampleReviews(businessId)
+        val root = supabase.postgrest.rpc("marketplace_business_reviews", buildJsonObject {
+            put("p_business_id", businessId)
+            put("p_limit", 50)
+        }).decodeSingle<JsonObject>()
+        root.array("items").map { it.jsonObject.toReview() } to root.objectOrEmpty("rating").toRating()
     }
 
     override suspend fun save(businessId: String, saved: Boolean): Result<Boolean> = runCatching {
@@ -170,7 +158,7 @@ class SupabaseMarketplaceRepository @Inject constructor(
         val remote = runCatching {
             supabase.postgrest.rpc("marketplace_saved_businesses").decodeSingle<JsonArray>().map { it.jsonObject.toBusinessCard() }
         }.getOrNull()
-        remote ?: MarketplaceMockData.getSampleSavedBusinesses()
+        remote.orEmpty()
     }
 
     override suspend fun mediaUrl(path: String): Result<String> = runCatching {
@@ -584,7 +572,10 @@ class SupabaseMarketplaceRepository @Inject constructor(
                 },
             )
         }.getOrNull()
-        remote ?: MarketplaceMockData.getSampleAdminQueue()
+        remote ?: MarketplaceAdminQueue(
+            items = emptyList(),
+            metrics = MarketplaceAdminMetrics(0, 0, 0, 0, 0, 0),
+        )
     }
 
     override suspend fun assign(submissionId: String): Result<Unit> = runCatching {

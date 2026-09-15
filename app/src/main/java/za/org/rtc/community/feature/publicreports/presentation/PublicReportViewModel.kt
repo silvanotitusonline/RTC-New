@@ -325,6 +325,60 @@ class PublicReportViewModel @Inject constructor(
         _detail.update { it.copy(message = null) }
     }
 
+    fun adminVerifyReport(
+        reportId: String,
+        verified: Boolean,
+        reason: String = if (verified) "Report verified by authorized administrator." else "Marked unverified by administrator."
+    ) {
+        viewModelScope.launch {
+            _feed.update { state ->
+                state.copy(
+                    reports = state.reports.map { if (it.id == reportId) it.copy(verified = verified) else it },
+                    message = if (verified) "Report approved & verified for public feed." else "Report verification removed."
+                )
+            }
+            repository.adminSetVerification(reportId, verified, reason, UUID.randomUUID().toString())
+                .onSuccess {
+                    refresh()
+                }
+                .onFailure { error ->
+                    _feed.update {
+                        it.copy(message = SafeUiError.generic(error, error.message ?: "Verification could not be updated."))
+                    }
+                    refresh()
+                }
+        }
+    }
+
+    fun adminRejectReport(
+        reportId: String,
+        reason: String = "Rejected by administrator during verification review."
+    ) {
+        viewModelScope.launch {
+            _feed.update { state ->
+                state.copy(
+                    reports = state.reports.filterNot { it.id == reportId },
+                    message = "Report rejected and excluded from public feed."
+                )
+            }
+            repository.adminTransition(
+                reportId = reportId,
+                toStatus = za.org.rtc.community.feature.publicreports.domain.PublicReportStatus.REJECTED,
+                publicNote = reason,
+                privateNote = "Rejected during verification: $reason",
+                duplicateOf = null,
+                requestId = UUID.randomUUID().toString()
+            ).onSuccess {
+                refresh()
+            }.onFailure { error ->
+                _feed.update {
+                    it.copy(message = SafeUiError.generic(error, error.message ?: "Failed to reject report."))
+                }
+                refresh()
+            }
+        }
+    }
+
     private suspend fun loadPage(reset: Boolean, generation: Long) {
         repository.page(_feed.value.filters, if (reset) null else cursorCreatedAt, if (reset) null else cursorId)
             .onSuccess { page ->

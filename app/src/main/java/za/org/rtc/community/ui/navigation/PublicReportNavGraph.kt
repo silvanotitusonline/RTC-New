@@ -20,9 +20,17 @@ internal fun NavGraphBuilder.publicReportRoutes(
     guidelinesVersion: String = "1",
 ) {
     composable(RtcRoute.PUBLIC_REPORTS) {
+        val isAdmin = session.role.isStaff || session.role in setOf(
+            za.org.rtc.community.core.UserRole.MODERATOR,
+            za.org.rtc.community.core.UserRole.SYSTEM_ADMIN,
+            za.org.rtc.community.core.UserRole.CASE_STAFF,
+            za.org.rtc.community.core.UserRole.EVIDENCE_REVIEWER,
+        )
         PublicReportsScreen(
+            isAdmin = isAdmin,
             onOpenReport = { navController.navigateOverlay(RtcRoute.publicReportDetail(it)) },
             onCompose = { navController.navigateOverlay(RtcRoute.PUBLIC_REPORT_NEW) },
+            onOpenAdminWorkspace = { navController.navigateOverlay(RtcRoute.PUBLIC_REPORTS_ADMIN) },
         )
     }
     composable(RtcRoute.PUBLIC_REPORT_NEW) {

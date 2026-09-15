@@ -531,6 +531,5 @@ fun ResolutionTimelineVisualizer(
 }
 
 private fun formatTimestamp(instant: java.time.Instant): String {
-    val formatter = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm").withZone(ZoneId.systemDefault())
-    return formatter.format(instant)
+    return za.org.rtc.community.core.TimeFormatters.formatRelativeTime(instant)
 }

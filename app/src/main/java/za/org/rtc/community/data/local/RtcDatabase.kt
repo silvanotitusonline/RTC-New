@@ -425,6 +425,35 @@ val RTC_DATABASE_MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
+val RTC_DATABASE_MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS daily_post_articles (
+                id TEXT NOT NULL PRIMARY KEY,
+                title TEXT NOT NULL,
+                subtitle TEXT NOT NULL,
+                content TEXT NOT NULL,
+                category TEXT NOT NULL,
+                authorName TEXT NOT NULL,
+                authorRole TEXT NOT NULL,
+                templateStyle TEXT NOT NULL,
+                accentColorHex TEXT NOT NULL,
+                coverImageUrl TEXT,
+                keyHighlightsJson TEXT NOT NULL,
+                quoteText TEXT,
+                quoteAuthor TEXT,
+                publishedAtEpochMillis INTEGER NOT NULL,
+                readTimeMinutes INTEGER NOT NULL,
+                reactionsCount INTEGER NOT NULL,
+                viewerHasLiked INTEGER NOT NULL,
+                isPublished INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 @Database(
     entities = [
         LocalDraftEntity::class,
@@ -435,8 +464,9 @@ val RTC_DATABASE_MIGRATION_7_8 = object : Migration(7, 8) {
         CachedPostEntity::class,
         CachedCommentEntity::class,
         CachedUserProfileEntity::class,
+        za.org.rtc.community.feature.dailypost.data.DailyPostEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class RtcDatabase : RoomDatabase() {
@@ -448,4 +478,5 @@ abstract class RtcDatabase : RoomDatabase() {
     abstract fun cachedPostDao(): CachedPostDao
     abstract fun cachedCommentDao(): CachedCommentDao
     abstract fun cachedUserProfileDao(): CachedUserProfileDao
+    abstract fun dailyPostDao(): za.org.rtc.community.feature.dailypost.data.DailyPostDao
 }

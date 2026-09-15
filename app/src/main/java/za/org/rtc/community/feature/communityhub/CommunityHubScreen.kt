@@ -9,9 +9,11 @@ import za.org.rtc.community.navigation.CommunitySection
 fun CommunityHubScreen(
     initialSection: CommunitySection = CommunitySection.DISCUSSIONS,
     initialReportScope: PublicReportScope = PublicReportScope.VERIFIED,
+    isAdmin: Boolean = false,
     discussions: @Composable (onNavigateToReports: () -> Unit) -> Unit,
     onOpenReport: (String) -> Unit,
     onComposeReport: () -> Unit,
+    onOpenAdminWorkspace: (() -> Unit)? = null,
 ) {
     CommunityModernisationScreen(
         initialSection = initialSection,
@@ -19,8 +21,10 @@ fun CommunityHubScreen(
         reports = {
             PublicReportsScreen(
                 initialScope = initialReportScope,
+                isAdmin = isAdmin,
                 onOpenReport = onOpenReport,
                 onCompose = onComposeReport,
+                onOpenAdminWorkspace = onOpenAdminWorkspace,
             )
         },
     )
