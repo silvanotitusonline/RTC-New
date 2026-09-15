@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Person
@@ -29,6 +30,7 @@ fun AccountHubScreen(
     onOpenSupport: () -> Unit,
     onOpenProviderProfile: (() -> Unit)? = null,
     onOpenMarketplaceBusiness: (() -> Unit)? = null,
+    onSignOut: () -> Unit,
 ) {
     RtcScreenScaffold {
         item { RtcSectionHeader("Account", "Identity, marketplace, support and settings.") }
@@ -72,6 +74,20 @@ fun AccountHubScreen(
                 description = "Profile, privacy, security, notifications, accessibility and account controls.",
                 icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
                 onClick = onOpenSettings,
+            )
+        }
+        item {
+            AccountHubAction(
+                title = "Log Out",
+                description = "Sign out of your resident account on this device.",
+                icon = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Logout,
+                        contentDescription = "Log Out",
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = onSignOut,
             )
         }
         item {

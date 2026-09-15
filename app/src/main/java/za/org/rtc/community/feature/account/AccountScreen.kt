@@ -26,6 +26,7 @@ fun AccountScreen(
     val passwordUi by viewModel.passwordUi.collectAsStateWithLifecycle()
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showPasswordDialog by rememberSaveable { mutableStateOf(false) }
+    var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
 
     if (showPasswordDialog) {
         PasswordUpdateDialog(
@@ -35,6 +36,18 @@ fun AccountScreen(
             onDismiss = {
                 showPasswordDialog = false
                 viewModel.dismissPasswordUi()
+            },
+        )
+    }
+
+    if (showLogoutDialog) {
+        LogoutConfirmationDialog(
+            onConfirm = {
+                showLogoutDialog = false
+                viewModel.signOutToPublicWelcome()
+            },
+            onDismiss = {
+                showLogoutDialog = false
             },
         )
     }
@@ -61,6 +74,7 @@ fun AccountScreen(
                         onOpenAccessibility = {},
                         onOpenMarketplaceBusiness = { onMarketplace(RtcRoute.MARKETPLACE_MY_BUSINESSES) },
                         onOpenMarketplaceRoute = { onMarketplace(it) },
+                        onSignOut = { showLogoutDialog = true },
                     )
                 }
             }
@@ -70,6 +84,7 @@ fun AccountScreen(
                 onOpenSettings = { showSettings = true },
                 onOpenSupport = onHelp,
                 onOpenMarketplaceBusiness = { onMarketplace(RtcRoute.MARKETPLACE_MY_BUSINESSES) },
+                onSignOut = { showLogoutDialog = true },
             )
         }
     }

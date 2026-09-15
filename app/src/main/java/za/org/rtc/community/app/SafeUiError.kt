@@ -96,8 +96,14 @@ internal object SafeUiError {
     fun generic(error: Throwable, fallback: String): String {
         val detail = error.message.orEmpty()
         return when {
+            detail.contains("User already registered", ignoreCase = true) ||
+                detail.contains("already registered", ignoreCase = true) ->
+                "An account with this email address already exists. Please sign in instead."
+            detail.contains("Email rate limit exceeded", ignoreCase = true) ||
+                detail.contains("rate limit", ignoreCase = true) ->
+                "Email rate limit exceeded. Please wait a few minutes before requesting another confirmation email."
             detail.contains("Invalid login credentials", ignoreCase = true) -> "Invalid login credentials. Please check your email and password."
-            detail.contains("Email not confirmed", ignoreCase = true) -> "Please confirm your email address before signing in."
+            detail.contains("Email not confirmed", ignoreCase = true) -> "Please confirm your email address before signing in. Check your inbox for the confirmation email."
             detail.contains("permission", ignoreCase = true) ||
                 detail.contains("not authorized", ignoreCase = true) ||
                 detail.contains("forbidden", ignoreCase = true) -> "You do not have access to complete this action."

@@ -405,9 +405,9 @@ class RtcRepository @Inject constructor(
     }
 
     /**
-     * Email confirmation remains enabled in Supabase. A successful sign-up normally requires
-     * the user to follow the message delivered to their verified email address before a session
-     * can be created on this device.
+     * Email confirmation remains enabled in Supabase. A successful sign-up triggers a confirmation
+     * email to the user's email address and requires the user to verify their email before a session
+     * is created on this device.
      */
     suspend fun signUpWithEmail(email: String, password: String, displayName: String): Result<Unit> = runCatching {
         val cleanEmail = email.trim()
@@ -415,15 +415,14 @@ class RtcRepository @Inject constructor(
         require(cleanDisplayName.isNotEmpty()) { "Enter your name to create an account." }
         requireStrongPassword(password)
         
-        runCatching {
-            supabase.auth.signUpWith(Email, "rtc://community") {
-                this.email = cleanEmail
-                this.password = password
-                data = buildJsonObject { put("full_name", cleanDisplayName) }
-            }
+        // Trigger Supabase Auth sign up so Supabase delivers the confirmation email
+        supabase.auth.signUpWith(Email, redirectUrl = "rtc://community") {
+            this.email = cleanEmail
+            this.password = password
+            data = buildJsonObject { put("full_name", cleanDisplayName) }
         }
 
-        val userId = "user_${UUID.nameUUIDFromBytes(cleanEmail.toByteArray())}"
+        val userId = supabase.auth.currentUserOrNull()?.id ?: "user_${UUID.nameUUIDFromBytes(cleanEmail.toByteArray())}"
         val isAdminEmail = cleanEmail.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
                 cleanEmail.startsWith("admin", ignoreCase = true) ||
                 cleanEmail.contains("admin@", ignoreCase = true)
@@ -442,30 +441,34 @@ class RtcRepository @Inject constructor(
             )
         )
 
-        _session.value = RtcSession(
-            id = userId,
-            displayName = cleanDisplayName,
-            role = targetRole,
-            authority = SessionAuthority.SUPABASE_AUTH,
-            authenticatedEmail = cleanEmail,
-            handle = if (isAdminEmail) "@silvano_admin" else "@${cleanEmail.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
-            onboardingComplete = true,
-            administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
-        )
-
-        database.cachedSessionDao().upsertSession(
-            CachedSessionEntity(
-                userId = userId,
-                email = cleanEmail,
-                isLoggedIn = true,
-                sessionJson = "",
-                updatedAtEpochMillis = System.currentTimeMillis()
+        // Only establish active session if auto-confirmed immediately by Supabase
+        val activeSession = supabase.auth.currentSessionOrNull()
+        if (activeSession != null) {
+            _session.value = RtcSession(
+                id = userId,
+                displayName = cleanDisplayName,
+                role = targetRole,
+                authority = SessionAuthority.SUPABASE_AUTH,
+                authenticatedEmail = cleanEmail,
+                handle = if (isAdminEmail) "@silvano_admin" else "@${cleanEmail.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
+                onboardingComplete = true,
+                administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
             )
-        )
 
-        recordPrivacyAnalyticsAppActivity()
-        refreshLiveContent()
-        enqueueUploadRecovery()
+            database.cachedSessionDao().upsertSession(
+                CachedSessionEntity(
+                    userId = userId,
+                    email = cleanEmail,
+                    isLoggedIn = true,
+                    sessionJson = "",
+                    updatedAtEpochMillis = System.currentTimeMillis()
+                )
+            )
+
+            recordPrivacyAnalyticsAppActivity()
+            refreshLiveContent()
+            enqueueUploadRecovery()
+        }
     }
 
     /** The result is intentionally generic so email address ownership is not disclosed. */

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AddBusiness
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Business
@@ -36,6 +37,7 @@ fun AccountSettingsMenu(
     onOpenAccessibility: () -> Unit,
     onOpenMarketplaceBusiness: (() -> Unit)? = null,
     onOpenMarketplaceRoute: ((String) -> Unit)? = null,
+    onSignOut: (() -> Unit)? = null,
 ) {
     val handleMarketplaceRoute: (String) -> Unit = { route ->
         onOpenMarketplaceRoute?.invoke(route) ?: onOpenMarketplaceBusiness?.invoke()
@@ -112,6 +114,14 @@ fun AccountSettingsMenu(
             description = "Reading mode and display preferences.",
             onClick = onOpenAccessibility,
         )
+        if (onSignOut != null) {
+            AccountSettingsRow(
+                title = "Log Out",
+                description = "Sign out of your resident account on this device.",
+                icon = Icons.AutoMirrored.Filled.Logout,
+                onClick = onSignOut,
+            )
+        }
     }
 }
 

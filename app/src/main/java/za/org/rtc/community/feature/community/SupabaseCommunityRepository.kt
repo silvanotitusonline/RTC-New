@@ -451,11 +451,11 @@ class SupabaseCommunityRepository @Inject constructor(
                 }
             }
         }
-        channel.subscribe()
+        runCatching { channel.subscribe() }
         awaitClose {
             job.cancel()
             CoroutineScope(Dispatchers.IO).launch {
-                channel.unsubscribe()
+                runCatching { channel.unsubscribe() }
             }
         }
     }
@@ -475,11 +475,11 @@ class SupabaseCommunityRepository @Inject constructor(
                 }
             }
         }
-        channel.subscribe()
+        runCatching { channel.subscribe() }
         awaitClose {
             job.cancel()
             CoroutineScope(Dispatchers.IO).launch {
-                channel.unsubscribe()
+                runCatching { channel.unsubscribe() }
             }
         }
     }

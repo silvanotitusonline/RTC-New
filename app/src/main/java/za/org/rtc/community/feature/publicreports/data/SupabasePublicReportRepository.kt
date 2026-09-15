@@ -3,20 +3,12 @@ package za.org.rtc.community.feature.publicreports.data
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.realtime.PostgresAction
-import io.github.jan.supabase.realtime.channel
-import io.github.jan.supabase.realtime.postgresChangeFlow
-import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -55,34 +47,8 @@ class SupabasePublicReportRepository @Inject constructor(
     private val _dashboardUpdates = kotlinx.coroutines.flow.MutableStateFlow<PublicReportDashboard?>(null)
     override val dashboardUpdates: kotlinx.coroutines.flow.StateFlow<PublicReportDashboard?> = _dashboardUpdates.asStateFlow()
 
-    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     init {
         notifyDashboardChanged()
-        setupRealtimeSubscription()
-    }
-
-    private fun setupRealtimeSubscription() {
-        repositoryScope.launch {
-            runCatching {
-                val channel = supabase.realtime.channel("public-reports-db-changes")
-                val changeFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
-                    table = "public_reports"
-                }
-                channel.subscribe()
-                changeFlow.collect {
-                    runCatching {
-                        dashboard().onSuccess { updatedDashboard ->
-                            _dashboardUpdates.value = updatedDashboard
-                        }.onFailure {
-                            notifyDashboardChanged()
-                        }
-                    }.getOrElse {
-                        notifyDashboardChanged()
-                    }
-                }
-            }
-        }
     }
 
     private fun calculateDashboard(): PublicReportDashboard {

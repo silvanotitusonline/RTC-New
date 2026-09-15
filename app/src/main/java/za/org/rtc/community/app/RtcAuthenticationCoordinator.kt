@@ -129,8 +129,9 @@ internal class RtcAuthenticationCoordinator(
             repository.signUpWithEmail(email, password, displayName)
                 .onSuccess {
                     _authenticationUi.value = AuthenticationUiState(
-                        message = "Check your email to confirm your account, then return here to sign in.",
+                        message = "A confirmation email has been sent to $email. Please check your inbox and confirm your email before signing in.",
                         confirmationRequired = true,
+                        isSuccess = true,
                     )
                 }
                 .onFailure { error ->

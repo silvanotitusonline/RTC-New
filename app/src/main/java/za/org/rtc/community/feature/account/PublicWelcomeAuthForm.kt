@@ -254,7 +254,7 @@ internal fun PublicWelcomeAuthForm(
             item {
                 Text(
                     text = message,
-                    color = if (authenticationUi.confirmationRequired) Color(0xFFFBBF24) else Color(0xFFF87171),
+                    color = if (authenticationUi.confirmationRequired || authenticationUi.isSuccess) Color(0xFF34D399) else Color(0xFFF87171),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
