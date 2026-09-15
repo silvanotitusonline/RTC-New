@@ -64,6 +64,29 @@ data class DailyPostArticle(
     val isPublished: Boolean = true,
 )
 
+fun calculateEstimatedReadingTimeMinutes(
+    title: String,
+    subtitle: String,
+    content: String,
+    keyHighlights: List<String> = emptyList(),
+    wordsPerMinute: Int = 200
+): Int {
+    val fullText = buildString {
+        append(title)
+        append(" ")
+        append(subtitle)
+        append(" ")
+        append(content)
+        if (keyHighlights.isNotEmpty()) {
+            append(" ")
+            append(keyHighlights.joinToString(" "))
+        }
+    }.trim()
+    if (fullText.isBlank()) return 1
+    val wordCount = fullText.split(Regex("\\s+")).count { it.isNotBlank() }
+    return maxOf(1, Math.ceil(wordCount.toDouble() / wordsPerMinute).toInt())
+}
+
 data class DailyPostColorTheme(
     val name: String,
     val hex: String,

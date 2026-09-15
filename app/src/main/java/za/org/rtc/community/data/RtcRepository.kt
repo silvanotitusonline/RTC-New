@@ -120,8 +120,28 @@ class RtcRepository @Inject constructor(
     private val localDraftDao: LocalDraftDao,
     private val preferencesStore: UserPreferencesStore,
     private val workManager: WorkManager,
+    private val syncEngine: za.org.rtc.community.core.sync.SystemUpdateSyncEngine = za.org.rtc.community.core.sync.SystemUpdateSyncEngine(),
 ) {
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    val lastSyncedEpochMillis: StateFlow<Long> = syncEngine.lastSyncedEpochMillis
+    val isSyncingLiveUpdates: StateFlow<Boolean> = syncEngine.isSyncing
+    val syncCount: StateFlow<Int> = syncEngine.syncCount
+    val systemUpdateEvents = syncEngine.systemUpdateEvents
+
+    init {
+        syncEngine.startAutoSync(intervalMillis = 15_000L) {
+            refreshLiveContent()
+        }
+    }
+
+    fun triggerSystemWideUpdate(
+        event: za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent = za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.GlobalSystemRefresh
+    ) {
+        syncEngine.triggerSystemWideUpdate(event) {
+            refreshLiveContent()
+        }
+    }
 
     val events: StateFlow<List<za.org.rtc.community.feature.events.domain.CommunityEvent>> =
         (communityEventsRepository as? za.org.rtc.community.feature.events.data.remote.SupabaseCommunityEventsRepository)?.eventsFlow
@@ -1423,6 +1443,16 @@ class RtcRepository @Inject constructor(
                 avatarUrl = currentSession.avatarUrl,
                 role = currentSession.role.name,
                 updatedAtEpochMillis = System.currentTimeMillis(),
+            )
+        )
+        database.cachedPostDao().updateAuthorInfo(currentSession.id, cleanName, currentSession.avatarUrl)
+        database.cachedCommentDao().updateAuthorInfo(currentSession.id, cleanName, currentSession.avatarUrl)
+
+        triggerSystemWideUpdate(
+            za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.ProfileUpdated(
+                userId = currentSession.id,
+                newName = cleanName,
+                avatarUrl = currentSession.avatarUrl
             )
         )
 

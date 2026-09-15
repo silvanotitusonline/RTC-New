@@ -31,7 +31,10 @@ import kotlinx.coroutines.withContext
 import za.org.rtc.community.core.MediaKind
 
 @Singleton
-class MediaPreparation @Inject constructor(@ApplicationContext private val context: Context) {
+class MediaPreparation @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val compressor: ImageCompressionUtility = ImageCompressionUtility(),
+) {
     data class Prepared(
         val file: File,
         val kind: MediaKind,
@@ -57,45 +60,27 @@ class MediaPreparation @Inject constructor(@ApplicationContext private val conte
             }
         }
         return when {
-            mime in IMAGE_TYPES -> withContext(Dispatchers.IO) { prepareImage(uri) }
+            mime in IMAGE_TYPES -> prepareImage(uri)
             mime in VIDEO_TYPES -> prepareVideo(uri, mime)
-            else -> withContext(Dispatchers.IO) { prepareImage(uri) }
+            else -> prepareImage(uri)
         }
     }
 
-    private fun prepareImage(uri: Uri): Prepared {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: error("The selected image could not be read.")
-        require(bounds.outWidth > 0 && bounds.outHeight > 0) { "The selected image could not be decoded." }
-        var sample = 1
-        while (bounds.outWidth / sample > 3072 || bounds.outHeight / sample > 3072) sample *= 2
-        val options = BitmapFactory.Options().apply { inSampleSize = sample }
-        val source = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
-            ?: error("The selected image could not be decoded.")
-        val orientation = context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
-            ExifInterface(descriptor.fileDescriptor).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-        } ?: ExifInterface.ORIENTATION_NORMAL
-        var normalized = source.normalizedForExif(orientation)
-        if (normalized !== source) source.recycle()
-        if (maxOf(normalized.width, normalized.height) > 2048) {
-            val ratio = 2048f / maxOf(normalized.width, normalized.height)
-            val scaled = Bitmap.createScaledBitmap(normalized, (normalized.width * ratio).toInt(), (normalized.height * ratio).toInt(), true)
-            if (scaled !== normalized) normalized.recycle()
-            normalized = scaled
-        }
-        val encoding = preparedImageEncoding(normalized.hasAlpha())
-        val out = stagingFile("image", encoding.extension)
-        FileOutputStream(out).use { stream ->
-            val format = if (encoding == PreparedImageEncoding.PNG) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-            val quality = if (encoding == PreparedImageEncoding.PNG) 100 else 88
-            check(normalized.compress(format, quality, stream))
-        }
-        val width = normalized.width
-        val height = normalized.height
-        normalized.recycle()
-        require(out.length() in 1..MAX_IMAGE_BYTES) { out.delete(); "Prepared image exceeds 5 MB." }
-        return Prepared(out, MediaKind.IMAGE, encoding.mimeType, out.length(), width, height)
+    private suspend fun prepareImage(uri: Uri): Prepared = withContext(Dispatchers.IO) {
+        val compressed = compressor.compressUriToStagingFile(
+            context = context,
+            uri = uri,
+            preset = ImageCompressionUtility.CompressionPreset.FEED_IMAGE,
+            prefix = "rtc_community_feed"
+        )
+        Prepared(
+            file = compressed.file,
+            kind = MediaKind.IMAGE,
+            mimeType = compressed.mimeType,
+            byteSize = compressed.compressedByteSize,
+            width = compressed.width,
+            height = compressed.height
+        )
     }
 
     @OptIn(markerClass = [UnstableApi::class])

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -275,6 +276,16 @@ class RtcViewModel @Inject constructor(
     fun consumePendingCommunityPost() = residentCoordinator.consumePendingCommunityPost()
     fun openPublicReportFromDeepLink(reportId: String?) = residentCoordinator.openPublicReportFromDeepLink(reportId)
     fun consumePendingPublicReport() = residentCoordinator.consumePendingPublicReport()
+    fun openDailyPostFromDeepLink(articleId: String?) = residentCoordinator.openDailyPostFromDeepLink(articleId)
+    fun consumePendingDailyPost() = residentCoordinator.consumePendingDailyPost()
+    val lastSyncedEpochMillis: StateFlow<Long> = residentCoordinator.lastSyncedEpochMillis
+    val isSyncingLiveUpdates: StateFlow<Boolean> = residentCoordinator.isSyncingLiveUpdates
+    val syncCount: StateFlow<Int> = residentCoordinator.syncCount
+
+    fun triggerSystemWideUpdate(
+        event: za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent = za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.GlobalSystemRefresh
+    ) = residentCoordinator.triggerSystemWideUpdate(event)
+
     fun refreshLiveContent() = residentCoordinator.refreshLiveContent()
     fun loadMoreProjects() = residentCoordinator.loadMoreProjects()
     fun loadMoreCentres() = residentCoordinator.loadMoreCentres()

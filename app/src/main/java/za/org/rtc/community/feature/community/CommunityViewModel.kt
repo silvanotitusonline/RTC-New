@@ -10,7 +10,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.update
 import za.org.rtc.community.core.CommunityPost
+import za.org.rtc.community.core.sync.SystemUpdateSyncEngine
 import za.org.rtc.community.feature.publicreports.domain.PublicReportFilters
 import za.org.rtc.community.feature.publicreports.domain.PublicReportRepository
 
@@ -18,6 +20,7 @@ import za.org.rtc.community.feature.publicreports.domain.PublicReportRepository
 class CommunityViewModel @Inject constructor(
     private val repository: CommunityRepository,
     private val publicReportRepository: PublicReportRepository? = null,
+    private val syncEngine: SystemUpdateSyncEngine = SystemUpdateSyncEngine(),
 ) : ViewModel() {
     private val _feedState = MutableStateFlow(CommunityFeedState(initialLoading = true))
     val feedState = _feedState.asStateFlow()
@@ -32,6 +35,52 @@ class CommunityViewModel @Inject constructor(
     private var detailGeneration = 0L
 
     init {
+        // 1. Immediately observe Room database cache so feed loads instantly before fetching network updates
+        viewModelScope.launch {
+            repository.observeCachedPosts().collect { cachedPosts ->
+                if (cachedPosts.isNotEmpty()) {
+                    _feedState.update { current ->
+                        current.copy(
+                            items = cachedPosts,
+                            initialLoading = false
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Observe real-time system update events for post deletions, profile changes, and refreshes
+        viewModelScope.launch {
+            syncEngine.systemUpdateEvents.collect { event ->
+                when (event) {
+                    is SystemUpdateSyncEngine.SystemUpdateEvent.PostDeleted -> {
+                        _feedState.update { current ->
+                            current.copy(items = current.items.filterNot { it.id == event.postId })
+                        }
+                    }
+                    is SystemUpdateSyncEngine.SystemUpdateEvent.ProfileUpdated -> {
+                        _feedState.update { current ->
+                            current.copy(
+                                items = current.items.map { post ->
+                                    if (post.authorId == event.userId) {
+                                        post.copy(
+                                            author = event.newName,
+                                            authorAvatarUrl = event.avatarUrl ?: post.authorAvatarUrl
+                                        )
+                                    } else post
+                                }
+                            )
+                        }
+                    }
+                    is SystemUpdateSyncEngine.SystemUpdateEvent.GlobalSystemRefresh,
+                    is SystemUpdateSyncEngine.SystemUpdateEvent.PostCreated -> {
+                        refreshFeed(initial = false)
+                    }
+                    else -> {}
+                }
+            }
+        }
+
         refreshFeed(initial = true)
         refreshPublicReports()
     }

@@ -109,4 +109,7 @@ interface DailyPostDao {
 
     @Query("UPDATE daily_post_articles SET reactionsCount = reactionsCount + CASE WHEN viewerHasLiked = 1 THEN -1 ELSE 1 END, viewerHasLiked = CASE WHEN viewerHasLiked = 1 THEN 0 ELSE 1 END WHERE id = :id")
     suspend fun toggleLike(id: String)
+
+    @Query("DELETE FROM daily_post_articles WHERE isPublished = 1 AND publishedAtEpochMillis < :cutoffEpochMillis")
+    suspend fun deleteStaleArticles(cutoffEpochMillis: Long): Int
 }

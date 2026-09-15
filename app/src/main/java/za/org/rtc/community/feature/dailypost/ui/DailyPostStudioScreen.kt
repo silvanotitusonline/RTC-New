@@ -84,6 +84,7 @@ import kotlinx.coroutines.launch
 import za.org.rtc.community.feature.dailypost.domain.DailyPostArticle
 import za.org.rtc.community.feature.dailypost.domain.DailyPostPresets
 import za.org.rtc.community.feature.dailypost.domain.DailyPostTemplateStyle
+import za.org.rtc.community.feature.dailypost.domain.calculateEstimatedReadingTimeMinutes
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -124,7 +125,10 @@ fun DailyPostStudioScreen(
     var quoteAuthor by remember { mutableStateOf("") }
     val highlights = remember { mutableStateListOf<String>() }
     var newHighlightInput by remember { mutableStateOf("") }
-    var readTimeMinutes by remember { mutableIntStateOf(3) }
+    // Dynamic calculation of estimated reading time
+    val computedReadTimeMinutes = remember(title, subtitle, content, highlights.toList()) {
+        calculateEstimatedReadingTimeMinutes(title, subtitle, content, highlights.toList())
+    }
 
     // Live mode switch: 0 = Form Editor, 1 = Canva/Blog Live Preview
     var editorMode by remember { mutableIntStateOf(0) }
@@ -143,7 +147,6 @@ fun DailyPostStudioScreen(
         quoteAuthor = article.quoteAuthor.orEmpty()
         highlights.clear()
         highlights.addAll(article.keyHighlights)
-        readTimeMinutes = article.readTimeMinutes
         selectedStudioTab = 0
         editorMode = 0
     }
@@ -161,7 +164,6 @@ fun DailyPostStudioScreen(
         quoteText = ""
         quoteAuthor = ""
         highlights.clear()
-        readTimeMinutes = 3
         editorMode = 0
     }
 
@@ -169,7 +171,7 @@ fun DailyPostStudioScreen(
     val currentArticlePreview = remember(
         editingArticleId, title, subtitle, content, selectedCategory,
         selectedColorHex, selectedTemplate, authorName, authorRole,
-        quoteText, quoteAuthor, highlights.toList(), readTimeMinutes
+        quoteText, quoteAuthor, highlights.toList(), computedReadTimeMinutes
     ) {
         DailyPostArticle(
             id = editingArticleId ?: UUID.randomUUID().toString(),
@@ -185,7 +187,7 @@ fun DailyPostStudioScreen(
             quoteText = quoteText.takeIf { it.isNotBlank() },
             quoteAuthor = quoteAuthor.takeIf { it.isNotBlank() },
             publishedAtEpochMillis = System.currentTimeMillis(),
-            readTimeMinutes = readTimeMinutes,
+            readTimeMinutes = computedReadTimeMinutes,
             reactionsCount = 0,
             viewerHasLiked = false,
             isPublished = true,
@@ -426,6 +428,32 @@ fun DailyPostStudioScreen(
                             minLines = 6,
                             shape = RoundedCornerShape(12.dp)
                         )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val wordCount = remember(title, subtitle, content) {
+                                "$title $subtitle $content".split(Regex("\\s+")).count { it.isNotBlank() }
+                            }
+                            Text(
+                                text = "$wordCount words",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ) {
+                                Text(
+                                    text = "⏱️ Estimated Read: $computedReadTimeMinutes min read",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
 
                         // 4. PULL QUOTE (OPTIONAL)
                         Text("4. PULL QUOTE CALLOUT (OPTIONAL)", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Black))

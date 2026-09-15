@@ -25,6 +25,7 @@ import za.org.rtc.community.ui.animation.LocalSnackbarHostState
 import za.org.rtc.community.ui.animation.RtcMotionAlertDialog
 import za.org.rtc.community.ui.animation.RtcMotionPatterns
 import za.org.rtc.community.ui.animation.RtcMotionSnackbar
+import za.org.rtc.community.ui.components.LiveSyncStatusBanner
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -278,6 +279,12 @@ internal fun RtcCommunityApp(viewModel: RtcViewModel) {
         Surface(modifier = Modifier.fillMaxSize().padding(padding)) {
             Column(modifier = Modifier.fillMaxSize()) {
                 if (isOffline) OfflineBanner()
+                LiveSyncStatusBanner(
+                    isSyncingFlow = viewModel.isSyncingLiveUpdates,
+                    lastSyncedEpochFlow = viewModel.lastSyncedEpochMillis,
+                    syncCountFlow = viewModel.syncCount,
+                    onManualSync = viewModel::triggerSystemWideUpdate
+                )
                 if (!isStaff) {
                     liveContentMessage?.let { message ->
                         ResidentRefreshFailureBanner(

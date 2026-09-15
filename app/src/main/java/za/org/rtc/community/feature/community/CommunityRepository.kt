@@ -49,4 +49,6 @@ interface CommunityRepository {
     fun observeNotificationEvents(userId: String): Flow<CommunityRealtimeNotification>
 
     fun observeCommunityFeedRealtime(): Flow<String>
+
+    fun observeCachedPosts(): Flow<List<CommunityPost>>
 }

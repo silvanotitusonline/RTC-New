@@ -10,6 +10,8 @@ import androidx.work.WorkManager
 import androidx.work.Constraints
 import androidx.work.NetworkType
 import java.util.concurrent.TimeUnit
+import za.org.rtc.community.data.work.CacheCleanupWorker
+import za.org.rtc.community.data.work.DataSyncWorker
 import za.org.rtc.community.feature.marketplace.data.work.MarketplacePrefetchWorker
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
@@ -78,6 +80,34 @@ class RtcCommunityApplication : Application(), Configuration.Provider, ImageLoad
             "marketplace_prefetch",
             ExistingPeriodicWorkPolicy.KEEP,
             prefetchWork
+        )
+
+        val dataSyncConstraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val dataSyncWork = PeriodicWorkRequestBuilder<DataSyncWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(dataSyncConstraints)
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            DataSyncWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            dataSyncWork
+        )
+
+        val cleanupConstraints = Constraints.Builder()
+            .setRequiresBatteryNotLow(true)
+            .build()
+
+        val cleanupWork = PeriodicWorkRequestBuilder<CacheCleanupWorker>(24, TimeUnit.HOURS)
+            .setConstraints(cleanupConstraints)
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            CacheCleanupWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            cleanupWork
         )
     }
 }

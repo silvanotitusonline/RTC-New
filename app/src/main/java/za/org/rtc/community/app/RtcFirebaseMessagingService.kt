@@ -51,7 +51,41 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
             postPublicReportNotification(message)
             return
         }
+        if (notificationType.startsWith("DAILY_POST") || message.data.containsKey("daily_post_id") || message.data.containsKey("article_id")) {
+            postDailyPostNotification(message)
+            return
+        }
         postCommunityNotification(message)
+    }
+
+    private fun postDailyPostNotification(message: RemoteMessage) {
+        val articleId = message.data["daily_post_id"] ?: message.data["article_id"] ?: message.data["articleId"] ?: return
+        if (!isSafeId(articleId)) return
+        val title = message.notification?.title ?: message.data["title"] ?: "New Daily Post Published"
+        val body = message.notification?.body ?: message.data["body"] ?: message.data["subtitle"] ?: "Read the latest official update from local administrators."
+
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            action = MainActivity.ACTION_OPEN_DAILY_POST
+            data = Uri.parse("rtc://daily-post/article/$articleId")
+            putExtra(MainActivity.EXTRA_DAILY_POST_ID, articleId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            articleId.hashCode(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, RTC_COMMUNITY_UPDATES_CHANNEL)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title.take(120))
+            .setContentText(body.take(240))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body.take(1000)))
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+        notifyIfPermitted(articleId.hashCode(), notification)
     }
 
     private fun postPublicReportNotification(message: RemoteMessage) {

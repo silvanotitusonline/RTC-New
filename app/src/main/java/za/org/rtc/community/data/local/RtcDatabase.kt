@@ -103,6 +103,9 @@ interface CachedReportDao {
 
     @Query("DELETE FROM cached_reports WHERE id = :id")
     suspend fun deleteReport(id: String)
+
+    @Query("DELETE FROM cached_reports WHERE createdAtEpochMillis < :cutoffEpochMillis")
+    suspend fun deleteStaleReports(cutoffEpochMillis: Long): Int
 }
 
 @Entity(tableName = "cached_app_state")
@@ -125,6 +128,9 @@ interface CachedAppStateDao {
 
     @Query("DELETE FROM cached_app_state WHERE stateKey = :key")
     suspend fun deleteState(key: String)
+
+    @Query("DELETE FROM cached_app_state WHERE updatedAtEpochMillis < :cutoffEpochMillis")
+    suspend fun deleteStaleAppState(cutoffEpochMillis: Long): Int
 }
 
 @Entity(tableName = "cached_session")
@@ -207,6 +213,12 @@ interface CachedPostDao {
 
     @Query("DELETE FROM cached_posts WHERE id = :id")
     suspend fun deletePost(id: String)
+
+    @Query("UPDATE cached_posts SET author = :newName, authorAvatarUrl = COALESCE(:avatarUrl, authorAvatarUrl) WHERE authorId = :userId")
+    suspend fun updateAuthorInfo(userId: String, newName: String, avatarUrl: String?)
+
+    @Query("DELETE FROM cached_posts WHERE isPendingSync = 0 AND createdAtEpochMillis < :cutoffEpochMillis")
+    suspend fun deleteStalePosts(cutoffEpochMillis: Long): Int
 }
 
 @Entity(tableName = "cached_comments")
@@ -244,6 +256,12 @@ interface CachedCommentDao {
 
     @Query("DELETE FROM cached_comments WHERE postId = :postId")
     suspend fun deleteCommentsForPost(postId: String)
+
+    @Query("UPDATE cached_comments SET author = :newName, authorAvatarUrl = COALESCE(:avatarUrl, authorAvatarUrl) WHERE authorId = :userId")
+    suspend fun updateAuthorInfo(userId: String, newName: String, avatarUrl: String?)
+
+    @Query("DELETE FROM cached_comments WHERE createdAtEpochMillis < :cutoffEpochMillis OR postId NOT IN (SELECT id FROM cached_posts)")
+    suspend fun deleteStaleComments(cutoffEpochMillis: Long): Int
 }
 
 @Entity(tableName = "cached_user_profiles")

@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
         handleCommunityPostIntent(intent)
         handlePublicReportIntent(intent)
         handleServiceCentreIntent(intent)
+        handleDailyPostIntent(intent)
         applyDebugSessionIntent(intent)
         setTheme(R.style.Theme_RtcCommunity)
         enableEdgeToEdge()
@@ -58,6 +59,7 @@ class MainActivity : ComponentActivity() {
         handleCommunityPostIntent(intent)
         handlePublicReportIntent(intent)
         handleServiceCentreIntent(intent)
+        handleDailyPostIntent(intent)
         applyDebugSessionIntent(intent)
     }
 
@@ -115,6 +117,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun handleDailyPostIntent(intent: Intent?) {
+        val articleId = intent?.getStringExtra(EXTRA_DAILY_POST_ID)
+            ?: intent?.data
+                ?.takeIf { it.scheme == "rtc" && it.host == "daily-post" && it.pathSegments.firstOrNull() == "article" }
+                ?.pathSegments?.getOrNull(1)
+        if (intent?.action == ACTION_OPEN_DAILY_POST || !articleId.isNullOrBlank()) {
+            articleId?.takeIf { value ->
+                value.length <= 128 && value.all { it.isLetterOrDigit() || it in "-_" }
+            }?.let { safeId ->
+                rtcViewModel.openDailyPostFromDeepLink(safeId)
+            }
+        }
+    }
+
     companion object {
         const val ACTION_OPEN_COMMUNITY_ALERT = "za.org.rtc.community.OPEN_COMMUNITY_ALERT"
         const val EXTRA_COMMUNITY_ALERT_ID = "community_alert_id"
@@ -122,6 +138,8 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_PUBLIC_REPORT_ID = "public_report_id"
         const val ACTION_OPEN_SERVICE_BOOKING = "za.org.rtc.community.OPEN_SERVICE_BOOKING"
         const val EXTRA_SERVICE_BOOKING_ID = "service_booking_id"
+        const val ACTION_OPEN_DAILY_POST = "za.org.rtc.community.OPEN_DAILY_POST"
+        const val EXTRA_DAILY_POST_ID = "daily_post_id"
         const val EXTRA_DEBUG_SESSION_ROLE = "za.org.rtc.community.DEBUG_SESSION_ROLE"
         private const val DEBUG_RESIDENT_A = "RESIDENT_A"
     }

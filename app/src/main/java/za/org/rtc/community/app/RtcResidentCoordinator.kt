@@ -3,6 +3,7 @@ package za.org.rtc.community.app
 import android.net.Uri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import za.org.rtc.community.core.DraftArea
@@ -20,6 +21,18 @@ internal class RtcResidentCoordinator(
     val pendingCommunityPostId = _pendingCommunityPostId.asStateFlow()
     private val _pendingPublicReportId = MutableStateFlow<String?>(null)
     val pendingPublicReportId = _pendingPublicReportId.asStateFlow()
+    private val _pendingDailyPostId = MutableStateFlow<String?>(null)
+    val pendingDailyPostId = _pendingDailyPostId.asStateFlow()
+
+    fun openDailyPostFromDeepLink(articleId: String?) {
+        _pendingDailyPostId.value = articleId?.trim()?.takeIf { value ->
+            value.length <= 128 && value.all { it.isLetterOrDigit() || it in "-_" }
+        }
+    }
+
+    fun consumePendingDailyPost() {
+        _pendingDailyPostId.value = null
+    }
 
     fun openPublicReportFromDeepLink(reportId: String?) {
         _pendingPublicReportId.value = reportId?.trim()?.takeIf { value ->
@@ -53,6 +66,16 @@ internal class RtcResidentCoordinator(
 
     fun consumePendingCommunityPost() {
         _pendingCommunityPostId.value = null
+    }
+
+    val lastSyncedEpochMillis: StateFlow<Long> = repository.lastSyncedEpochMillis
+    val isSyncingLiveUpdates: StateFlow<Boolean> = repository.isSyncingLiveUpdates
+    val syncCount: StateFlow<Int> = repository.syncCount
+
+    fun triggerSystemWideUpdate(
+        event: za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent = za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.GlobalSystemRefresh
+    ) {
+        repository.triggerSystemWideUpdate(event)
     }
 
     fun refreshLiveContent() {

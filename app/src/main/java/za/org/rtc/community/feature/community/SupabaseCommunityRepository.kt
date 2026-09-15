@@ -26,6 +26,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -49,6 +50,7 @@ class SupabaseCommunityRepository @Inject constructor(
     private val supabase: SupabaseClient,
     private val cachedPostDao: CachedPostDao,
     private val cachedCommentDao: CachedCommentDao,
+    private val syncEngine: za.org.rtc.community.core.sync.SystemUpdateSyncEngine = za.org.rtc.community.core.sync.SystemUpdateSyncEngine(),
     @ApplicationContext private val context: Context,
 ) : CommunityRepository {
     private val clock = Clock.systemUTC()
@@ -61,6 +63,9 @@ class SupabaseCommunityRepository @Inject constructor(
 
     suspend fun addLocalPost(post: CommunityPost) {
         cachedPostDao.insertPost(post.toCachedEntity())
+        syncEngine.triggerSystemWideUpdate(
+            za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.PostCreated(post.id, post.author)
+        )
     }
 
     override suspend fun loadFeedPage(
@@ -213,6 +218,9 @@ class SupabaseCommunityRepository @Inject constructor(
 
     override suspend fun deleteComment(commentId: String): Result<Unit> = runCatching {
         cachedCommentDao.deleteComment(commentId)
+        syncEngine.triggerSystemWideUpdate(
+            za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.CommentDeleted(commentId)
+        )
         runCatching {
             supabase.from("community_comments").delete {
                 filter { eq("id", commentId) }
@@ -233,6 +241,9 @@ class SupabaseCommunityRepository @Inject constructor(
     override suspend fun deletePost(postId: String): Result<Unit> = runCatching {
         cachedPostDao.deletePost(postId)
         cachedCommentDao.deleteCommentsForPost(postId)
+        syncEngine.triggerSystemWideUpdate(
+            za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.PostDeleted(postId)
+        )
         runCatching {
             supabase.from("community_posts").delete {
                 filter { eq("id", postId) }
@@ -471,6 +482,10 @@ class SupabaseCommunityRepository @Inject constructor(
                 runCatching { channel.unsubscribe() }
             }
         }
+    }
+
+    override fun observeCachedPosts(): Flow<List<CommunityPost>> = cachedPostDao.observeAllPosts().map { list ->
+        list.map { it.toCommunityPost() }
     }
 
     override suspend fun getHashtagAutocomplete(prefix: String): Result<List<String>> = runCatching {

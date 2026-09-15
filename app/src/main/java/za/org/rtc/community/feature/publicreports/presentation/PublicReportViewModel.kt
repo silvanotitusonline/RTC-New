@@ -57,6 +57,7 @@ data class PublicReportDetailState(
 class PublicReportViewModel @Inject constructor(
     private val repository: PublicReportRepository,
     private val evidenceClient: PublicReportEvidenceClient,
+    private val syncEngine: za.org.rtc.community.core.sync.SystemUpdateSyncEngine = za.org.rtc.community.core.sync.SystemUpdateSyncEngine(),
 ) : ViewModel() {
     private val _feed = MutableStateFlow(PublicReportsFeedState())
     val feed = _feed.asStateFlow()
@@ -339,6 +340,7 @@ class PublicReportViewModel @Inject constructor(
             }
             repository.adminSetVerification(reportId, verified, reason, UUID.randomUUID().toString())
                 .onSuccess {
+                    syncEngine.triggerSystemWideUpdate(za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.PublicReportUpdated(reportId, if (verified) "VERIFIED" else "UNVERIFIED"))
                     refresh()
                 }
                 .onFailure { error ->
@@ -369,6 +371,7 @@ class PublicReportViewModel @Inject constructor(
                 duplicateOf = null,
                 requestId = UUID.randomUUID().toString()
             ).onSuccess {
+                syncEngine.triggerSystemWideUpdate(za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.PublicReportUpdated(reportId, "REJECTED"))
                 refresh()
             }.onFailure { error ->
                 _feed.update {
