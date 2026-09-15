@@ -55,6 +55,10 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
             postDailyPostNotification(message)
             return
         }
+        if (notificationType.startsWith("POST_REPLY") || notificationType.startsWith("COMMUNITY_REPLY") || message.data.containsKey("post_id") || message.data.containsKey("community_post_id")) {
+            postCommunityReplyNotification(message)
+            return
+        }
         postCommunityNotification(message)
     }
 
@@ -189,4 +193,34 @@ class RtcFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun isSafeId(value: String): Boolean = value.length in 1..128 && value.all { it.isLetterOrDigit() || it in "-_" }
+
+    private fun postCommunityReplyNotification(message: RemoteMessage) {
+        val postId = message.data["post_id"] ?: message.data["community_post_id"] ?: return
+        if (!isSafeId(postId)) return
+        val title = message.notification?.title ?: message.data["title"] ?: "New Reply"
+        val body = message.notification?.body ?: message.data["body"] ?: "Someone replied to your community post."
+        
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            action = Intent.ACTION_VIEW
+            data = Uri.parse("rtc://community/post/$postId")
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            postId.hashCode(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val notification = NotificationCompat.Builder(this, RTC_COMMUNITY_UPDATES_CHANNEL)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title.take(120))
+            .setContentText(body.take(240))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body.take(1000)))
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        notifyIfPermitted(postId.hashCode(), notification)
+    }
 }
