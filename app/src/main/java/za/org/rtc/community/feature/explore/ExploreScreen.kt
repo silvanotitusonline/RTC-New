@@ -62,7 +62,6 @@ import za.org.rtc.community.ui.components.RtcStatusTone
 import za.org.rtc.community.ui.theme.RtcSize
 import za.org.rtc.community.ui.theme.RtcSpacing
 
-import za.org.rtc.community.feature.publicreports.data.PublicReportMockData
 import za.org.rtc.community.feature.publicreports.domain.PublicReport
 
 @Composable
@@ -75,7 +74,7 @@ internal fun ExploreScreen(
     onRefresh: () -> Unit,
     onOpenDirectory: (String) -> Unit,
     onToggleRsvp: (String) -> Unit,
-    reports: List<PublicReport> = PublicReportMockData.getSampleReports(),
+    reports: List<PublicReport> = emptyList(),
     onOpenReport: (String) -> Unit = {},
 ) {
     val publishedNoticeCount = notices.count { it.status == NoticeStatus.PUBLISHED }

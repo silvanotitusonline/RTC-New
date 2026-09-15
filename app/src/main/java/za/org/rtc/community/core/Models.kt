@@ -557,6 +557,7 @@ data class CommunityPost(
     val isRepostedByViewer: Boolean = false,
     val isBookmarkedByViewer: Boolean = false,
     val quotedPost: CommunityPost? = null,
+    val isPendingSync: Boolean = false,
 )
 
 data class CommunityComment(

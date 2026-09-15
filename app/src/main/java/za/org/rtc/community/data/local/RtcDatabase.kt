@@ -179,6 +179,7 @@ data class CachedPostEntity(
     val bookmarkCount: Int = 0,
     val isRepostedByViewer: Boolean = false,
     val isBookmarkedByViewer: Boolean = false,
+    val isPendingSync: Boolean = false,
 )
 
 @Dao
@@ -191,6 +192,12 @@ interface CachedPostDao {
 
     @Query("SELECT * FROM cached_posts WHERE id = :id LIMIT 1")
     suspend fun getPostById(id: String): CachedPostEntity?
+
+    @Query("SELECT * FROM cached_posts WHERE isPendingSync = 1 ORDER BY createdAtEpochMillis ASC")
+    suspend fun getPendingSyncPosts(): List<CachedPostEntity>
+
+    @Query("UPDATE cached_posts SET isPendingSync = :pending WHERE id = :id")
+    suspend fun updatePendingSync(id: String, pending: Boolean)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPost(post: CachedPostEntity)
@@ -412,6 +419,12 @@ val RTC_DATABASE_MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+val RTC_DATABASE_MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE cached_posts ADD COLUMN isPendingSync INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [
         LocalDraftEntity::class,
@@ -423,7 +436,7 @@ val RTC_DATABASE_MIGRATION_6_7 = object : Migration(6, 7) {
         CachedCommentEntity::class,
         CachedUserProfileEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class RtcDatabase : RoomDatabase() {

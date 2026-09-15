@@ -41,9 +41,7 @@ class SupabasePublicReportRepository @Inject constructor(
     private val supabase: SupabaseClient,
 ) : PublicReportRepository {
 
-    private val localReports = mutableListOf<za.org.rtc.community.feature.publicreports.domain.PublicReport>().apply {
-        addAll(PublicReportMockData.getSampleReports())
-    }
+    private val localReports = mutableListOf<za.org.rtc.community.feature.publicreports.domain.PublicReport>()
     private val localComments = java.util.concurrent.ConcurrentHashMap<String, MutableList<PublicReportComment>>()
 
     private val _dashboardUpdates = kotlinx.coroutines.flow.MutableStateFlow<PublicReportDashboard?>(null)
@@ -58,12 +56,12 @@ class SupabasePublicReportRepository @Inject constructor(
         val open = allReports.count { it.status == PublicReportStatus.SUBMITTED || it.status == PublicReportStatus.ACKNOWLEDGED }.toLong()
         val inProgress = allReports.count { it.status == PublicReportStatus.IN_PROGRESS }.toLong()
         val resolved = allReports.count { it.status == PublicReportStatus.COMPLETED || it.status == PublicReportStatus.CLOSED }.toLong()
-        val total = allReports.size.toLong()
+        val verified = allReports.count { it.verified }.toLong()
         return PublicReportDashboard(
             openReports = open,
             inProgressReports = inProgress,
             resolvedReports = resolved,
-            verifiedReports = total,
+            verifiedReports = verified,
             activeReports = open + inProgress,
             unresolvedReports = open + inProgress,
         )
@@ -150,7 +148,7 @@ class SupabasePublicReportRepository @Inject constructor(
                     PublicReportScope.UNRESOLVED -> list = list.filter {
                         it.status !in setOf(PublicReportStatus.COMPLETED, PublicReportStatus.CLOSED)
                     }
-                    PublicReportScope.VERIFIED -> { /* all sample reports are verified */ }
+                    PublicReportScope.VERIFIED -> list = list.filter { it.verified }
                 }
 
                 list
@@ -188,7 +186,7 @@ class SupabasePublicReportRepository @Inject constructor(
             ).map(PublicReportJsonMappers::timeline)
         }.getOrDefault(emptyList())
 
-        if (remote.isNotEmpty()) remote else PublicReportMockData.getSampleTimeline(reportId)
+        if (remote.isNotEmpty()) remote else emptyList()
     }
 
     override suspend fun comments(
@@ -212,7 +210,7 @@ class SupabasePublicReportRepository @Inject constructor(
         }.getOrDefault(emptyList())
 
         val local = localComments.getOrPut(reportId) {
-            PublicReportMockData.getSampleComments(reportId).toMutableList()
+            mutableListOf()
         }
 
         if (remote.isNotEmpty()) remote + local else local.toList()
@@ -229,7 +227,7 @@ class SupabasePublicReportRepository @Inject constructor(
             createdAt = Instant.now(),
         )
         val list = localComments.getOrPut(reportId) {
-            PublicReportMockData.getSampleComments(reportId).toMutableList()
+            mutableListOf()
         }
         list.add(newComment)
 
@@ -309,8 +307,8 @@ class SupabasePublicReportRepository @Inject constructor(
             identityMode = draft.identityMode,
             publicLocationLabel = draft.publicLocationLabel.trim().ifBlank { "Community Sector" },
             authorDisplayName = "You (Community Resident)",
-            verified = true,
-            verificationReason = "Submitted and queued for inspection",
+            verified = false,
+            verificationReason = "Pending administrator verification",
             duplicateOf = null,
             thumbsUpCount = 1,
             thumbsDownCount = 0,

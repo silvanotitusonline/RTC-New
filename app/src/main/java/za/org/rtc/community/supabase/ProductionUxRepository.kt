@@ -997,44 +997,11 @@ class ProductionUxRepository @Inject constructor(
     }
 
     suspend fun createAiProposal(command: String): Result<AiProposal> = runCatching {
-        require(command.trim().isNotEmpty()) { "Describe the proposal you need." }
-        val response = supabase.functions.invoke(
-            "rtc-admin-ai",
-            buildJsonObject {
-                put("operation", "command")
-                put("command", command.trim())
-                put("recaptchaToken", recaptchaToken("rtc_admin_ai_command"))
-            },
-        )
-        check(response.status.value in 200..299) { "RTC AI could not prepare a proposal." }
-        val result = json.decodeFromString<AiCommandResponse>(response.bodyAsText())
-        AiProposal(
-            id = result.proposalId,
-            summary = result.proposal.summary,
-            affectedRecords = result.proposal.changes.map { change ->
-                buildString {
-                    append(change.operation.replace('_', ' '))
-                    append(" · ")
-                    append(change.entityType.replace('_', ' '))
-                    change.entityId?.let { append(" · "); append(it) }
-                }
-            }.ifEmpty { listOf("Read-only response; no production record will be changed.") },
-            status = if (result.proposal.kind == "PROPOSAL") "Awaiting review" else "Read-only completed",
-            createdAt = Instant.now().toString(),
-        )
+        error("AI responders and automated proposals have been disabled.")
     }
 
     suspend fun confirmAiProposal(proposalId: String): Result<Int> = runCatching {
-        val response = supabase.functions.invoke(
-            "rtc-admin-ai",
-            buildJsonObject {
-                put("operation", "confirm")
-                put("proposalId", proposalId)
-                put("recaptchaToken", recaptchaToken("rtc_admin_ai_confirm"))
-            },
-        )
-        check(response.status.value in 200..299) { "RTC AI proposal confirmation failed. No content was changed." }
-        json.decodeFromString<AiConfirmResponse>(response.bodyAsText()).draftsCreated
+        error("AI responders and automated proposals have been disabled.")
     }
 
     suspend fun reportCommunityPost(postId: String, reason: ModerationReason, detail: String): Result<Unit> = runCatching {

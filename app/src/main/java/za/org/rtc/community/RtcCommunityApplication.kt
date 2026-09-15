@@ -16,6 +16,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
 import za.org.rtc.community.core.configuration.RemoteFeatureManager
+import za.org.rtc.community.feature.community.CommunitySyncManager
 import za.org.rtc.community.notifications.createRtcNotificationChannels
 import javax.inject.Inject
 
@@ -23,6 +24,7 @@ import javax.inject.Inject
 class RtcCommunityApplication : Application(), Configuration.Provider, ImageLoaderFactory {
 
     @Inject lateinit var remoteFeatureManager: RemoteFeatureManager
+    @Inject lateinit var communitySyncManager: CommunitySyncManager
 
     val marketplaceImageLoader: ImageLoader by lazy {
         ImageLoader.Builder(this)
@@ -62,6 +64,7 @@ class RtcCommunityApplication : Application(), Configuration.Provider, ImageLoad
     override fun onCreate() {
         super.onCreate()
         createRtcNotificationChannels(this)
+        communitySyncManager.start()
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .setRequiresBatteryNotLow(true)

@@ -70,13 +70,6 @@ class SupabaseCommunityRepository @Inject constructor(
         val visibleLimit = limit.coerceIn(1, MAX_VISIBLE_PAGE_SIZE)
         val serverLimit = (visibleLimit + 1).coerceAtMost(MAX_SERVER_PAGE_SIZE)
 
-        // Seed sample posts into Room if database is empty on first run
-        val cachedEntities = cachedPostDao.getAllPosts()
-        if (cachedEntities.isEmpty()) {
-            val samplePosts = CommunityMockData.getSamplePosts(context)
-            cachedPostDao.insertPosts(samplePosts.map { it.toCachedEntity() })
-        }
-
         val remotePosts = runCatching {
             val rows = supabase.postgrest.rpc(
                 function = "community_post_page_v3",
@@ -117,15 +110,19 @@ class SupabaseCommunityRepository @Inject constructor(
                     rows.map { row -> async { row.toCommunityPost() } }.awaitAll()
                 }
             }
-        }
+        }.getOrDefault(emptyList())
 
         if (remotePosts.isNotEmpty()) {
             cachedPostDao.insertPosts(remotePosts.map { it.toCachedEntity() })
-            buildCommunityFeedPage(posts = remotePosts, visibleLimit = visibleLimit)
-        } else {
-            val finalPosts = cachedPostDao.getAllPosts().map { it.toCommunityPost() }
-            buildCommunityFeedPage(posts = finalPosts, visibleLimit = visibleLimit)
         }
+
+        val allCached = cachedPostDao.getAllPosts().map { it.toCommunityPost() }
+        val finalPosts = if (cursor != null) {
+            allCached.filter { it.createdAt < cursor.createdAt || (it.createdAt == cursor.createdAt && it.id < cursor.id) }
+        } else {
+            allCached
+        }
+        buildCommunityFeedPage(posts = finalPosts, visibleLimit = visibleLimit)
     }
 
     override suspend fun loadPost(postId: String): Result<CommunityPost?> = runCatching {
@@ -142,7 +139,6 @@ class SupabaseCommunityRepository @Inject constructor(
             remotePost
         } else {
             cachedPostDao.getPostById(postId)?.toCommunityPost()
-                ?: CommunityMockData.getSamplePosts(context).firstOrNull { it.id == postId }
         }
     }
 
@@ -161,16 +157,7 @@ class SupabaseCommunityRepository @Inject constructor(
             cachedCommentDao.insertComments(remoteComments.map { it.toCachedEntity() })
         }
 
-        var cached = cachedCommentDao.getCommentsForPost(postId).map { it.toCommunityComment() }
-        if (cached.isEmpty()) {
-            val sampleComments = CommunityMockData.getSampleComments(postId)
-            if (sampleComments.isNotEmpty()) {
-                cachedCommentDao.insertComments(sampleComments.map { it.toCachedEntity() })
-                cached = sampleComments
-            }
-        }
-
-        cached
+        cachedCommentDao.getCommentsForPost(postId).map { it.toCommunityComment() }
     }
 
     override suspend fun createComment(postId: String, body: String, parentId: String?): Result<Unit> = runCatching {

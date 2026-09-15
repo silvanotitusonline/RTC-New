@@ -24,6 +24,7 @@ import za.org.rtc.community.core.MediaItem
 import za.org.rtc.community.core.MediaKind
 import za.org.rtc.community.core.MediaTargetType
 import za.org.rtc.community.feature.community.FullScreenMediaGallery
+import za.org.rtc.community.feature.community.relativeTimeLabel
 import za.org.rtc.community.feature.publicreports.domain.PublicReportMediaKind
 import za.org.rtc.community.ui.components.RtcCard
 import za.org.rtc.community.ui.components.RtcScreenScaffold

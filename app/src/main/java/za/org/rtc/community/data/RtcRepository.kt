@@ -102,7 +102,6 @@ import javax.inject.Singleton
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
-import za.org.rtc.community.feature.community.CommunityMockData
 import java.util.UUID
 
 data class AdministratorTotpEnrollment(
@@ -837,11 +836,6 @@ class RtcRepository @Inject constructor(
         notices.onSuccess { _notices.value = it }
         helpArticles.onSuccess { _helpArticles.value = it }
 
-        val samplePosts = CommunityMockData.getSamplePosts(context)
-        val cachedEntities = database.cachedPostDao().getAllPosts()
-        if (cachedEntities.isEmpty()) {
-            database.cachedPostDao().insertPosts(samplePosts.map { it.toCachedEntity() })
-        }
         if (communityPosts.isNotEmpty()) {
             database.cachedPostDao().insertPosts(communityPosts.map { it.toCachedEntity() })
         }
@@ -947,7 +941,6 @@ class RtcRepository @Inject constructor(
         val post = remotePost
             ?: database.cachedPostDao().getPostById(postId)?.toCommunityPost()
             ?: _posts.value.firstOrNull { it.id == postId }
-            ?: CommunityMockData.getSamplePosts(context).firstOrNull { it.id == postId }
 
         val roomComments = database.cachedCommentDao().getCommentsForPost(postId).map { it.toCommunityComment() }
         val comments = if (roomComments.isNotEmpty()) {
@@ -955,11 +948,7 @@ class RtcRepository @Inject constructor(
         } else if (!remoteComments.isNullOrEmpty()) {
             remoteComments
         } else {
-            val samples = CommunityMockData.getSampleComments(postId)
-            if (samples.isNotEmpty()) {
-                database.cachedCommentDao().insertComments(samples.map { it.toCachedEntity() })
-            }
-            samples
+            emptyList()
         }
 
         _communityPostDetail.value = post
@@ -1609,6 +1598,7 @@ class RtcRepository @Inject constructor(
             isOfficial = _session.value.role in setOf(UserRole.SYSTEM_ADMIN, UserRole.CONTENT_EDITOR, UserRole.CASE_STAFF),
             authorId = _session.value.id,
             authorAvatarUrl = _session.value.avatarUrl,
+            isPendingSync = true,
         )
 
         database.cachedPostDao().insertPost(newPost.toCachedEntity())
@@ -1616,7 +1606,11 @@ class RtcRepository @Inject constructor(
         _posts.value = listOf(newPost) + _posts.value.filterNot { it.id == newPost.id }
         discardDraft(DraftArea.COMMUNITY)
 
-        runCatching { productionUxRepository.createCommunityPost(text, mediaUris) }
+        val remoteResult = runCatching { productionUxRepository.createCommunityPost(text, mediaUris) }
+        if (remoteResult.isSuccess) {
+            database.cachedPostDao().updatePendingSync(postId, false)
+            _posts.value = _posts.value.map { if (it.id == postId) it.copy(isPendingSync = false) else it }
+        }
         refreshLiveContent()
         return Result.success(postId)
     }

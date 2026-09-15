@@ -30,6 +30,7 @@ fun CommunityPost.toCachedEntity(): CachedPostEntity = CachedPostEntity(
     bookmarkCount = bookmarkCount,
     isRepostedByViewer = isRepostedByViewer,
     isBookmarkedByViewer = isBookmarkedByViewer,
+    isPendingSync = isPendingSync,
 )
 
 fun CachedPostEntity.toCommunityPost(): CommunityPost {
@@ -64,6 +65,7 @@ fun CachedPostEntity.toCommunityPost(): CommunityPost {
         bookmarkCount = bookmarkCount,
         isRepostedByViewer = isRepostedByViewer,
         isBookmarkedByViewer = isBookmarkedByViewer,
+        isPendingSync = isPendingSync,
     )
 }
 

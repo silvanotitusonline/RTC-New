@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import za.org.rtc.community.feature.community.relativeTimeLabel
 import za.org.rtc.community.feature.publicreports.domain.PublicReport
 import za.org.rtc.community.feature.publicreports.domain.PublicReportIdentityMode
 import za.org.rtc.community.feature.publicreports.domain.label
@@ -49,7 +50,11 @@ fun PublicReportCard(
             Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
                 AssistChip(onClick = {}, label = { Text(report.urgency.label) })
                 AssistChip(onClick = {}, label = { Text(report.status.label) })
-                if (report.verified) AssistChip(onClick = {}, label = { Text("Verified") })
+                if (report.verified) {
+                    AssistChip(onClick = {}, label = { Text("Verified") })
+                } else {
+                    AssistChip(onClick = {}, label = { Text("Unverified") })
+                }
             }
             if (report.categoryLabel.isNotBlank()) {
                 Text(report.categoryLabel, style = MaterialTheme.typography.labelLarge)
@@ -60,7 +65,7 @@ fun PublicReportCard(
             if (report.description.isNotBlank()) {
                 Text(report.description, style = MaterialTheme.typography.bodyMedium)
             }
-            Text("$author · ${report.createdAt}", style = MaterialTheme.typography.bodySmall)
+            Text("$author · ${relativeTimeLabel(report.createdAt.toString())}", style = MaterialTheme.typography.bodySmall)
             Text(
                 "Evidence ${report.evidenceCount}",
                 style = MaterialTheme.typography.bodySmall,

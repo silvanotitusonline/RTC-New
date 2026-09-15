@@ -28,6 +28,7 @@ import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_3_4
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_4_5
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_5_6
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_6_7
+import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_7_8
 import javax.inject.Singleton
 import za.org.rtc.community.feature.community.CommunityRepository
 import za.org.rtc.community.feature.community.SupabaseCommunityRepository
@@ -70,6 +71,7 @@ object AppModule {
                 RTC_DATABASE_MIGRATION_4_5,
                 RTC_DATABASE_MIGRATION_5_6,
                 RTC_DATABASE_MIGRATION_6_7,
+                RTC_DATABASE_MIGRATION_7_8,
             )
             .fallbackToDestructiveMigration(true)
             .build()
