@@ -1,6 +1,9 @@
 package za.org.rtc.community.feature.community
 
+import java.time.Instant
 import za.org.rtc.community.core.CommunityPost
+import za.org.rtc.community.feature.publicreports.domain.PublicReport
+import za.org.rtc.community.feature.publicreports.domain.PublicReportDashboard
 
 internal const val COMMUNITY_FEED_PAGE_SIZE = 20
 
@@ -48,6 +51,11 @@ data class CommunityFeedState(
     val searchResults: List<CommunityPost>? = null,
     val isSearching: Boolean = false,
     val hasNewPosts: Boolean = false,
+    val publicReports: List<PublicReport> = emptyList(),
+    val publicReportsDashboard: PublicReportDashboard? = null,
+    val publicReportsLoading: Boolean = false,
+    val publicReportsLastFetched: Instant? = null,
+    val publicReportsError: String? = null,
 ) {
     fun withPage(page: CommunityFeedPage, append: Boolean): CommunityFeedState {
         val merged = if (append) {

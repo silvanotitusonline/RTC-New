@@ -9,7 +9,7 @@ import za.org.rtc.community.navigation.CommunitySection
 fun CommunityHubScreen(
     initialSection: CommunitySection = CommunitySection.DISCUSSIONS,
     initialReportScope: PublicReportScope = PublicReportScope.VERIFIED,
-    discussions: @Composable () -> Unit,
+    discussions: @Composable (onNavigateToReports: () -> Unit) -> Unit,
     onOpenReport: (String) -> Unit,
     onComposeReport: () -> Unit,
 ) {

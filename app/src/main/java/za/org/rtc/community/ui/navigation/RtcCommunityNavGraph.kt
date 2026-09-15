@@ -189,7 +189,7 @@ internal fun RtcCommunityNavGraph(
             CommunityHubScreen(
                 initialSection = initialSection,
                 initialReportScope = initialReportScope,
-                discussions = {
+                discussions = { onNavigateToReports ->
                     CommunityScreen(
                         readingMode = session.readingMode,
                         useSyntheticPortraits = session.authority == SessionAuthority.DEVELOPMENT_ADAPTER,
@@ -203,6 +203,8 @@ internal fun RtcCommunityNavGraph(
                         onDiscardDraft = { viewModel.discardDraft(DraftArea.COMMUNITY) },
                         onOpenPost = { post -> navController.navigateOverlay(communityPostRoute(post.id)) },
                         onSharePost = { sharedPost -> shareCommunityPost(context, sharedPost.id) },
+                        onOpenReport = { reportId -> navController.navigateOverlay(RtcRoute.publicReportDetail(reportId)) },
+                        onNavigateToReports = onNavigateToReports,
                         openComposerOnEntry = openCommunityComposer,
                     )
                 },
@@ -225,6 +227,8 @@ internal fun RtcCommunityNavGraph(
                     onDiscardDraft = { viewModel.discardDraft(DraftArea.COMMUNITY) },
                     onOpenPost = { post -> navController.navigateOverlay(communityPostRoute(post.id)) },
                     onSharePost = { sharedPost -> shareCommunityPost(context, sharedPost.id) },
+                    onOpenReport = { reportId -> navController.navigateOverlay(RtcRoute.publicReportDetail(reportId)) },
+                    onNavigateToReports = { navController.navigateOverlay(RtcRoute.PUBLIC_REPORTS) },
                 )
             }
         }

@@ -3,6 +3,7 @@ package za.org.rtc.community.feature.community
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -10,10 +11,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import za.org.rtc.community.core.CommunityPost
+import za.org.rtc.community.feature.publicreports.domain.PublicReportFilters
+import za.org.rtc.community.feature.publicreports.domain.PublicReportRepository
 
 @HiltViewModel
 class CommunityViewModel @Inject constructor(
     private val repository: CommunityRepository,
+    private val publicReportRepository: PublicReportRepository? = null,
 ) : ViewModel() {
     private val _feedState = MutableStateFlow(CommunityFeedState(initialLoading = true))
     val feedState = _feedState.asStateFlow()
@@ -29,10 +33,38 @@ class CommunityViewModel @Inject constructor(
 
     init {
         refreshFeed(initial = true)
+        refreshPublicReports()
     }
 
     fun refresh() {
         refreshFeed(initial = false)
+        refreshPublicReports()
+    }
+
+    fun refreshPublicReports() {
+        val reportRepo = publicReportRepository ?: return
+        _feedState.value = _feedState.value.copy(
+            publicReportsLoading = true,
+            publicReportsError = null,
+        )
+        viewModelScope.launch {
+            val pageResult = reportRepo.page(
+                filters = PublicReportFilters(),
+                limit = 10,
+            )
+            val dashboardResult = reportRepo.dashboard()
+
+            val current = _feedState.value
+            _feedState.value = current.copy(
+                publicReports = pageResult.getOrNull()?.items ?: current.publicReports,
+                publicReportsDashboard = dashboardResult.getOrNull() ?: current.publicReportsDashboard,
+                publicReportsLoading = false,
+                publicReportsLastFetched = Instant.now(),
+                publicReportsError = if (pageResult.isFailure && dashboardResult.isFailure) {
+                    "Unable to refresh public reports"
+                } else null,
+            )
+        }
     }
 
     fun dismissMutationError() {

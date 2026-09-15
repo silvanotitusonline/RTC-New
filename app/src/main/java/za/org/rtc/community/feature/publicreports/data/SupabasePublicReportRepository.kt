@@ -2,7 +2,9 @@ package za.org.rtc.community.feature.publicreports.data
 
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import java.time.Instant
@@ -98,7 +100,17 @@ class SupabasePublicReportRepository @Inject constructor(
                     pageParameters(filters, cursorCreatedAt, cursorId, bounded),
                 ),
             ).map(PublicReportJsonMappers::report)
-        }.getOrDefault(emptyList())
+        }.getOrElse {
+            runCatching {
+                decodeObjects(
+                    supabase.from("public_reports")
+                        .select {
+                            order(column = "created_at", order = Order.DESCENDING)
+                            limit(bounded.toLong())
+                        },
+                ).map(PublicReportJsonMappers::report)
+            }.getOrDefault(emptyList())
+        }
 
         val items = if (remoteRows.isNotEmpty()) {
             remoteRows

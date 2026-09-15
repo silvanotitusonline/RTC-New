@@ -13,8 +13,23 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.Instant
 import za.org.rtc.community.core.CommunityComment
 import za.org.rtc.community.core.CommunityPost
+import za.org.rtc.community.feature.publicreports.domain.PublicReportAdminRow
+import za.org.rtc.community.feature.publicreports.domain.PublicReportCategory
+import za.org.rtc.community.feature.publicreports.domain.PublicReportComment
+import za.org.rtc.community.feature.publicreports.domain.PublicReportDashboard
+import za.org.rtc.community.feature.publicreports.domain.PublicReportDraft
+import za.org.rtc.community.feature.publicreports.domain.PublicReportEvidenceUpload
+import za.org.rtc.community.feature.publicreports.domain.PublicReportFilters
+import za.org.rtc.community.feature.publicreports.domain.PublicReportPage
+import za.org.rtc.community.feature.publicreports.domain.PublicReportPrivateDetails
+import za.org.rtc.community.feature.publicreports.domain.PublicReportRepository
+import za.org.rtc.community.feature.publicreports.domain.PublicReportStatus
+import za.org.rtc.community.feature.publicreports.domain.PublicReportTimelineEntry
+import za.org.rtc.community.feature.publicreports.domain.PublicReportUrgency
+import za.org.rtc.community.feature.publicreports.domain.PublicReportVoteResult
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CommunityViewModelTest {
@@ -193,6 +208,72 @@ class CommunityViewModelTest {
         assertEquals(listOf("comment-1" to "Contains personal information"), repository.moderationRequests)
         assertTrue(viewModel.detailState.value.comments.isEmpty())
         assertEquals("Comment removed by moderation.", viewModel.detailState.value.message)
+    }
+
+    @Test
+    fun `refresh triggers re-fetch of public reports when repository provided`() = runTest(dispatcher) {
+        val communityRepo = FakeCommunityRepository(
+            pages = ArrayDeque(
+                listOf(
+                    Result.success(
+                        CommunityFeedPage(
+                            items = listOf(post("p1", "2026-08-28T12:00:00Z")),
+                            nextCursor = null,
+                            hasMore = false,
+                        )
+                    ),
+                    Result.success(
+                        CommunityFeedPage(
+                            items = listOf(post("p1", "2026-08-28T12:00:00Z")),
+                            nextCursor = null,
+                            hasMore = false,
+                        )
+                    )
+                )
+            )
+        )
+        var pageFetchCount = 0
+        var dashboardFetchCount = 0
+        val fakePublicReportRepo = object : PublicReportRepository {
+            override val dashboardUpdates = kotlinx.coroutines.flow.MutableStateFlow<PublicReportDashboard?>(null)
+            override suspend fun categories() = Result.success(emptyList<PublicReportCategory>())
+            override suspend fun page(filters: PublicReportFilters, cursorCreatedAt: Instant?, cursorId: String?, limit: Int): Result<PublicReportPage> {
+                pageFetchCount++
+                return Result.success(PublicReportPage(items = emptyList(), nextCreatedAt = null, nextId = null, endReached = true))
+            }
+            override suspend fun dashboard(): Result<PublicReportDashboard> {
+                dashboardFetchCount++
+                return Result.success(PublicReportDashboard(verifiedReports = 10L))
+            }
+            override suspend fun get(reportId: String) = Result.success(null)
+            override suspend fun timeline(reportId: String) = Result.success(emptyList<PublicReportTimelineEntry>())
+            override suspend fun comments(reportId: String, cursorCreatedAt: Instant?, cursorId: String?, limit: Int) = Result.success(emptyList<PublicReportComment>())
+            override suspend fun addComment(reportId: String, body: String, clientRequestId: String) = Result.success("id")
+            override suspend fun setVote(reportId: String, direction: Int) = Result.success(PublicReportVoteResult(0, 0, 0))
+            override suspend fun create(draft: PublicReportDraft) = Result.success("id")
+            override suspend fun currentUserId() = Result.success("user")
+            override suspend fun uploadEvidenceBytes(storagePath: String, bytes: ByteArray, mimeType: String) = Result.success(Unit)
+            override suspend fun finalizeEvidence(upload: PublicReportEvidenceUpload) = Result.success("id")
+            override suspend fun myPage(cursorCreatedAt: Instant?, cursorId: String?, limit: Int) = Result.success(PublicReportPage(emptyList(), null, null, true))
+            override suspend fun withdraw(reportId: String, reason: String, requestId: String) = Result.success(Unit)
+            override suspend fun ownerPrivateDetails(reportId: String): Result<PublicReportPrivateDetails> = Result.failure(NotImplementedError())
+            override suspend fun adminPage(status: PublicReportStatus?, urgency: PublicReportUrgency?, categorySlug: String?, verified: Boolean?, limit: Int) = Result.success(emptyList<PublicReportAdminRow>())
+            override suspend fun adminSetVerification(reportId: String, verified: Boolean, reason: String, requestId: String) = Result.success(Unit)
+            override suspend fun adminTransition(reportId: String, toStatus: PublicReportStatus, publicNote: String?, privateNote: String?, duplicateOf: String?, requestId: String) = Result.success(Unit)
+        }
+
+        val viewModel = CommunityViewModel(communityRepo, fakePublicReportRepo)
+        advanceUntilIdle()
+
+        assertEquals(1, pageFetchCount)
+        assertEquals(1, dashboardFetchCount)
+        assertEquals(10L, viewModel.feedState.value.publicReportsDashboard?.verifiedReports)
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals(2, pageFetchCount)
+        assertEquals(2, dashboardFetchCount)
     }
 
     private data class PageRequest(val cursor: CommunityCursor?, val limit: Int)

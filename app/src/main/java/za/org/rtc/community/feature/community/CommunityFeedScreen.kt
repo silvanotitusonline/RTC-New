@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -49,6 +50,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,6 +60,9 @@ import za.org.rtc.community.app.CommunityAction
 import za.org.rtc.community.app.CommunityActionUiState
 import za.org.rtc.community.core.CommunityPost
 import za.org.rtc.community.core.LocalDraft
+import za.org.rtc.community.feature.publicreports.domain.PublicReport
+import za.org.rtc.community.feature.publicreports.domain.PublicReportDashboard
+import za.org.rtc.community.feature.publicreports.domain.PublicReportUrgency
 import za.org.rtc.community.core.ModerationReason
 import za.org.rtc.community.feature.home.ContinueDraftCard
 import za.org.rtc.community.ui.components.ResidentPullToRefresh
@@ -88,6 +93,8 @@ internal fun CommunityScreen(
     onDiscardDraft: () -> Unit,
     onOpenPost: (CommunityPost) -> Unit,
     onSharePost: (CommunityPost) -> Unit,
+    onOpenReport: (String) -> Unit = {},
+    onNavigateToReports: (() -> Unit)? = null,
     session: RtcSession? = null,
     openComposerOnEntry: Boolean = false,
     communityViewModel: CommunityViewModel = hiltViewModel(),
@@ -142,7 +149,11 @@ internal fun CommunityScreen(
     }
     val initialError = feedState.initialError
 
-    ResidentPullToRefresh(isRefreshing = feedState.refreshing, onRefresh = communityViewModel::refresh) {
+    ResidentPullToRefresh(
+        isRefreshing = feedState.refreshing || feedState.publicReportsLoading,
+        onRefresh = communityViewModel::refresh,
+        modifier = Modifier.testTag("community_feed_pull_refresh"),
+    ) {
         RtcScreenScaffold(
             density = RtcContentDensity.FEED_CONTENT,
             floatingActionButton = {
@@ -286,6 +297,18 @@ internal fun CommunityScreen(
                         .parallaxScrollItem(index = 5, rate = 0.05f)
                 ) {
                     ComposerCard(onClick = ::requestPost)
+                }
+            }
+            if (feedState.publicReports.isNotEmpty() || feedState.publicReportsDashboard != null) {
+                item {
+                    CommunityPublicReportsHighlightCard(
+                        reports = feedState.publicReports,
+                        dashboard = feedState.publicReportsDashboard,
+                        isLoading = feedState.publicReportsLoading,
+                        onRefresh = communityViewModel::refresh,
+                        onOpenReport = onOpenReport,
+                        onViewAll = onNavigateToReports,
+                    )
                 }
             }
             if (feedState.initialLoading && displayPosts.isEmpty()) {
@@ -512,4 +535,171 @@ internal fun CommunityReportDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+@Composable
+private fun CommunityPublicReportsHighlightCard(
+    reports: List<PublicReport>,
+    dashboard: PublicReportDashboard?,
+    isLoading: Boolean,
+    onRefresh: () -> Unit,
+    onOpenReport: (String) -> Unit,
+    onViewAll: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("public_reports_highlight_card"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = "Public Reports",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        RtcStatusChip("Civic Watch", RtcStatusTone.PROTECTED)
+                    }
+                    Text(
+                        text = "Verified neighborhood reports • Pull feed to re-fetch",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(
+                    onClick = onRefresh,
+                    modifier = Modifier.testTag("public_reports_refresh_button"),
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.Refresh,
+                            contentDescription = "Refresh public reports",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+
+            if (dashboard != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    RtcStatusChip("${dashboard.verifiedReports} Verified", RtcStatusTone.SUCCESS)
+                    RtcStatusChip("${dashboard.activeReports} Active", RtcStatusTone.PROTECTED)
+                    RtcStatusChip("${dashboard.resolvedReports} Resolved", RtcStatusTone.NEUTRAL)
+                }
+            }
+
+            if (reports.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    reports.take(2).forEach { report ->
+                        Surface(
+                            onClick = { onOpenReport(report.id) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("public_report_item_${report.id}"),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = report.title,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                        )
+                                        if (report.verified) {
+                                            Icon(
+                                                Icons.Filled.CheckCircle,
+                                                contentDescription = "Verified report",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                        }
+                                    }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = report.categoryLabel,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.secondary,
+                                        )
+                                        if (report.publicLocationLabel.isNotBlank()) {
+                                            Text(
+                                                text = "• ${report.publicLocationLabel}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                            )
+                                        }
+                                    }
+                                }
+                                val statusTone = when (report.urgency) {
+                                    PublicReportUrgency.CRITICAL, PublicReportUrgency.HIGH -> RtcStatusTone.DANGER
+                                    else -> RtcStatusTone.NEUTRAL
+                                }
+                                RtcStatusChip(report.status.name.replace("_", " "), statusTone)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (onViewAll != null) {
+                TextButton(
+                    onClick = onViewAll,
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .testTag("public_reports_view_all_button"),
+                ) {
+                    Text("View all public reports")
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+    }
 }

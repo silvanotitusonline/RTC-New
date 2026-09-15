@@ -20,10 +20,11 @@ import za.org.rtc.community.ui.theme.RtcSpacing
 @Composable
 fun CommunityModernisationScreen(
     initialSection: CommunitySection = CommunitySection.DISCUSSIONS,
-    discussions: @Composable () -> Unit,
+    discussions: @Composable (onNavigateToReports: () -> Unit) -> Unit,
     reports: @Composable () -> Unit,
 ) {
     var section by remember(initialSection) { mutableStateOf(initialSection) }
+    val onNavigateToReports = remember { { section = CommunitySection.REPORTS } }
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -46,7 +47,7 @@ fun CommunityModernisationScreen(
         }
         Column(modifier = Modifier.fillMaxSize()) {
             when (section) {
-                CommunitySection.DISCUSSIONS -> discussions()
+                CommunitySection.DISCUSSIONS -> discussions(onNavigateToReports)
                 CommunitySection.REPORTS -> reports()
             }
         }
