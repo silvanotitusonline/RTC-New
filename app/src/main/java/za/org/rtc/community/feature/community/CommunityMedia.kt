@@ -1,5 +1,9 @@
 package za.org.rtc.community.feature.community
 
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -77,7 +81,7 @@ import za.org.rtc.community.ui.theme.RtcSize
 import za.org.rtc.community.ui.theme.RtcSpacing
 
 @Composable
-private fun ThumbnailItem(
+fun PostMediaPreview(
     item: MediaItem,
     onClick: () -> Unit,
     onRefreshMediaUrl: suspend (String) -> String?,
@@ -92,7 +96,7 @@ private fun ThumbnailItem(
             .clip(RoundedCornerShape(12.dp))
             .clickable(
                 role = Role.Image,
-                onClickLabel = "View image full screen",
+                onClickLabel = "View media full screen",
                 onClick = onClick,
             ),
     ) {
@@ -115,23 +119,11 @@ private fun ThumbnailItem(
                     )
                 }
                 else -> {
-                    CommunityVideoPoster(
-                        url = mediaUrl,
-                        contentDescription = item.caption ?: "Video attachment",
+                    MutedAutoPlayVideo(
+                        mediaId = item.id,
+                        initialUrl = mediaUrl,
+                        onRefreshUrl = onRefreshMediaUrl,
                     )
-                    Surface(
-                        color = Color.Black.copy(alpha = 0.55f),
-                        shape = CircleShape,
-                    ) {
-                        Icon(
-                            Icons.Filled.PlayArrow,
-                            contentDescription = "Play video",
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .size(24.dp),
-                            tint = Color.White,
-                        )
-                    }
                 }
             }
             if (overlayText != null) {
@@ -173,7 +165,7 @@ internal fun CommunityMediaPreview(
 
     when (ordered.size) {
         1 -> {
-            ThumbnailItem(
+            PostMediaPreview(
                 item = ordered[0],
                 onClick = { handleClick(0) },
                 onRefreshMediaUrl = onRefreshMediaUrl,
@@ -189,7 +181,7 @@ internal fun CommunityMediaPreview(
                     .height(160.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                ThumbnailItem(
+                PostMediaPreview(
                     item = ordered[0],
                     onClick = { handleClick(0) },
                     onRefreshMediaUrl = onRefreshMediaUrl,
@@ -197,7 +189,7 @@ internal fun CommunityMediaPreview(
                         .weight(1f)
                         .fillMaxHeight(),
                 )
-                ThumbnailItem(
+                PostMediaPreview(
                     item = ordered[1],
                     onClick = { handleClick(1) },
                     onRefreshMediaUrl = onRefreshMediaUrl,
@@ -214,7 +206,7 @@ internal fun CommunityMediaPreview(
                     .height(180.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                ThumbnailItem(
+                PostMediaPreview(
                     item = ordered[0],
                     onClick = { handleClick(0) },
                     onRefreshMediaUrl = onRefreshMediaUrl,
@@ -228,7 +220,7 @@ internal fun CommunityMediaPreview(
                         .fillMaxHeight(),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    ThumbnailItem(
+                    PostMediaPreview(
                         item = ordered[1],
                         onClick = { handleClick(1) },
                         onRefreshMediaUrl = onRefreshMediaUrl,
@@ -236,7 +228,7 @@ internal fun CommunityMediaPreview(
                             .weight(1f)
                             .fillMaxWidth(),
                     )
-                    ThumbnailItem(
+                    PostMediaPreview(
                         item = ordered[2],
                         onClick = { handleClick(2) },
                         onRefreshMediaUrl = onRefreshMediaUrl,
@@ -261,7 +253,7 @@ internal fun CommunityMediaPreview(
                         .fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    ThumbnailItem(
+                    PostMediaPreview(
                         item = ordered[0],
                         onClick = { handleClick(0) },
                         onRefreshMediaUrl = onRefreshMediaUrl,
@@ -269,7 +261,7 @@ internal fun CommunityMediaPreview(
                             .weight(1f)
                             .fillMaxHeight(),
                     )
-                    ThumbnailItem(
+                    PostMediaPreview(
                         item = ordered[1],
                         onClick = { handleClick(1) },
                         onRefreshMediaUrl = onRefreshMediaUrl,
@@ -284,7 +276,7 @@ internal fun CommunityMediaPreview(
                         .fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    ThumbnailItem(
+                    PostMediaPreview(
                         item = ordered[2],
                         onClick = { handleClick(2) },
                         onRefreshMediaUrl = onRefreshMediaUrl,
@@ -292,7 +284,7 @@ internal fun CommunityMediaPreview(
                             .weight(1f)
                             .fillMaxHeight(),
                     )
-                    ThumbnailItem(
+                    PostMediaPreview(
                         item = ordered[3],
                         onClick = { handleClick(3) },
                         onRefreshMediaUrl = onRefreshMediaUrl,
@@ -338,12 +330,16 @@ private fun RecoverableSignedImage(
     contentDescription: String,
     contentScale: ContentScale,
     onRefreshUrl: suspend (String) -> String?,
+    zoomable: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     var currentUrl by remember(mediaId, initialUrl) { mutableStateOf(initialUrl) }
     var refreshAttempted by remember(mediaId, initialUrl) { mutableStateOf(false) }
     var refreshing by remember(mediaId) { mutableStateOf(false) }
     var failed by remember(mediaId, initialUrl) { mutableStateOf(false) }
+
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
     fun refresh(explicit: Boolean) {
         if (refreshing || (!explicit && refreshAttempted)) return
@@ -361,11 +357,35 @@ private fun RecoverableSignedImage(
         }
     }
 
+    val modifier = if (zoomable) {
+        Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    scale = (scale * zoom).coerceIn(1f, 5f)
+                    val maxX = (size.width * (scale - 1)) / 2
+                    val maxY = (size.height * (scale - 1)) / 2
+                    offset = androidx.compose.ui.geometry.Offset(
+                        x = (offset.x + pan.x).coerceIn(-maxX, maxX),
+                        y = (offset.y + pan.y).coerceIn(-maxY, maxY)
+                    )
+                }
+            }
+            .graphicsLayer(
+                scaleX = scale,
+                scaleY = scale,
+                translationX = offset.x,
+                translationY = offset.y
+            )
+    } else {
+        Modifier.fillMaxSize()
+    }
+
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         AsyncImage(
             model = currentUrl,
             contentDescription = contentDescription,
-            modifier = Modifier.fillMaxSize(),
+            modifier = modifier,
             contentScale = contentScale,
             onSuccess = { failed = false },
             onError = {
@@ -396,6 +416,64 @@ private fun RecoverableSignedImage(
             }
         }
     }
+}
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun MutedAutoPlayVideo(
+    mediaId: String,
+    initialUrl: String,
+    onRefreshUrl: suspend (String) -> String?,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var currentUrl by remember(mediaId, initialUrl) { mutableStateOf(initialUrl) }
+    var refreshAttempted by remember(mediaId, initialUrl) { mutableStateOf(false) }
+
+    val exoPlayer = remember {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+            volume = 0f
+            playWhenReady = true
+            repeatMode = androidx.media3.common.Player.REPEAT_MODE_ALL
+        }
+    }
+
+    DisposableEffect(exoPlayer) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                if (!refreshAttempted) {
+                    refreshAttempted = true
+                    scope.launch {
+                        val refreshed = onRefreshUrl(mediaId)
+                        if (!refreshed.isNullOrBlank()) {
+                            currentUrl = refreshed
+                        }
+                    }
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
+    }
+
+    LaunchedEffect(currentUrl) {
+        exoPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(currentUrl))
+        exoPlayer.prepare()
+    }
+
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = {
+            androidx.media3.ui.PlayerView(context).apply {
+                player = exoPlayer
+                useController = false
+                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            }
+        },
+        modifier = Modifier.fillMaxSize()
+    )
 }
 
 @Composable
@@ -449,6 +527,7 @@ internal fun FullScreenMediaGallery(
                                 contentDescription = item.caption ?: "Full-screen image attachment",
                                 contentScale = ContentScale.Fit,
                                 onRefreshUrl = onRefreshMediaUrl,
+                                zoomable = true,
                             )
                             else -> SignedVideoPlayer(
                                 mediaId = item.id,
@@ -521,25 +600,10 @@ private fun SignedVideoPlayer(
     initialUrl: String,
     onRefreshUrl: suspend (String) -> String?,
 ) {
-    var isMuted by rememberSaveable(mediaId) { mutableStateOf(false) }
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val player = remember(mediaId, initialUrl) {
-        ExoPlayer.Builder(context).build().apply {
-            playWhenReady = true
-            volume = if (isMuted) 0f else 1f
-        }
-    }
-    DisposableEffect(player) {
-        onDispose {
-            player.release()
-        }
-    }
-    val muteDescription = if (isMuted) "Unmute video" else "Mute video"
-    player.volume = if (isMuted) 0f else 1f
-
     RtcMedia3VideoPlayer(
         videoUrl = initialUrl,
         modifier = Modifier.fillMaxSize(),
+        autoPlay = true,
         onRefreshUrl = { onRefreshUrl(mediaId) },
     )
 }

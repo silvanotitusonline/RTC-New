@@ -13,6 +13,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.scale
+import kotlinx.coroutines.launch
 import za.org.rtc.community.core.CommunityPost
 import za.org.rtc.community.ui.components.RtcCommunityFeedCard
 
@@ -35,6 +43,9 @@ fun CommunityPostCard(
     modifier: Modifier = Modifier,
 ) {
     val timestampLabel = relativeTimeLabel(post.createdAt)
+    val scale = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
+    
     RtcCommunityFeedCard(
         post = post,
         onOpen = { onOpenPost(post) },
@@ -63,10 +74,21 @@ fun CommunityPostCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { onToggleLike(post.id) }, enabled = !isLikePending) {
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            scale.animateTo(0.7f, tween(100))
+                            scale.animateTo(1.2f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+                            scale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioLowBouncy))
+                        }
+                        onToggleLike(post.id)
+                    },
+                    enabled = !isLikePending
+                ) {
                     Icon(
                         if (post.viewerHasLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = if (post.viewerHasLiked) "Unlike" else "Like"
+                        contentDescription = if (post.viewerHasLiked) "Unlike" else "Like",
+                        modifier = Modifier.scale(scale.value)
                     )
                 }
                 IconButton(onClick = { onSharePost(post) }) {

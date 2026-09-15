@@ -40,6 +40,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.draw.scale
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -171,6 +176,9 @@ internal fun CommunityPostDetailScreen(
     }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    
+    val likeScale = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
 
     val sharedModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
         with(sharedTransitionScope) {
@@ -332,7 +340,14 @@ internal fun CommunityPostDetailScreen(
                         val likePending = activePost.id in pendingLikeIds
                         val likeLabel = if (activePost.viewerHasLiked) "Unlike post" else "Like post"
                         TextButton(
-                            onClick = { communityViewModel.toggleLike(activePost.id) },
+                            onClick = {
+                                scope.launch {
+                                    likeScale.animateTo(0.7f, tween(100))
+                                    likeScale.animateTo(1.2f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+                                    likeScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioLowBouncy))
+                                }
+                                communityViewModel.toggleLike(activePost.id)
+                            },
                             enabled = !likePending,
                             modifier = Modifier
                                 .weight(1f)
@@ -346,7 +361,9 @@ internal fun CommunityPostDetailScreen(
                                 if (activePost.viewerHasLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                                 contentDescription = null,
                                 tint = if (activePost.viewerHasLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(RtcSize.inlineIcon),
+                                modifier = Modifier
+                                    .size(RtcSize.inlineIcon)
+                                    .scale(likeScale.value),
                             )
                             Spacer(Modifier.width(RtcSpacing.relatedText))
                             Text(
