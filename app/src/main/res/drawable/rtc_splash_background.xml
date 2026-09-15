@@ -5,7 +5,7 @@
             <solid android:color="#0C1013" />
         </shape>
     </item>
-    <item
-        android:drawable="@drawable/rtc_community_logo_transparent"
-        android:gravity="center" />
+    <item android:gravity="center">
+        <bitmap android:src="@drawable/rtc_community_logo_transparent" android:gravity="center" />
+    </item>
 </layer-list>
