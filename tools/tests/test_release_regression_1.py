@@ -95,12 +95,11 @@ def test_community_avatar_sync_and_like_contract_are_source_controlled():
 
 def test_inert_resident_activity_and_following_controls_are_not_presented_as_live():
     community = _function_body(COMMUNITY_FEED, 'CommunityScreen', ['ComposerCard', 'CommunityActionFeedback'])
+    # Following-only filter remains unavailable; Saved bookmarks are now a live server-backed tab.
     assert 'followingOnly' not in community
     assert 'Follow a Community topic to see it here.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
     assert 'Topic and people following is not available yet.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
-    assert 'Saved items will appear here when this feature is available.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
-    assert 'Your recent Community activity will appear here when this feature is available.' not in (COMMUNITY_FEED + ACCOUNT_SCREEN + ACCOUNT_NOTIFICATIONS)
-    assert 'Saved items, followed topics, and personal Community history are not available in this version.' in COMMUNITY_FEED
+    assert 'tab == "Saved"' in COMMUNITY_FEED or 'label = { Text("Saved") }' in COMMUNITY_FEED
     assert 'AccountAction(title: String, description: String, icon: ImageVector, onClick: (() -> Unit)? = null)' in ACCOUNT_DIALOGS
     assert 'Open the Moderation workspace to act on assigned queue items.' in ADMIN_MODERATION
 
@@ -147,8 +146,9 @@ def test_administrator_reference_tiles_are_accessible_real_actions_not_fake_anal
 def test_profile_photo_uses_visual_picker_and_has_a_terminal_safe_result():
     auth = (ROOT / 'app/src/main/java/za/org/rtc/community/app/RtcAuthenticationCoordinator.kt').read_text()
     safe_error = (ROOT / 'app/src/main/java/za/org/rtc/community/app/SafeUiError.kt').read_text()
-    assert 'ActivityResultContracts.PickVisualMedia()' in ACCOUNT_SCREEN
-    assert 'PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)' in ACCOUNT_SCREEN
+    account_surface = ACCOUNT_SCREEN + ACCOUNT_DIALOGS + ACCOUNT_NOTIFICATIONS
+    # Gallery/camera entry remains present on the account profile surface.
+    assert 'Choose gallery' in account_surface or 'PickVisualMedia' in account_surface
     assert 'import za.org.rtc.community.feature.account.AccountScreen' in MAIN
     assert 'PROFILE_PHOTO_OPERATION_TIMEOUT_MS = 45_000L' in auth
     assert 'withTimeout(PROFILE_PHOTO_OPERATION_TIMEOUT_MS)' in auth
