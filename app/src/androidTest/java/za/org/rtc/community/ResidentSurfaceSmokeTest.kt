@@ -109,11 +109,9 @@ class ResidentSurfaceSmokeTest {
                     projects = emptyList(),
                     opportunities = emptyList(),
                     notices = emptyList(),
-                    events = emptyList(),
                     isRefreshing = false,
                     onRefresh = {},
                     onOpenDirectory = {},
-                    onToggleRsvp = {},
                 )
             }
         }

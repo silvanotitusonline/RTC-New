@@ -62,7 +62,7 @@ class MediaPreparation @Inject constructor(
         return when {
             mime in IMAGE_TYPES -> prepareImage(uri)
             mime in VIDEO_TYPES -> prepareVideo(uri, mime)
-            else -> prepareImage(uri)
+            else -> error("Unsupported media type: $mime")
         }
     }
 

@@ -38,9 +38,11 @@ create index if not exists idx_notification_events_recipient
 
 alter table public.notification_events enable row level security;
 
+drop policy if exists notification_events_select_own on public.notification_events;
 create policy notification_events_select_own on public.notification_events
     for select to authenticated using (recipient_id = auth.uid());
 
+drop policy if exists notification_events_update_own on public.notification_events;
 create policy notification_events_update_own on public.notification_events
     for update to authenticated using (recipient_id = auth.uid());
 

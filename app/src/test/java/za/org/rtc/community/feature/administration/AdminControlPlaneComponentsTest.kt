@@ -12,8 +12,9 @@ class AdminControlPlaneComponentsTest {
     fun testAdminDashboardUiStateCalculation() {
         val state = AdminDashboardUiState(
             reportsCount = 5,
-            businessSubmissionsCount = 3,
-            supportRequestsCount = 8,
+            noticesCount = 3,
+            eventsCount = 2,
+            workQueueCount = 6,
             totalPendingTasks = 16,
             isLoading = false,
             errorMessage = null,
@@ -22,8 +23,9 @@ class AdminControlPlaneComponentsTest {
 
         assertEquals(16L, state.totalPendingTasks)
         assertEquals(5L, state.reportsCount)
-        assertEquals(3L, state.businessSubmissionsCount)
-        assertEquals(8L, state.supportRequestsCount)
+        assertEquals(3L, state.noticesCount)
+        assertEquals(2L, state.eventsCount)
+        assertEquals(6L, state.workQueueCount)
         assertTrue(state.isAuthorized)
         assertFalse(state.isLoading)
     }

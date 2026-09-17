@@ -33,7 +33,7 @@ fun BookingChatTabContent(
         "When will you arrive?",
         "I've shared the location pin.",
         "Please call before coming.",
-        "The gate entry code is #4092.",
+        "Please let me know when you are nearby.",
     )
 
     Column(
@@ -66,7 +66,7 @@ fun BookingChatTabContent(
             }
 
             items(messages, key = { it.id }) { msg ->
-                val isMe = msg.mine || msg.senderUserId == "user-me"
+                val isMe = msg.mine
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

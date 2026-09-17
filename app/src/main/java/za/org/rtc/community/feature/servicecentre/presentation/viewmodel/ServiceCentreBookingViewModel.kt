@@ -3,7 +3,6 @@ package za.org.rtc.community.feature.servicecentre.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -14,11 +13,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import za.org.rtc.community.app.SafeUiError
-import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreActorRole
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBooking
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBookingDraft
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBookingRepository
-import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreBookingStatus
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreDiscoveryRepository
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreMessage
 import za.org.rtc.community.feature.servicecentre.domain.ServiceCentreProvider
@@ -79,9 +76,12 @@ class ServiceCentreBookingViewModel @Inject constructor(
             _state.value = _state.value.copy(loading = true, message = null)
             bookingRepository.bookingDetail(bookingId).onSuccess { booking ->
                 _state.value = _state.value.copy(detail = booking, loading = false, message = null)
-            }.onFailure {
-                val sample = getSampleBooking(bookingId)
-                _state.value = _state.value.copy(detail = sample, loading = false, message = null)
+            }.onFailure { error ->
+                _state.value = _state.value.copy(
+                    detail = null,
+                    loading = false,
+                    message = SafeUiError.serviceCentre(error, "Booking details could not be loaded."),
+                )
             }
         }
     }
@@ -146,14 +146,11 @@ class ServiceCentreBookingViewModel @Inject constructor(
     fun refreshMessages(bookingId: String) {
         viewModelScope.launch {
             bookingRepository.messages(bookingId).onSuccess { messages ->
+                _state.value = _state.value.copy(messages = messages, message = null)
+            }.onFailure { error ->
                 _state.value = _state.value.copy(
-                    messages = if (messages.isNotEmpty()) messages else getSampleMessages(bookingId),
-                    message = null
-                )
-            }.onFailure {
-                _state.value = _state.value.copy(
-                    messages = if (_state.value.messages.isNotEmpty()) _state.value.messages else getSampleMessages(bookingId),
-                    message = null,
+                    messages = emptyList(),
+                    message = SafeUiError.serviceCentre(error, "Messages could not be loaded."),
                 )
             }
         }
@@ -167,10 +164,15 @@ class ServiceCentreBookingViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = _state.value.copy(working = true, message = null)
             val now = Instant.now()
+            val currentUserId = bookingRepository.currentUserId()
+                ?: run {
+                    _state.value = _state.value.copy(working = false, message = "Sign in to send a message.")
+                    return@launch
+                }
             val newMessage = ServiceCentreMessage(
                 id = "msg_${System.currentTimeMillis()}",
                 bookingId = bookingId,
-                senderUserId = bookingRepository.currentUserId() ?: "user-me",
+                senderUserId = currentUserId,
                 senderDisplayName = "Me",
                 body = body.trim(),
                 mine = true,
@@ -228,145 +230,5 @@ class ServiceCentreBookingViewModel @Inject constructor(
         fun defaultWhenText(now: LocalDateTime = LocalDateTime.now()): String =
             now.plusDays(1).withSecond(0).withNano(0).format(bookingFormatter)
 
-        fun getSampleBooking(bookingId: String): ServiceCentreBooking {
-            val now = Instant.now()
-            return when (bookingId) {
-                "bk-102" -> ServiceCentreBooking(
-                    id = "bk-102",
-                    customerUserId = "user-me",
-                    providerUserId = "prov-102",
-                    actorRole = ServiceCentreActorRole.CUSTOMER,
-                    counterpartyUserId = "prov-102",
-                    counterpartyDisplayName = "RTC Community Handyman",
-                    categoryId = "handyman",
-                    categoryName = "Handyman & Maintenance",
-                    requestedStartAt = now.plusSeconds(86400),
-                    serviceLocationText = "Rec Centre Sector 2, Community Hub",
-                    offerAmount = BigDecimal("350.00"),
-                    status = ServiceCentreBookingStatus.PENDING_PROVIDER,
-                    createdAt = now.minusSeconds(3600 * 2),
-                    updatedAt = now.minusSeconds(3600 * 2),
-                )
-                "bk-103" -> ServiceCentreBooking(
-                    id = "bk-103",
-                    customerUserId = "user-me",
-                    providerUserId = "prov-103",
-                    actorRole = ServiceCentreActorRole.CUSTOMER,
-                    counterpartyUserId = "prov-103",
-                    counterpartyDisplayName = "Northern Cape Auto Care",
-                    categoryId = "auto",
-                    categoryName = "Auto Repair & Servicing",
-                    requestedStartAt = now.minusSeconds(86400 * 2),
-                    serviceLocationText = "Industrial Zone, Lot 12",
-                    offerAmount = BigDecimal("850.00"),
-                    status = ServiceCentreBookingStatus.COMPLETED,
-                    completedAt = now.minusSeconds(86400 * 2 + 7200),
-                    createdAt = now.minusSeconds(86400 * 3),
-                    updatedAt = now.minusSeconds(86400 * 2),
-                )
-                else -> ServiceCentreBooking(
-                    id = bookingId.ifBlank { "bk-101" },
-                    customerUserId = "user-me",
-                    providerUserId = "prov-101",
-                    actorRole = ServiceCentreActorRole.CUSTOMER,
-                    counterpartyUserId = "prov-101",
-                    counterpartyDisplayName = "Apex Electrical & Plumbing Services",
-                    categoryId = "electrical",
-                    categoryName = "Electrical & Solar",
-                    requestedStartAt = now.plusSeconds(86400),
-                    serviceLocationText = "Main Rd Corridor, Sector 4",
-                    offerAmount = BigDecimal("650.00"),
-                    status = ServiceCentreBookingStatus.CONFIRMED,
-                    acceptedAt = now.minusSeconds(3600 * 5),
-                    confirmedAt = now.minusSeconds(3600 * 4),
-                    createdAt = now.minusSeconds(3600 * 8),
-                    updatedAt = now.minusSeconds(3600 * 4),
-                )
-            }
-        }
-
-        fun getSampleMessages(bookingId: String): List<ServiceCentreMessage> {
-            val now = Instant.now()
-            return when (bookingId) {
-                "bk-102" -> listOf(
-                    ServiceCentreMessage(
-                        id = "msg-201",
-                        bookingId = bookingId,
-                        senderUserId = "user-me",
-                        senderDisplayName = "Me",
-                        body = "Hi! I submitted a request for the geyser valve repair. Water is leaking slowly under the cover.",
-                        mine = true,
-                        createdAt = now.minusSeconds(3600 * 2),
-                    ),
-                    ServiceCentreMessage(
-                        id = "msg-202",
-                        bookingId = bookingId,
-                        senderUserId = "prov-102",
-                        senderDisplayName = "RTC Community Handyman",
-                        body = "Hello! Thanks for reaching out. Please send a photo if possible. I'll review and respond with confirmation shortly.",
-                        mine = false,
-                        createdAt = now.minusSeconds(3600 * 1),
-                    )
-                )
-                "bk-103" -> listOf(
-                    ServiceCentreMessage(
-                        id = "msg-301",
-                        bookingId = bookingId,
-                        senderUserId = "user-me",
-                        senderDisplayName = "Me",
-                        body = "Dropping off the vehicle for annual service & oil change.",
-                        mine = true,
-                        createdAt = now.minusSeconds(86400 * 2 + 14400),
-                    ),
-                    ServiceCentreMessage(
-                        id = "msg-302",
-                        bookingId = bookingId,
-                        senderUserId = "prov-103",
-                        senderDisplayName = "Northern Cape Auto Care",
-                        body = "Inspection & oil change completed! All fluid levels and brake pads are checked.",
-                        mine = false,
-                        createdAt = now.minusSeconds(86400 * 2 + 7200),
-                    )
-                )
-                else -> listOf(
-                    ServiceCentreMessage(
-                        id = "msg-101",
-                        bookingId = bookingId,
-                        senderUserId = "user-me",
-                        senderDisplayName = "Me",
-                        body = "Hi Apex Electrical, I've requested a solar inverter and DB board inspection for tomorrow.",
-                        mine = true,
-                        createdAt = now.minusSeconds(3600 * 8),
-                    ),
-                    ServiceCentreMessage(
-                        id = "msg-102",
-                        bookingId = bookingId,
-                        senderUserId = "prov-101",
-                        senderDisplayName = "Apex Electrical",
-                        body = "Good day! Request accepted. Our certified technician will arrive tomorrow at 10:00 AM.",
-                        mine = false,
-                        createdAt = now.minusSeconds(3600 * 5),
-                    ),
-                    ServiceCentreMessage(
-                        id = "msg-103",
-                        bookingId = bookingId,
-                        senderUserId = "user-me",
-                        senderDisplayName = "Me",
-                        body = "Perfect! The gate code is #4092. Please call me when you reach Sector 4.",
-                        mine = true,
-                        createdAt = now.minusSeconds(3600 * 2),
-                    ),
-                    ServiceCentreMessage(
-                        id = "msg-104",
-                        bookingId = bookingId,
-                        senderUserId = "prov-101",
-                        senderDisplayName = "Apex Electrical",
-                        body = "Noted! Gate code #4092 recorded. See you tomorrow.",
-                        mine = false,
-                        createdAt = now.minusSeconds(3600 * 1),
-                    )
-                )
-            }
-        }
     }
 }
