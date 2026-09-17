@@ -34,8 +34,14 @@ jobs:
         with:
           deno-version: v2.x
 
+      # Google retired the legacy `tools` package (sdkmanager can no longer
+      # resolve it). Default packages for setup-android@v4 still include it,
+      # so pin an explicit set that excludes `tools`.
+      # See: https://github.com/android-actions/setup-android/issues/537
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
 
       - name: Install required Android SDK packages
         shell: bash
