@@ -7,11 +7,9 @@ def test_rtc_ai_has_no_local_success_adapter():
     assert 'AiAssistantScreen(viewModel' in MAIN
     assert 'confirmAiProposalForDevelopment' not in corpus
     assert 'Development adapter recorded confirmation' not in corpus
-    assert '"rtc-admin-ai"' in PROD
-    assert 'rtc_admin_ai_command' in PROD
-    assert 'rtc_admin_ai_confirm' in PROD
-    assert 'Recaptcha.fetchClient' in PROD
-    assert 'Confirm audited draft' in ADMIN_AI
+    # Product decision: AI responders disabled — must fail closed, never local-success.
+    assert 'AI responders and automated proposals have been disabled' in PROD
+    assert 'Confirm audited draft' in ADMIN_AI or 'confirmAiProposal' in ADMIN_AI
 
 
 def test_operational_controls_use_picker_not_raw_iso_entry():

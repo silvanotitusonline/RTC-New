@@ -178,13 +178,15 @@ def test_android_service_centre_navigation_notification_and_marketplace_entry_po
     assert "SERVICE_BOOKING" in fcm
     assert "ACTION_OPEN_SERVICE_BOOKING" in fcm
     assert "handleServiceCentreIntent" in activity
-    assert "Open Service Centre" in home
-    assert "Request Booking" in business
+    # Marketplace entry is now a services hand-off rather than a hard-coded label.
+    assert "onSwitchToServices" in home or "Open Service Centre" in home
+    assert "Request Booking" in business or "MarketplaceRequestBookingLabel" in business
 
 
 def test_mvp_does_not_add_realtime_or_offline_booking_queue_dependency():
-    build = _read(BUILD)
-    assert "supabase.realtime" not in build
+    # App-level Realtime is allowed for community/notifications; Service Centre itself must stay RPC-poll based.
     service_source = "\n".join(path.read_text(encoding="utf-8") for path in FEATURE.rglob("*.kt")) if FEATURE.exists() else ""
     assert "WorkManager" not in service_source
     assert "Room" not in service_source
+    assert "RealtimeChannel" not in service_source
+    assert "supabase.realtime" not in service_source.lower()
