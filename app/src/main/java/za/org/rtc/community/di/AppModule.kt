@@ -66,8 +66,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideRtcDatabase(@dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context): RtcDatabase =
-        Room.databaseBuilder(context, RtcDatabase::class.java, "rtc-community.db")
+    fun provideRtcDatabase(@dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context): RtcDatabase {
+        val builder = Room.databaseBuilder(context, RtcDatabase::class.java, "rtc-community.db")
             .addMigrations(
                 RTC_DATABASE_MIGRATION_1_2,
                 RTC_DATABASE_MIGRATION_2_3,
@@ -78,8 +78,17 @@ object AppModule {
                 RTC_DATABASE_MIGRATION_7_8,
                 RTC_DATABASE_MIGRATION_8_9,
             )
-            .fallbackToDestructiveMigration(true)
-            .build()
+        // Destructive fallback silently drops and recreates every table on
+        // any migration path gap — including local_drafts (unsent posts)
+        // and community_upload_outbox (queued media uploads). Acceptable
+        // for debug-cycle convenience; never acceptable in release, where a
+        // missed migration would erase a resident's queued content with no
+        // warning. Release builds fail loudly instead.
+        if (BuildConfig.DEBUG) {
+            builder.fallbackToDestructiveMigration(true)
+        }
+        return builder.build()
+    }
 
     @Provides
     fun provideLocalDraftDao(database: RtcDatabase): LocalDraftDao = database.localDraftDao()

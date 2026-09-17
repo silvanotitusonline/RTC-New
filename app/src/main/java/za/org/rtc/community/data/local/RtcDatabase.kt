@@ -485,7 +485,7 @@ val RTC_DATABASE_MIGRATION_8_9 = object : Migration(8, 9) {
         za.org.rtc.community.feature.dailypost.data.DailyPostEntity::class,
     ],
     version = 9,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class RtcDatabase : RoomDatabase() {
     abstract fun localDraftDao(): LocalDraftDao

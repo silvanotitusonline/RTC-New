@@ -177,6 +177,14 @@ android {
     }
 }
 
+ksp {
+    // Room schema export target (see exportSchema = true in RtcDatabase.kt).
+    // Snapshots land here on every build and should be committed so Room's
+    // MigrationTestHelper can validate future migrations against a real
+    // prior schema instead of trusting hand-written SQL to match @Entity.
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(platform(libs.firebase.bom))
