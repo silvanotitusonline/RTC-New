@@ -1632,13 +1632,25 @@ class RtcRepository @Inject constructor(
         _posts.value = listOf(newPost) + _posts.value.filterNot { it.id == newPost.id }
         discardDraft(DraftArea.COMMUNITY)
 
-        val remoteResult = runCatching { productionUxRepository.createCommunityPost(text, mediaUris) }
+        // The outer runCatching only guards against createCommunityPost throwing. That call
+        // already returns Result<String> internally, so a normal (non-throwing) inner failure
+        // was previously reported as an outer success and this function unconditionally
+        // returned Result.success(postId) regardless of what happened remotely. Flatten the
+        // two Result layers so a genuine remote failure clears no pending state and is
+        // surfaced to the caller, which already has correct onSuccess/onFailure UI handling.
+        val remoteResult: Result<String> = runCatching { productionUxRepository.createCommunityPost(text, mediaUris) }
+            .fold(onSuccess = { it }, onFailure = { Result.failure(it) })
         if (remoteResult.isSuccess) {
             database.cachedPostDao().updatePendingSync(postId, false)
             _posts.value = _posts.value.map { if (it.id == postId) it.copy(isPendingSync = false) else it }
         }
         refreshLiveContent()
-        return Result.success(postId)
+        return remoteResult.fold(
+            onSuccess = { Result.success(postId) },
+            // Local optimistic entry stays cached with isPendingSync = true so it is not lost;
+            // the caller surfaces this failure to the user rather than silently queuing it.
+            onFailure = { Result.failure(it) },
+        )
     }
 
     suspend fun submitSupportRequest(title: String, detail: String): Result<String> {
