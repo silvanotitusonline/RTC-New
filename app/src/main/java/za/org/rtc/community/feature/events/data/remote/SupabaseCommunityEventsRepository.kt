@@ -18,72 +18,31 @@ import za.org.rtc.community.feature.events.domain.CommunityEvent
 import za.org.rtc.community.feature.events.domain.CommunityEventDraft
 import za.org.rtc.community.feature.events.domain.CommunityEventState
 import za.org.rtc.community.feature.events.domain.CommunityEventsRepository
-import za.org.rtc.community.feature.events.domain.SampleCommunityEvents
 
 @Singleton
 class SupabaseCommunityEventsRepository @Inject constructor(
     private val supabase: SupabaseClient,
 ) : CommunityEventsRepository {
-    private val _eventsFlow = MutableStateFlow<List<CommunityEvent>>(SampleCommunityEvents)
+    private val _eventsFlow = MutableStateFlow<List<CommunityEvent>>(emptyList())
     val eventsFlow: StateFlow<List<CommunityEvent>> = _eventsFlow.asStateFlow()
 
     override suspend fun page(locality: String?, offset: Int, limit: Int): Result<List<CommunityEvent>> = runCatching {
-        val remoteList = runCatching {
-            supabase.postgrest.rpc("community_events_page", buildJsonObject {
+        supabase.postgrest.rpc("community_events_page", buildJsonObject {
                 put("p_limit", limit.coerceIn(1, 50))
                 put("p_offset", offset.coerceAtMost(1000))
                 locality?.trim()?.takeIf(String::isNotBlank)?.let { put("p_locality", it) }
             }).decodeSingle<JsonArray>().map { it as JsonObject }.map { event -> event.toCommunityEvent() }
-        }.getOrNull()
-
-        if (!remoteList.isNullOrEmpty()) {
-            remoteList
-        } else {
-            val filterLocality = locality?.trim()?.lowercase()
-            _eventsFlow.value.filter { event ->
-                event.state == CommunityEventState.PUBLISHED &&
-                    (filterLocality.isNullOrBlank() || event.locality?.lowercase()?.contains(filterLocality) == true)
-            }
-        }
     }
 
     override suspend fun adminPage(offset: Int, limit: Int): Result<List<CommunityEvent>> = runCatching {
-        val remoteList = runCatching {
-            supabase.postgrest.rpc("community_events_admin_page", buildJsonObject {
+        supabase.postgrest.rpc("community_events_admin_page", buildJsonObject {
                 put("p_limit", limit.coerceIn(1, 100))
                 put("p_offset", offset.coerceAtMost(1000))
             }).decodeSingle<JsonArray>().map { it as JsonObject }.map { event -> event.toCommunityEvent() }
-        }.getOrNull()
-
-        if (!remoteList.isNullOrEmpty()) {
-            remoteList
-        } else {
-            _eventsFlow.value
-        }
     }
 
     override suspend fun upsert(draft: CommunityEventDraft): Result<String> = runCatching {
-        val newId = draft.id ?: "event-${System.currentTimeMillis()}"
-        val existing = _eventsFlow.value.find { it.id == newId }
-        val updatedEvent = CommunityEvent(
-            id = newId,
-            title = draft.title,
-            description = draft.description,
-            startsAt = draft.startsAt,
-            endsAt = draft.endsAt,
-            timeZone = draft.timeZone,
-            locality = draft.locality,
-            venueLabel = draft.venueLabel,
-            isLocal = draft.isLocal,
-            category = draft.category,
-            state = existing?.state ?: CommunityEventState.DRAFT,
-            rsvpCount = existing?.rsvpCount ?: 0,
-            isRsvped = existing?.isRsvped ?: false,
-        )
-        _eventsFlow.value = listOf(updatedEvent) + _eventsFlow.value.filterNot { it.id == newId }
-
-        runCatching {
-            supabase.postgrest.rpc("upsert_community_event", buildJsonObject {
+        val result = supabase.postgrest.rpc("upsert_community_event", buildJsonObject {
                 put("p_event_id", draft.id)
                 put("p_title", draft.title.trim())
                 put("p_description", draft.description.trim())
@@ -93,9 +52,8 @@ class SupabaseCommunityEventsRepository @Inject constructor(
                 draft.locality?.trim()?.takeIf(String::isNotBlank)?.let { put("p_locality", it) }
                 put("p_venue_label", draft.venueLabel.trim())
                 put("p_is_local", draft.isLocal)
-            })
-        }
-        newId
+            }).decodeSingle<JsonObject>()
+        result["id"]?.jsonPrimitive?.contentOrNull ?: draft.id ?: error("The event was saved without an ID.")
     }
 
     override suspend fun publish(eventId: String): Result<Unit> = runCatching {
@@ -164,4 +122,3 @@ class SupabaseCommunityEventsRepository @Inject constructor(
     private fun JsonObject.optionalString(key: String): String? =
         get(key)?.jsonPrimitive?.contentOrNull
 }
-

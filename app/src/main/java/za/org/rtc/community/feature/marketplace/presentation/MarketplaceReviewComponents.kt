@@ -129,14 +129,6 @@ fun WriteReviewDialog(
         }
     }
 
-    val sampleReviewPhotos = remember {
-        listOf(
-            "https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=600&q=80" to "Work Result",
-            "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=80" to "Food/Service",
-            "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80" to "Storefront",
-        )
-    }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -230,31 +222,6 @@ fun WriteReviewDialog(
                             Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Upload", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-
-                    // Preset Quick Sample Photos
-                    if (attachedPhotos.isEmpty()) {
-                        Text(
-                            text = "Quick Attach Sample Photos:",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            sampleReviewPhotos.forEach { (url, label) ->
-                                FilterChip(
-                                    selected = false,
-                                    onClick = {
-                                        if (!attachedPhotos.contains(url)) {
-                                            attachedPhotos = attachedPhotos + url
-                                        }
-                                    },
-                                    label = { Text("+ $label", style = MaterialTheme.typography.labelSmall) },
-                                )
-                            }
                         }
                     }
 

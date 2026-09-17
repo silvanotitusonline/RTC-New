@@ -232,44 +232,10 @@ class SupabaseMarketplaceRepository @Inject constructor(
             }).decodeSingle<JsonObject>()
             editor(created.string("businessId")).getOrNull()
         } catch (_: Throwable) {
-            null
+            throw IllegalStateException("The business draft could not be created. Check your connection and try again.")
         }
 
-        if (remoteEditor != null) {
-            localDrafts[remoteEditor.businessId] = remoteEditor
-            remoteEditor
-        } else {
-            val localId = "biz-draft-${System.currentTimeMillis()}"
-            val draft = MarketplaceDraftEditor(
-                businessId = localId,
-                revisionId = "rev-1",
-                displayName = cleanName,
-                tagline = "Local Enterprise & Services",
-                description = "Community Marketplace business listing for $cleanName.",
-                businessType = "TRADE_SERVICE",
-                phone = "",
-                email = "",
-                websiteUrl = "",
-                categories = listOf("general_services"),
-                locations = emptyList(),
-                offerings = emptyList(),
-                media = emptyList(),
-            )
-            localDrafts[localId] = draft
-            localOwnerBusinesses[localId] = MarketplaceOwnerBusiness(
-                id = localId,
-                slug = localId,
-                lifecycleState = "DRAFT",
-                revisionId = "rev-1",
-                displayName = cleanName,
-                revisionState = "DRAFT",
-                updatedAt = "Just now",
-                role = "OWNER",
-                submissionState = "DRAFT",
-                feedback = null,
-            )
-            draft
-        }
+        requireNotNull(remoteEditor) { "The business draft could not be loaded after creation." }
     }
 
     override suspend fun editor(businessId: String): Result<MarketplaceDraftEditor> = runCatching {
@@ -421,14 +387,10 @@ class SupabaseMarketplaceRepository @Inject constructor(
     }
 
     override suspend fun submit(businessId: String, idempotencyKey: String): Result<String> = runCatching {
-        val submissionId = try {
-            supabase.postgrest.rpc("marketplace_submit_business", buildJsonObject {
-                put("p_business_id", businessId)
-                put("p_idempotency_key", idempotencyKey)
-            }).decodeSingle<JsonObject>().string("submissionId")
-        } catch (_: Throwable) {
-            "sub-${System.currentTimeMillis()}"
-        }
+        val submissionId = supabase.postgrest.rpc("marketplace_submit_business", buildJsonObject {
+            put("p_business_id", businessId)
+            put("p_idempotency_key", idempotencyKey)
+        }).decodeSingle<JsonObject>().string("submissionId")
         localOwnerBusinesses[businessId]?.let { ownerBiz ->
             localOwnerBusinesses[businessId] = ownerBiz.copy(
                 revisionState = "SUBMITTED",
@@ -441,26 +403,8 @@ class SupabaseMarketplaceRepository @Inject constructor(
     }
 
     override suspend fun status(businessId: String): Result<MarketplaceSubmissionStatus> = runCatching {
-        try {
-            supabase.postgrest.rpc("marketplace_submission_status", buildJsonObject { put("p_business_id", businessId) })
-                .decodeSingle<JsonObject>().toSubmissionStatus()
-        } catch (_: Throwable) {
-            val biz = localOwnerBusinesses[businessId]
-            MarketplaceSubmissionStatus(
-                businessId = businessId,
-                lifecycleState = biz?.lifecycleState ?: "DRAFT",
-                revisions = listOf(
-                    MarketplaceRevisionStatus(
-                        id = biz?.revisionId ?: "rev-1",
-                        number = 1,
-                        state = biz?.revisionState ?: "DRAFT",
-                        feedback = biz?.feedback,
-                        submittedAt = "Today",
-                        reviewedAt = null,
-                    )
-                ),
-            )
-        }
+        supabase.postgrest.rpc("marketplace_submission_status", buildJsonObject { put("p_business_id", businessId) })
+            .decodeSingle<JsonObject>().toSubmissionStatus()
     }
 
     override suspend fun archive(businessId: String, idempotencyKey: String): Result<Unit> = runCatching {

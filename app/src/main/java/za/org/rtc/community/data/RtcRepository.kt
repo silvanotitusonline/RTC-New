@@ -145,7 +145,7 @@ class RtcRepository @Inject constructor(
 
     val events: StateFlow<List<za.org.rtc.community.feature.events.domain.CommunityEvent>> =
         (communityEventsRepository as? za.org.rtc.community.feature.events.data.remote.SupabaseCommunityEventsRepository)?.eventsFlow
-            ?: MutableStateFlow(za.org.rtc.community.feature.events.domain.SampleCommunityEvents).asStateFlow()
+            ?: MutableStateFlow<List<za.org.rtc.community.feature.events.domain.CommunityEvent>>(emptyList()).asStateFlow()
 
     suspend fun toggleEventRsvp(eventId: String) {
         communityEventsRepository.toggleRsvp(eventId)
@@ -336,60 +336,23 @@ class RtcRepository @Inject constructor(
 
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
         val cleanEmail = email.trim()
-        val isAdminEmail = cleanEmail.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
-                cleanEmail.startsWith("admin", ignoreCase = true) ||
-                cleanEmail.contains("admin@", ignoreCase = true)
-
-        val remoteResult = runCatching {
-            supabase.auth.signInWith(Email) {
-                this.email = cleanEmail
-                this.password = password
-            }
-            supabase.auth.startAutoRefreshForCurrentSession()
-            hydrateSupabaseSession()
+        supabase.auth.signInWith(Email) {
+            this.email = cleanEmail
+            this.password = password
         }
-
-        if (remoteResult.isFailure) {
-            val targetRole = if (isAdminEmail) UserRole.SYSTEM_ADMIN else UserRole.RESIDENT_A
-            val userId = "user_${UUID.nameUUIDFromBytes(cleanEmail.toByteArray())}"
-            val existingProfile = database.cachedUserProfileDao().getProfileByEmail(cleanEmail)
-            val displayName = existingProfile?.displayName ?: if (isAdminEmail) "Silvano Titus (Admin)" else cleanEmail.substringBefore("@").replaceFirstChar { it.uppercase() }
-
-            _session.value = RtcSession(
-                id = userId,
-                displayName = displayName,
-                role = if (isAdminEmail) UserRole.SYSTEM_ADMIN else (existingProfile?.role?.let { runCatching { UserRole.valueOf(it) }.getOrNull() } ?: targetRole),
-                authority = SessionAuthority.SUPABASE_AUTH,
-                authenticatedEmail = cleanEmail,
-                handle = if (isAdminEmail) "@silvano_admin" else "@${cleanEmail.substringBefore("@").lowercase().replace(Regex("[^a-z0-9_]"), "")}",
-                avatarUrl = existingProfile?.avatarUrl,
-                bio = existingProfile?.bio.orEmpty(),
-                interests = existingProfile?.interestsJson?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
-                onboardingComplete = true,
-                administratorMfaStatus = AdministratorMfaStatus.NOT_REQUIRED,
+        supabase.auth.startAutoRefreshForCurrentSession()
+        hydrateSupabaseSession()
+        val current = _session.value
+        check(current.authority == SessionAuthority.SUPABASE_AUTH) { "A verified Supabase session was not established." }
+        database.cachedSessionDao().upsertSession(
+            CachedSessionEntity(
+                userId = current.id,
+                email = cleanEmail,
+                isLoggedIn = true,
+                sessionJson = "",
+                updatedAtEpochMillis = System.currentTimeMillis()
             )
-
-            database.cachedSessionDao().upsertSession(
-                CachedSessionEntity(
-                    userId = userId,
-                    email = cleanEmail,
-                    isLoggedIn = true,
-                    sessionJson = "",
-                    updatedAtEpochMillis = System.currentTimeMillis()
-                )
-            )
-        } else {
-            val current = _session.value
-            database.cachedSessionDao().upsertSession(
-                CachedSessionEntity(
-                    userId = current.id,
-                    email = cleanEmail,
-                    isLoggedIn = true,
-                    sessionJson = "",
-                    updatedAtEpochMillis = System.currentTimeMillis()
-                )
-            )
-        }
+        )
 
         recordPrivacyAnalyticsAppActivity()
         refreshLiveContent()
@@ -441,7 +404,9 @@ class RtcRepository @Inject constructor(
             data = buildJsonObject { put("full_name", cleanDisplayName) }
         }
 
-        val userId = supabase.auth.currentUserOrNull()?.id ?: "user_${UUID.nameUUIDFromBytes(cleanEmail.toByteArray())}"
+        val userId = requireNotNull(supabase.auth.currentUserOrNull()?.id) {
+            "Supabase did not return a user after sign-up. Please try again."
+        }
         val isAdminEmail = cleanEmail.equals("SilvanoTitusOnline@gmail.com", ignoreCase = true) ||
                 cleanEmail.startsWith("admin", ignoreCase = true) ||
                 cleanEmail.contains("admin@", ignoreCase = true)
