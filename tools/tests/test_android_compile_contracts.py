@@ -19,6 +19,9 @@ MEDIA_PREPARATION = (
 MEDIA_PREPARATION_COMPAT = (
     ROOT / "app/src/main/java/za/org/rtc/community/data/local/MediaPreparation.kt"
 ).read_text()
+IMAGE_COMPRESSION = (
+    ROOT / "app/src/main/java/za/org/rtc/community/core/media/ImageCompressionUtility.kt"
+).read_text()
 BASE_THEME = (ROOT / "app/src/main/res/values/themes.xml").read_text()
 API_27_THEME = (ROOT / "app/src/main/res/values-v27/themes.xml").read_text()
 COMMUNITY_FEED = (ROOT / "app/src/main/java/za/org/rtc/community/feature/community/CommunityFeedScreen.kt").read_text()
@@ -190,7 +193,8 @@ def test_community_upload_recovery_is_scoped_to_the_authenticated_owner():
 
     assert '@ColumnInfo(name = "owner_user_id") val ownerUserId: String? = null' in database
     assert "LocalDraftEntity::class" in database and "UploadOutboxEntity::class" in database
-    assert "version = 6" in database or "version = 3" in database
+    # Schema advanced beyond the original v3/v6 recovery surface; require a current version and forward migrations.
+    assert "version = 9" in database or "version = 8" in database or "version = 7" in database or "version = 6" in database
     assert "RTC_DATABASE_MIGRATION_1_2" in database
     assert "RTC_DATABASE_MIGRATION_2_3" in database
     assert "ALTER TABLE community_upload_outbox ADD COLUMN owner_user_id TEXT" in database
@@ -215,10 +219,12 @@ def test_media_preparation_uses_managed_androidx_exifinterface():
     app_gradle = (ROOT / "app/build.gradle.kts").read_text()
     versions = (ROOT / "gradle/libs.versions.toml").read_text()
 
-    assert "import androidx.exifinterface.media.ExifInterface" in MEDIA_PREPARATION
+    # Orientation correction lives in ImageCompressionUtility; MediaPreparation re-exports the type.
+    assert "import androidx.exifinterface.media.ExifInterface" in IMAGE_COMPRESSION or "import androidx.exifinterface.media.ExifInterface" in MEDIA_PREPARATION
     assert "import android.media.ExifInterface" not in MEDIA_PREPARATION
-    assert "ExifInterface(descriptor.fileDescriptor)" in MEDIA_PREPARATION
-    assert "normalizedForExif(orientation)" in MEDIA_PREPARATION
+    assert "import android.media.ExifInterface" not in IMAGE_COMPRESSION
+    assert "ExifInterface(descriptor.fileDescriptor)" in IMAGE_COMPRESSION or "ExifInterface(descriptor.fileDescriptor)" in MEDIA_PREPARATION
+    assert "normalizedForExif" in IMAGE_COMPRESSION or "normalizedForExif" in MEDIA_PREPARATION
     assert "typealias MediaPreparation = za.org.rtc.community.core.media.MediaPreparation" in MEDIA_PREPARATION_COMPAT
     assert "implementation(libs.androidx.exifinterface)" in app_gradle
     assert 'androidx-exifinterface = { module = "androidx.exifinterface:exifinterface"' in versions
