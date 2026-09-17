@@ -355,8 +355,9 @@ internal fun AdminWorkspace(
                     dashboardState = dashboardState,
                     onRefresh = dashboardViewModel::refreshCounts,
                     onOpenReports = { onOpenTool(RtcRoute.MODERATION) },
-                    onOpenBusiness = { onOpenTool(RtcRoute.ADMIN_MARKETPLACE) },
-                    onOpenSupport = { onOpenTool(RtcRoute.MY_WORK) },
+                    onOpenNotices = { onOpenTool(RtcRoute.CONTENT) },
+                    onOpenEvents = { onOpenTool(RtcRoute.EVENTS) },
+                    onOpenWorkQueue = { onOpenTool(RtcRoute.WORK_QUEUE) },
                 )
             }
 

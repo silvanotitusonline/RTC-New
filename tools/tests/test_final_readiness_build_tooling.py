@@ -27,11 +27,11 @@ def test_android_ci_uses_node24_capable_current_action_majors_without_weakening_
     assert 'cache-read-only: ${{ github.event_name == \'pull_request\' }}' in workflow
     assert 'python3 tools/tests/run_contract_tests.py' in workflow
     assert 'deno test supabase/functions/_shared/auth_test.ts' in workflow
-    assert 'gradle --no-daemon --stacktrace testDebugUnitTest' in workflow
-    assert 'gradle --no-daemon --stacktrace lintDebug' in workflow
-    assert 'gradle --no-daemon --stacktrace assembleDebugAndroidTest' in workflow
+    assert './gradlew --no-daemon --stacktrace testDebugUnitTest' in workflow
+    assert './gradlew --no-daemon --stacktrace lintDebug' in workflow
+    assert './gradlew --no-daemon --stacktrace assembleDebugAndroidTest' in workflow
     assert 'Release-candidate build skipped because the complete release secret bundle is not configured' in workflow
-    assert 'gradle --no-daemon --stacktrace assembleRelease bundleRelease' in workflow
+    assert './gradlew --no-daemon --stacktrace assembleRelease bundleRelease' in workflow
     assert 'rm -f \\' in workflow
     assert 'rtc-ci-release.keystore' in workflow
     assert 'app/google-services.json' in workflow

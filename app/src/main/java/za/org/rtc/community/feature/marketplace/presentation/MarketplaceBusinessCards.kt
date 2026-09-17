@@ -310,7 +310,7 @@ fun AppStoreMediumCard(
                     modifier = Modifier.size(48.dp),
                 )
                 if (onToggleSave != null) {
-                    IconButton(onClick = onToggleSave, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = onToggleSave, modifier = Modifier.size(48.dp)) {
                         Icon(
                             imageVector = if (isSaved) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
                             contentDescription = if (isSaved) "Saved" else "Save",

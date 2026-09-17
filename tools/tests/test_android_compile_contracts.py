@@ -245,3 +245,55 @@ def test_explore_uses_approved_two_card_information_architecture():
     assert 'onOpenDirectory("centres")' not in EXPLORE_SCREEN
     assert 'onOpenDirectory("services")' not in EXPLORE_SCREEN
     assert "import za.org.rtc.community.feature.explore.ExploreScreen" in MAIN
+
+
+ADMIN_DASHBOARD = (
+    ROOT / "app/src/main/java/za/org/rtc/community/feature/administration/AdminDashboardViewModel.kt"
+).read_text()
+ADMIN_SUMMARY = (
+    ROOT / "app/src/main/java/za/org/rtc/community/feature/administration/AdminWorkspaceComponents.kt"
+).read_text()
+ADMIN_DASHBOARD_MIGRATION = (
+    ROOT / "supabase/migrations/20260917220000_production_admin_dashboard_summary.sql"
+).read_text()
+ACCOUNT_DELETION_FUNCTION = (
+    ROOT / "supabase/functions/process-account-deletions/index.ts"
+).read_text()
+ACCOUNT_DELETION_MIGRATION = (
+    ROOT / "supabase/migrations/20260917220500_account_deletion_fk_cascade.sql"
+).read_text()
+
+
+def test_administration_dashboard_uses_production_rpc_and_real_frontend_surfaces():
+    assert 'SUMMARY_RPC = "admin_get_moderation_dashboard_summary_v1"' in ADMIN_DASHBOARD
+    assert 'supabase.postgrest.rpc(SUMMARY_RPC)' in ADMIN_DASHBOARD
+    assert 'decodeList<AdminDashboardSummary>()' in ADMIN_DASHBOARD
+    assert 'from(TABLE_REPORTS)' not in ADMIN_DASHBOARD
+    assert 'delay(' not in ADMIN_DASHBOARD
+    assert 'label = "Notices"' in ADMIN_SUMMARY
+    assert 'label = "Events"' in ADMIN_SUMMARY
+    assert 'label = "Work queue"' in ADMIN_SUMMARY
+    assert 'private.ops_assert_staff()' in ADMIN_DASHBOARD_MIGRATION
+    assert 'revoke all on function public.admin_get_moderation_dashboard_summary_v1() from public, anon;' in ADMIN_DASHBOARD_MIGRATION
+
+
+def test_account_deletion_is_bounded_idempotent_and_deletes_auth_user():
+    assert ".select('id, requester_id')" in ACCOUNT_DELETION_FUNCTION
+    assert ".limit(MAX_BATCH)" in ACCOUNT_DELETION_FUNCTION
+    assert ".eq('state', 'submitted')" in ACCOUNT_DELETION_FUNCTION
+    assert ".in('state', ['processing', 'submitted'])" in ACCOUNT_DELETION_FUNCTION
+    assert "supabase.auth.admin.deleteUser(request.requester_id)" in ACCOUNT_DELETION_FUNCTION
+    assert "user_id" not in ACCOUNT_DELETION_FUNCTION
+    assert "on delete cascade" in ACCOUNT_DELETION_MIGRATION
+
+
+MARKETPLACE_CARDS = (
+    ROOT / "app/src/main/java/za/org/rtc/community/feature/marketplace/presentation/MarketplaceBusinessCards.kt"
+).read_text()
+
+
+def test_media_and_ui_final_readiness_boundaries_are_explicit():
+    assert 'else -> error("Unsupported media type: $mime")' in MEDIA_PREPARATION
+    assert "while (pending.length > 0)" in ACCOUNT_DELETION_FUNCTION
+    assert "object.id === null || object.metadata === null" in ACCOUNT_DELETION_FUNCTION
+    assert "IconButton(onClick = onToggleSave, modifier = Modifier.size(48.dp))" in MARKETPLACE_CARDS

@@ -56,6 +56,17 @@ jobs:
             "platforms;android-36" \
             "build-tools;35.0.0"
 
+      - name: Verify Android SDK and Gradle wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x ./gradlew
+          test -n "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          sdk_root="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          test -d "$sdk_root/platforms/android-36"
+          test -d "$sdk_root/build-tools/35.0.0"
+          ./gradlew --version
+
       - name: Restore isolated debug runtime for verification
         env:
           RTC_NONPROD_SUPABASE_URL: ${{ secrets.RTC_NONPROD_SUPABASE_URL }}
@@ -103,16 +114,16 @@ jobs:
         run: deno test supabase/functions/_shared/auth_test.ts
 
       - name: Run JVM unit tests
-        run: gradle --no-daemon --stacktrace testDebugUnitTest
+        run: ./gradlew --no-daemon --stacktrace testDebugUnitTest
 
       - name: Run Android lint
-        run: gradle --no-daemon --stacktrace lintDebug
+        run: ./gradlew --no-daemon --stacktrace lintDebug
 
       - name: Assemble debug APK
-        run: gradle --no-daemon --stacktrace assembleDebug
+        run: ./gradlew --no-daemon --stacktrace assembleDebug
 
       - name: Compile Compose smoke tests
-        run: gradle --no-daemon --stacktrace assembleDebugAndroidTest
+        run: ./gradlew --no-daemon --stacktrace assembleDebugAndroidTest
 
       - name: Upload debug verification artifacts
         if: always()
@@ -166,7 +177,7 @@ jobs:
           printf '%s' "$RTC_ANDROID_KEYSTORE_BASE64" | base64 --decode > rtc-ci-release.keystore
           export RTC_ANDROID_KEYSTORE_PATH="$GITHUB_WORKSPACE/rtc-ci-release.keystore"
 
-          gradle --no-daemon --stacktrace assembleRelease bundleRelease
+          ./gradlew --no-daemon --stacktrace assembleRelease bundleRelease
 
       - name: Upload release candidate artifacts
         if: always()

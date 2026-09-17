@@ -172,8 +172,9 @@ internal fun AdminPendingModerationSummary(
     dashboardState: AdminDashboardUiState,
     onRefresh: () -> Unit,
     onOpenReports: () -> Unit,
-    onOpenBusiness: () -> Unit,
-    onOpenSupport: () -> Unit,
+    onOpenNotices: () -> Unit,
+    onOpenEvents: () -> Unit,
+    onOpenWorkQueue: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     RtcCard(protected = true, modifier = modifier.fillMaxWidth()) {
@@ -190,7 +191,7 @@ internal fun AdminPendingModerationSummary(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Real-Time Queue Aggregation",
+                    "Live production work overview",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -222,7 +223,7 @@ internal fun AdminPendingModerationSummary(
         }
 
         Text(
-            "Aggregated real-time summary across reports, business submissions, and support requests.",
+            "Counts are returned by the protected production summary RPC. Open a surface to review or change its live frontend state.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -238,22 +239,28 @@ internal fun AdminPendingModerationSummary(
                 onClick = onOpenReports
             )
             AdminWorkspaceMetricTile(
-                value = dashboardState.businessSubmissionsCount.toString(),
-                label = "Businesses",
+                value = dashboardState.noticesCount.toString(),
+                label = "Notices",
                 modifier = Modifier.weight(1f),
-                onClick = onOpenBusiness
+                onClick = onOpenNotices
             )
             AdminWorkspaceMetricTile(
-                value = dashboardState.supportRequestsCount.toString(),
-                label = "Support Cases",
+                value = dashboardState.eventsCount.toString(),
+                label = "Events",
                 modifier = Modifier.weight(1f),
-                onClick = onOpenSupport
+                onClick = onOpenEvents
+            )
+            AdminWorkspaceMetricTile(
+                value = dashboardState.workQueueCount.toString(),
+                label = "Work queue",
+                modifier = Modifier.weight(1f),
+                onClick = onOpenWorkQueue
             )
         }
 
         if (!dashboardState.isAuthorized) {
             Text(
-                "Notice: AdminGuard requires the custom 'is_admin' claim to access complete pending counts.",
+                "Notice: this workspace requires an authorised staff session. System administrator actions may also require MFA.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error
             )
@@ -276,4 +283,3 @@ internal fun AdminPendingModerationSummary(
         }
     }
 }
-
