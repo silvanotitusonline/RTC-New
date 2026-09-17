@@ -26,9 +26,10 @@ class CommunitySyncManager @Inject constructor(
     private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
     private var isNetworkCallbackRegistered = false
 
-    init {
-        start()
-    }
+    // Deliberately no init{} side effect here — start() is called exactly
+    // once, explicitly, from RtcCommunityApplication.onCreate(). See that
+    // call site for why: this used to also run implicitly at construction
+    // time, which meant a synced-twice race on every cold launch.
 
     fun start() {
         registerNetworkCallback()
