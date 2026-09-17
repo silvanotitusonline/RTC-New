@@ -169,7 +169,7 @@ def test_reference_administrator_workspace_has_real_guarded_navigation_and_profi
     assert 'onOpenTool(if (needsLiveAdministratorMfa) RtcRoute.ADMIN_MFA else RtcRoute.ANALYTICS_DASHBOARD)' in workspace
     assert 'AdminWorkspaceNavigation(role = session.role' in workspace
     assert 'AdminWorkspaceMetricTile(workItems.count { it.assignedToMe }.toString(), "Assigned"' in workspace
-    assert 'AdminWorkspaceMetricTile(workItems.count { it.priority in setOf("URGENT", "HIGH") }.toString(), "Unassigned"' in workspace
+    assert 'AdminWorkspaceMetricTile(workItems.count { it.priority in setOf("URGENT", "HIGH") }.toString(), "High priority"' in workspace
     assert 'AdminWorkspaceMetricTile(workItems.count { it.isUnassigned }.toString(), "Unassigned"' in workspace
     assert 'internal fun StaffWorkspaceBottomNavigation(' in NAV_CHROME
     assert 'StaffWorkspaceBottomNavigation(' in MAIN
