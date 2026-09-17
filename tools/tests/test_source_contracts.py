@@ -155,15 +155,21 @@ def test_protected_workspace_fail_closed_contract():
 
 
 def test_rtc_ai_uses_guarded_edge_function_contract():
+    """RTC AI edge path is intentionally disabled in production client code.
+
+    Keep the invariant that no local success adapter exists and that confirmation
+    flows cannot silently succeed without a server response.
+    """
     repo = text('app/src/main/java/za/org/rtc/community/data/RtcRepository.kt')
     prod = text('app/src/main/java/za/org/rtc/community/supabase/ProductionUxRepository.kt')
     vm = text('app/src/main/java/za/org/rtc/community/app/RtcViewModel.kt')
     assert 'confirmAiProposalForDevelopment' not in repo
     assert 'Development adapter recorded confirmation' not in repo
-    assert 'rtc-admin-ai' in prod
-    assert 'rtc_admin_ai_command' in prod and 'rtc_admin_ai_confirm' in prod
-    assert 'Recaptcha.fetchClient' in prod
+    # Product decision: AI responders disabled — client must fail closed.
+    assert 'AI responders and automated proposals have been disabled' in prod
     assert 'confirmAiProposal' in vm and 'proposeAiAction' in vm
+    # When re-enabled, these must return to the guarded edge function path.
+    assert 'Recaptcha.fetchClient' in prod
 
 
 def test_administrator_mfa_qr_and_secret_lifecycle_contract():
