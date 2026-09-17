@@ -29,7 +29,8 @@ def test_concept6_shared_system_is_used_by_major_surfaces():
     assert 'RtcCaseProgress' in COMPONENTS
     for name in ['CommunityScreen', 'ExploreScreen', 'SupportScreen', 'AccountScreen', 'NotificationsScreen', 'AiAssistantScreen']:
         source = COMMUNITY_FEED if name == 'CommunityScreen' else EXPLORE_SCREEN if name == 'ExploreScreen' else SUPPORT_SCREENS if name == 'SupportScreen' else ACCOUNT_SCREEN if name == 'AccountScreen' else ACCOUNT_NOTIFICATIONS if name == 'NotificationsScreen' else ADMIN_AI
-        block = re.search(rf'(?:private|internal) fun {name}\(.*?(?=\n@Composable|\Z)', source, re.S)
+        # AccountScreen is public; other major surfaces may be internal/private.
+        block = re.search(rf'(?:(?:private|internal|public)\s+)?fun {name}\(.*?(?=\n@Composable|\Z)', source, re.S)
         assert block and 'RtcScreenScaffold' in block.group(0), name
     # SearchScreen may compose without a full scaffold wrapper; still require route import wiring.
     assert 'import za.org.rtc.community.feature.community.CommunityScreen' in MAIN

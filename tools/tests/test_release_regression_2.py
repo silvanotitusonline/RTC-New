@@ -138,7 +138,8 @@ def test_reference_onboarding_uses_supplied_splash_logo_and_real_full_page_auth_
     assert 'RtcGoogleSignInButton(' in welcome
     assert 'onCredential = onGoogleCredential' in welcome
     assert 'onFailure = onGoogleSignInError' in welcome
-    assert 'Text("Back")' in welcome
+    # Back is an IconButton with accessible contentDescription, not a Text label.
+    assert 'contentDescription = "Back"' in welcome or 'Text("Back")' in welcome
 
 
 def test_reference_graphite_theme_is_the_default_for_system_preference_sessions():
