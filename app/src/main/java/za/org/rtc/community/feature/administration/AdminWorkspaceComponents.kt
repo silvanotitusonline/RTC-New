@@ -195,6 +195,18 @@ internal fun AdminPendingModerationSummary(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                Text(
+                    text = when (dashboardState.realtimeStatus) {
+                        AdminRealtimeStatus.LIVE -> "Live updates · ${dashboardState.lastUpdatedLabel()}"
+                        AdminRealtimeStatus.CONNECTING -> "Connecting to live updates · ${dashboardState.lastUpdatedLabel()}"
+                        AdminRealtimeStatus.DISCONNECTED -> "Refresh required · ${dashboardState.lastUpdatedLabel()}"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when (dashboardState.realtimeStatus) {
+                        AdminRealtimeStatus.LIVE -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
             }
             Surface(
                 color = if (dashboardState.totalPendingTasks > 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,

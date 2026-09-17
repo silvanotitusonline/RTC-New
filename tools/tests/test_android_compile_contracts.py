@@ -297,3 +297,31 @@ def test_media_and_ui_final_readiness_boundaries_are_explicit():
     assert "while (pending.length > 0)" in ACCOUNT_DELETION_FUNCTION
     assert "object.id === null || object.metadata === null" in ACCOUNT_DELETION_FUNCTION
     assert "IconButton(onClick = onToggleSave, modifier = Modifier.size(48.dp))" in MARKETPLACE_CARDS
+
+
+ADMIN_REALTIME_MIGRATION = (
+    ROOT / "supabase/migrations/20260918010000_admin_dashboard_realtime_invalidation.sql"
+).read_text()
+
+
+def test_admin_dashboard_realtime_is_staff_scoped_payload_free_and_forward_only():
+    assert "admin_dashboard_invalidations" in ADMIN_REALTIME_MIGRATION
+    assert "private.is_any_staff()" in ADMIN_REALTIME_MIGRATION
+    assert "revoke all on public.admin_dashboard_invalidations from public, anon;" in ADMIN_REALTIME_MIGRATION
+    assert "alter publication supabase_realtime add table public.admin_dashboard_invalidations" in ADMIN_REALTIME_MIGRATION
+    assert "emit_admin_dashboard_invalidation" in ADMIN_REALTIME_MIGRATION
+    for table in ["civic_reports", "official_notices", "community_events", "operational_work_items"]:
+        assert f"on public.{table}" in ADMIN_REALTIME_MIGRATION
+
+
+def test_admin_dashboard_realtime_rehydrates_authoritative_rpc_and_cleans_up():
+    assert 'INVALIDATION_TABLE = "admin_dashboard_invalidations"' in ADMIN_DASHBOARD
+    assert "postgresChangeFlow<PostgresAction>" in ADMIN_DASHBOARD
+    assert "debounce(INVALIDATION_DEBOUNCE_MILLIS)" in ADMIN_DASHBOARD
+    assert "fetchPendingCountsInternal()" in ADMIN_DASHBOARD
+    assert "channel.unsubscribe()" in ADMIN_DASHBOARD
+    assert "override fun onCleared()" in ADMIN_DASHBOARD
+    assert "AdminRealtimeStatus.DISCONNECTED" in ADMIN_DASHBOARD
+    assert "Live updates" in ADMIN_SUMMARY
+    assert "Refresh required" in ADMIN_SUMMARY
+    assert "lastUpdatedLabel()" in ADMIN_SUMMARY
