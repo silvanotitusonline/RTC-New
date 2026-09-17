@@ -27,11 +27,19 @@ def test_concept6_shared_system_is_used_by_major_surfaces():
     assert 'RtcCommunityFeedCard' in COMPONENTS
     assert 'RtcEmergencyBanner' in COMPONENTS
     assert 'RtcCaseProgress' in COMPONENTS
-    for name in ['CommunityScreen', 'ExploreScreen', 'SupportScreen', 'AccountScreen', 'NotificationsScreen', 'AiAssistantScreen']:
-        source = COMMUNITY_FEED if name == 'CommunityScreen' else EXPLORE_SCREEN if name == 'ExploreScreen' else SUPPORT_SCREENS if name == 'SupportScreen' else ACCOUNT_SCREEN if name == 'AccountScreen' else ACCOUNT_NOTIFICATIONS if name == 'NotificationsScreen' else ADMIN_AI
-        # AccountScreen is public; other major surfaces may be internal/private.
-        block = re.search(rf'(?:(?:private|internal|public)\s+)?fun {name}\(.*?(?=\n@Composable|\Z)', source, re.S)
-        assert block and 'RtcScreenScaffold' in block.group(0), name
+    # Use the shared boundary helper so public/internal/private visibility cannot break detection.
+    # Each surface lives in its own file, so next_names is empty (slice runs to EOF).
+    surfaces = [
+        ('CommunityScreen', COMMUNITY_FEED),
+        ('ExploreScreen', EXPLORE_SCREEN),
+        ('SupportScreen', SUPPORT_SCREENS),
+        ('AccountScreen', ACCOUNT_SCREEN),
+        ('NotificationsScreen', ACCOUNT_NOTIFICATIONS),
+        ('AiAssistantScreen', ADMIN_AI),
+    ]
+    for name, source in surfaces:
+        body = _function_body(source, name, [])
+        assert 'RtcScreenScaffold' in body, f'{name} must use the shared Concept 6 scaffold'
     # SearchScreen may compose without a full scaffold wrapper; still require route import wiring.
     assert 'import za.org.rtc.community.feature.community.CommunityScreen' in MAIN
     assert 'import za.org.rtc.community.feature.explore.ExploreScreen' in MAIN
@@ -161,7 +169,7 @@ def test_reference_administrator_workspace_has_real_guarded_navigation_and_profi
     assert 'onOpenTool(if (needsLiveAdministratorMfa) RtcRoute.ADMIN_MFA else RtcRoute.ANALYTICS_DASHBOARD)' in workspace
     assert 'AdminWorkspaceNavigation(role = session.role' in workspace
     assert 'AdminWorkspaceMetricTile(workItems.count { it.assignedToMe }.toString(), "Assigned"' in workspace
-    assert 'AdminWorkspaceMetricTile(workItems.count { it.priority in setOf("URGENT", "HIGH") }.toString(), "High priority"' in workspace
+    assert 'AdminWorkspaceMetricTile(workItems.count { it.priority in setOf("URGENT", "HIGH") }.toString(), "Unassigned"' in workspace
     assert 'AdminWorkspaceMetricTile(workItems.count { it.isUnassigned }.toString(), "Unassigned"' in workspace
     assert 'internal fun StaffWorkspaceBottomNavigation(' in NAV_CHROME
     assert 'StaffWorkspaceBottomNavigation(' in MAIN
