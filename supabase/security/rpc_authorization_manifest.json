@@ -1,6 +1,10 @@
 {
   "manifest_version": 1,
   "scope": "public RPC authorization boundary",
+  "deployment_target": {
+    "project_name": "RTC Community Production",
+    "project_ref": "pbzzfzfgwzwdstvnwzqu"
+  },
   "policy": "Every SECURITY DEFINER function exposed through the public schema must have an explicit caller classification. Anonymous execution is reserved for intentionally public read-only responses.",
   "anonymous_security_definer_allowlist": [
     {

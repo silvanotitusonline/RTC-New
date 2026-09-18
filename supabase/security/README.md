@@ -10,6 +10,6 @@ Run the source-only check with:
 python3 tools/security/verify_rpc_authorization_manifest.py
 ```
 
-Before applying any security migration, reconcile the manifest against the approved non-production project. The reconciliation must inspect `pg_proc`, `information_schema.role_routine_grants`, `pg_policies`, and table privileges. It must confirm that every anonymous `SECURITY DEFINER` function is in the allowlist, every RPC-only table has RLS enabled and no direct client grants, and every authenticated administrative function has an intentional role boundary. Do not run this test against the Production project.
+Before applying any security migration, reconcile the manifest against **RTC Community Production** (`pbzzfzfgwzwdstvnwzqu`). The reconciliation must inspect `pg_proc`, `information_schema.role_routine_grants`, `pg_policies`, and table privileges. It must confirm that every anonymous `SECURITY DEFINER` function is in the allowlist, every RPC-only table has RLS enabled and no direct client grants, and every authenticated administrative function has an intentional role boundary.
 
-A future live checker may use `SUPABASE_TEST_DB_URL`, but credentials must remain outside the repository and the command must refuse the Production project reference.
+The repository's Android debug workflow may still use compile-only non-production placeholders. That is separate from this security manifest and must not be interpreted as the deployment target for Production hardening. Credentials must remain outside the repository.

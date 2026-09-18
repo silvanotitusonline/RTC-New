@@ -31,6 +31,10 @@ def test_manifest_has_only_explicit_public_read_anonymous_entries():
 
 def test_manifest_requires_zero_direct_grants_for_rpc_only_tables():
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    assert manifest["deployment_target"] == {
+        "project_name": "RTC Community Production",
+        "project_ref": "pbzzfzfgwzwdstvnwzqu",
+    }
     boundary = manifest["required_rpc_only_table_boundary"]
     assert boundary["rls_enabled"] is True
     assert boundary["direct_grants"] == []

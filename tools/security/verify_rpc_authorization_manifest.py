@@ -2,9 +2,9 @@
 """Validate the checked-in Supabase RPC authorization boundary.
 
 This is intentionally source-only. It does not connect to a database and never
-attempts to apply migrations. A live reconciliation may compare the manifest's
+attempts to apply migrations. A live reconciliation must compare the manifest's
 expected rows with pg_proc, information_schema.role_routine_grants, and
-pg_policies in the approved non-production project.
+pg_policies in RTC Community Production.
 """
 
 from __future__ import annotations
@@ -30,6 +30,11 @@ def main() -> int:
 
     if manifest.get("manifest_version") != 1:
         fail("unsupported manifest version")
+    target = manifest.get("deployment_target", {})
+    if target.get("project_name") != "RTC Community Production":
+        fail("manifest must target RTC Community Production")
+    if target.get("project_ref") != "pbzzfzfgwzwdstvnwzqu":
+        fail("manifest must target the RTC Production project ref")
 
     entries = manifest.get("anonymous_security_definer_allowlist", [])
     if not entries:
