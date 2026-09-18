@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "supabase" / "security" / "rpc_authorization_manifest.json"
 MIGRATION = ROOT / "supabase" / "migrations" / "20260918001000_close_advisor_rpc_only_table_access.sql"
+ANON_MIGRATION = ROOT / "supabase" / "migrations" / "20260918040000_fail_closed_public_security_definer_execution.sql"
 
 
 def fail(message: str) -> None:
@@ -27,6 +28,7 @@ def fail(message: str) -> None:
 def main() -> int:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     migration = MIGRATION.read_text(encoding="utf-8").lower()
+    anon_migration = ANON_MIGRATION.read_text(encoding="utf-8").lower()
 
     if manifest.get("manifest_version") != 1:
         fail("unsupported manifest version")
@@ -69,6 +71,18 @@ def main() -> int:
         fail("hardening migration must cover public, anon, and authenticated roles")
     if not migration.strip().startswith("begin;") or not migration.strip().endswith("commit;"):
         fail("hardening migration must be transactional")
+
+    if not anon_migration.strip().startswith("begin;") or not anon_migration.strip().endswith("commit;"):
+        fail("anonymous execution migration must be transactional")
+    if "p.prosecdef = true" not in anon_migration:
+        fail("anonymous execution migration must sweep SECURITY DEFINER functions")
+    if "from public, anon" not in anon_migration:
+        fail("anonymous execution migration must revoke PUBLIC and anon execution")
+    if "from public, anon, authenticated" in anon_migration:
+        fail("anonymous execution migration must preserve authenticated grants")
+    for entry in entries:
+        if f"grant execute on function public.{entry['name']}" not in anon_migration:
+            fail(f"anonymous allowlist entry is missing from the execution migration: {entry['name']}")
 
     boundary = manifest.get("required_rpc_only_table_boundary", {})
     if boundary.get("rls_enabled") is not True:

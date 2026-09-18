@@ -4,6 +4,8 @@
 
 The manifest also records the 25 tables identified by Supabase as RLS-enabled without policies. These tables are intentionally RPC-only. Migration `20260918001000_close_advisor_rpc_only_table_access.sql` revokes direct table privileges from `public`, `anon`, and `authenticated`; it does not change row data or function behavior.
 
+Migration `20260918040000_fail_closed_public_security_definer_execution.sql` performs a fail-closed sweep over public `SECURITY DEFINER` functions. It revokes `PUBLIC` and `anon` execution while preserving existing signed-in and service-role grants, then restores anonymous execution only for the ten manifest entries. Review the resulting RPC response payloads and public privacy model before applying this migration to Production.
+
 Run the source-only check with:
 
 ```bash

@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "supabase" / "security" / "rpc_authorization_manifest.json"
 CHECKER = ROOT / "tools" / "security" / "verify_rpc_authorization_manifest.py"
+ANON_MIGRATION = ROOT / "supabase" / "migrations" / "20260918040000_fail_closed_public_security_definer_execution.sql"
 
 
 def test_rpc_authorization_manifest_is_validated_by_the_checked_in_checker():
@@ -41,3 +42,13 @@ def test_manifest_requires_zero_direct_grants_for_rpc_only_tables():
     assert boundary["required_migration"].endswith(
         "close_advisor_rpc_only_table_access.sql"
     )
+
+
+def test_anonymous_security_definer_migration_is_fail_closed_and_preserves_signed_in_grants():
+    text = ANON_MIGRATION.read_text(encoding="utf-8").lower()
+    assert text.startswith("begin;")
+    assert text.rstrip().endswith("commit;")
+    assert "p.prosecdef = true" in text
+    assert "from public, anon" in text
+    assert "from public, anon, authenticated" not in text
+    assert text.count("grant execute on function public.") == 10
