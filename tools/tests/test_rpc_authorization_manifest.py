@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "supabase" / "security" / "rpc_authorization_manifest.json"
 CHECKER = ROOT / "tools" / "security" / "verify_rpc_authorization_manifest.py"
 ANON_MIGRATION = ROOT / "supabase" / "migrations" / "20260918040000_fail_closed_public_security_definer_execution.sql"
+SQL_CHECK = ROOT / "supabase" / "security" / "production_boundary_check.sql"
 
 
 def test_rpc_authorization_manifest_is_validated_by_the_checked_in_checker():
@@ -52,3 +53,19 @@ def test_anonymous_security_definer_migration_is_fail_closed_and_preserves_signe
     assert "from public, anon" in text
     assert "from public, anon, authenticated" not in text
     assert text.count("grant execute on function public.") == 10
+
+
+def test_production_sql_boundary_check_is_read_only_and_covers_both_boundaries():
+    text = SQL_CHECK.read_text(encoding="utf-8").lower()
+    assert "pbzzfzfgwzwdstvnwzqu" in text
+    assert "has_function_privilege" in text
+    assert "has_table_privilege" in text
+    assert "p.prosecdef" in text
+    assert "rpc_only_table_boundary" in text
+    assert "grant " not in text
+    assert "revoke " not in text
+    assert "insert " not in text
+    assert "update " not in text
+    assert "delete " not in text
+    assert "drop " not in text
+    assert "alter " not in text

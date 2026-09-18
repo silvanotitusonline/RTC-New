@@ -12,6 +12,8 @@ Run the source-only check with:
 python3 tools/security/verify_rpc_authorization_manifest.py
 ```
 
+For a direct, read-only check in the Supabase SQL editor, open `production_boundary_check.sql` and paste only its SQL contents. It returns a `PASS` or `FAIL` summary for the anonymous RPC allowlist and the 25 RPC-only tables, followed by detail rows for unexpected anonymous functions or direct table privileges. Do not paste `cd`, `python3`, or the Python checker into the SQL editor.
+
 Before applying any security migration, reconcile the manifest against **RTC Community Production** (`pbzzfzfgwzwdstvnwzqu`). The reconciliation must inspect `pg_proc`, `information_schema.role_routine_grants`, `pg_policies`, and table privileges. It must confirm that every anonymous `SECURITY DEFINER` function is in the allowlist, every RPC-only table has RLS enabled and no direct client grants, and every authenticated administrative function has an intentional role boundary.
 
 The repository's Android debug workflow may still use compile-only non-production placeholders. That is separate from this security manifest and must not be interpreted as the deployment target for Production hardening. Credentials must remain outside the repository.
