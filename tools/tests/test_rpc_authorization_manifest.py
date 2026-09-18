@@ -9,6 +9,7 @@ MANIFEST = ROOT / "supabase" / "security" / "rpc_authorization_manifest.json"
 CHECKER = ROOT / "tools" / "security" / "verify_rpc_authorization_manifest.py"
 ANON_MIGRATION = ROOT / "supabase" / "migrations" / "20260918040000_fail_closed_public_security_definer_execution.sql"
 SQL_CHECK = ROOT / "supabase" / "security" / "production_boundary_check.sql"
+INDEX_REVIEW = ROOT / "supabase" / "security" / "performance_index_review.sql"
 
 
 def test_rpc_authorization_manifest_is_validated_by_the_checked_in_checker():
@@ -68,4 +69,21 @@ def test_production_sql_boundary_check_is_read_only_and_covers_both_boundaries()
     assert "update " not in text
     assert "delete " not in text
     assert "drop " not in text
+    assert "alter " not in text
+
+
+def test_production_index_review_is_read_only_and_workload_ranked():
+    text = INDEX_REVIEW.read_text(encoding="utf-8").lower()
+    assert "pbzzfzfgwzwdstvnwzqu" in text
+    assert "pg_constraint" in text
+    assert "pg_index" in text
+    assert "n_live_tup" in text
+    assert "n_mod_since_analyze" in text
+    assert "high-priority-review" in text
+    assert "defer-until-workload" in text
+    assert "create index" not in text
+    assert "drop index" not in text
+    assert "insert " not in text
+    assert "update " not in text
+    assert "delete " not in text
     assert "alter " not in text
