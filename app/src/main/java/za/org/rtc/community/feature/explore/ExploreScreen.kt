@@ -178,10 +178,6 @@ internal fun ExploreScreen(
                                         RtcStatusChip("$publishedNoticeCount published", RtcStatusTone.NEUTRAL)
                                     }
                                 }
-                                InteractiveMunicipalCanvasMap(
-                                    verifiedReports = reports,
-                                    onOpenReport = onOpenReport,
-                                )
                                 RtcCard(modifier = Modifier.fillMaxWidth()) {
                                     Text("Projects and Opportunities", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Text(

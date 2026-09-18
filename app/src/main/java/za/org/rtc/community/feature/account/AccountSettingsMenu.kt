@@ -17,7 +17,9 @@ import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,6 +28,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import za.org.rtc.community.navigation.RtcRoute
+import za.org.rtc.community.core.ThemePreference
 import za.org.rtc.community.ui.components.RtcCard
 import za.org.rtc.community.ui.theme.RtcSpacing
 
@@ -35,6 +38,12 @@ fun AccountSettingsMenu(
     onOpenSecurity: () -> Unit,
     onOpenPrivacyAndData: () -> Unit,
     onOpenAccessibility: () -> Unit,
+    themePreference: ThemePreference = ThemePreference.SYSTEM,
+    onSetTheme: (ThemePreference) -> Unit = {},
+    readingMode: Boolean = false,
+    supportNotifications: Boolean = true,
+    communityNotifications: Boolean = true,
+    onSetNotificationPreference: (String, Boolean) -> Unit = { _, _ -> },
     onOpenMarketplaceBusiness: (() -> Unit)? = null,
     onOpenMarketplaceRoute: ((String) -> Unit)? = null,
     onSignOut: (() -> Unit)? = null,
@@ -92,12 +101,35 @@ fun AccountSettingsMenu(
             }
         }
 
+        Text("Appearance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
+            ThemePreference.entries.forEach { preference ->
+                FilterChip(
+                    selected = themePreference == preference,
+                    onClick = { onSetTheme(preference) },
+                    label = { Text(preference.name.lowercase().replaceFirstChar(Char::uppercase)) },
+                )
+            }
+        }
+
         Text("Account Preferences", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
         AccountSettingsRow(
             title = "Notifications",
-            description = "Choose which Community and Support updates you receive.",
+            description = "Review your Community and Support alerts and messages.",
             onClick = onOpenNotifications,
+        )
+        AccountSettingsRow(
+            title = "Community updates",
+            description = "Receive ordinary community alerts and local updates.",
+            onClick = { onSetNotificationPreference("community", !communityNotifications) },
+            trailing = { Switch(checked = communityNotifications, onCheckedChange = { onSetNotificationPreference("community", it) }) },
+        )
+        AccountSettingsRow(
+            title = "Support updates",
+            description = "Receive support-case and service-centre notifications.",
+            onClick = { onSetNotificationPreference("support", !supportNotifications) },
+            trailing = { Switch(checked = supportNotifications, onCheckedChange = { onSetNotificationPreference("support", it) }) },
         )
         AccountSettingsRow(
             title = "Security",
@@ -106,12 +138,12 @@ fun AccountSettingsMenu(
         )
         AccountSettingsRow(
             title = "Privacy and data",
-            description = "Declared locality, your data export, and deletion requests.",
+            description = "Manage your declared locality and privacy choices.",
             onClick = onOpenPrivacyAndData,
         )
         AccountSettingsRow(
             title = "Accessibility",
-            description = "Reading mode and display preferences.",
+            description = if (readingMode) "Reading mode is on; adjust text for easier reading." else "Turn on reading mode for larger, clearer text.",
             onClick = onOpenAccessibility,
         )
         if (onSignOut != null) {
@@ -131,6 +163,7 @@ private fun AccountSettingsRow(
     description: String,
     icon: ImageVector? = null,
     onClick: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     RtcCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
@@ -152,7 +185,7 @@ private fun AccountSettingsRow(
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            trailing?.invoke()
         }
     }
 }
-

@@ -1554,7 +1554,7 @@ class RtcRepository @Inject constructor(
         return productionUxRepository.registerFcmDevice(token, appVersion)
     }
 
-    suspend fun createPost(text: String, mediaUris: List<Uri> = emptyList()): Result<String> {
+    suspend fun createPost(text: String, mediaUris: List<Uri> = emptyList(), clientPostId: String = UUID.randomUUID().toString()): Result<String> {
         val cleanText = text.trim()
         val postId = "post_${UUID.randomUUID()}"
         val mediaItems = mediaUris.mapIndexed { index, uri ->
@@ -1603,7 +1603,7 @@ class RtcRepository @Inject constructor(
         // returned Result.success(postId) regardless of what happened remotely. Flatten the
         // two Result layers so a genuine remote failure clears no pending state and is
         // surfaced to the caller, which already has correct onSuccess/onFailure UI handling.
-        val remoteResult: Result<String> = runCatching { productionUxRepository.createCommunityPost(text, mediaUris) }
+        val remoteResult: Result<String> = runCatching { productionUxRepository.createCommunityPost(text, mediaUris, clientPostId) }
             .fold(onSuccess = { it }, onFailure = { Result.failure(it) })
         if (remoteResult.isSuccess) {
             database.cachedPostDao().updatePendingSync(postId, false)

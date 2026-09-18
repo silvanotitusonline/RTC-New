@@ -2,6 +2,9 @@ package za.org.rtc.community.feature.account
 
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,12 +24,16 @@ fun AccountScreen(
     onRefresh: () -> Unit,
     onHelp: () -> Unit,
     onMarketplace: (String) -> Unit,
+    onOpenProfile: () -> Unit,
+    onOpenNotifications: () -> Unit,
 ) {
     val session by viewModel.session.collectAsStateWithLifecycle()
     val passwordUi by viewModel.passwordUi.collectAsStateWithLifecycle()
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showPasswordDialog by rememberSaveable { mutableStateOf(false) }
     var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
+    var showPrivacyDialog by rememberSaveable { mutableStateOf(false) }
+    var localityDraft by rememberSaveable { mutableStateOf("") }
 
     if (showPasswordDialog) {
         PasswordUpdateDialog(
@@ -52,6 +59,29 @@ fun AccountScreen(
         )
     }
 
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            title = { Text("Privacy and data") },
+            text = {
+                OutlinedTextField(
+                    value = localityDraft,
+                    onValueChange = { localityDraft = it.take(120) },
+                    label = { Text("Declared locality") },
+                    supportingText = { Text("Used to tailor local community information. Leave blank to clear it.") },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.saveDeclaredLocality(localityDraft)
+                    showPrivacyDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showPrivacyDialog = false }) { Text("Cancel") } },
+        )
+    }
+
     ResidentPullToRefresh(isRefreshing = isRefreshing, onRefresh = onRefresh) {
         if (showSettings) {
             RtcScreenScaffold {
@@ -68,10 +98,19 @@ fun AccountScreen(
                 }
                 item {
                     AccountSettingsMenu(
-                        onOpenNotifications = {},
+                        onOpenNotifications = onOpenNotifications,
                         onOpenSecurity = { showPasswordDialog = true },
-                        onOpenPrivacyAndData = {},
-                        onOpenAccessibility = {},
+                        onOpenPrivacyAndData = {
+                            localityDraft = session.declaredLocality.orEmpty()
+                            showPrivacyDialog = true
+                        },
+                        onOpenAccessibility = { viewModel.toggleReadingMode() },
+                        themePreference = session.darkMode,
+                        onSetTheme = viewModel::setTheme,
+                        readingMode = session.readingMode,
+                        supportNotifications = session.supportNotifications,
+                        communityNotifications = session.communityNotifications,
+                        onSetNotificationPreference = viewModel::setNotificationPreference,
                         onOpenMarketplaceBusiness = { onMarketplace(RtcRoute.MARKETPLACE_MY_BUSINESSES) },
                         onOpenMarketplaceRoute = { onMarketplace(it) },
                         onSignOut = { showLogoutDialog = true },
@@ -82,6 +121,7 @@ fun AccountScreen(
             AccountHubScreen(
                 session = session,
                 onOpenSettings = { showSettings = true },
+                onOpenProviderProfile = onOpenProfile,
                 onOpenSupport = onHelp,
                 onOpenMarketplaceBusiness = { onMarketplace(RtcRoute.MARKETPLACE_MY_BUSINESSES) },
                 onSignOut = { showLogoutDialog = true },

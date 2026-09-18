@@ -253,13 +253,13 @@ internal class RtcResidentCoordinator(
         }
     }
 
-    fun createPost(text: String, mediaUris: List<Uri> = emptyList()) {
+    fun createPost(text: String, mediaUris: List<Uri> = emptyList(), clientPostId: String = java.util.UUID.randomUUID().toString()) {
         scope.launch {
             _communityActionUi.value = CommunityActionUiState(
                 action = CommunityAction.POST,
                 isWorking = true,
             )
-            repository.createPost(text, mediaUris)
+            repository.createPost(text, mediaUris, clientPostId)
                 .onSuccess {
                     _communityActionUi.value = CommunityActionUiState(
                         action = CommunityAction.POST,

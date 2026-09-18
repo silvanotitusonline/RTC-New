@@ -308,7 +308,7 @@ class RtcViewModel @Inject constructor(
     fun discardDraft(area: DraftArea) = residentCoordinator.discardDraft(area)
     fun reportCommunityPost(postId: String, reason: ModerationReason, detail: String) =
         residentCoordinator.reportCommunityPost(postId, reason, detail)
-    fun createPost(text: String, mediaUris: List<Uri> = emptyList()) = residentCoordinator.createPost(text, mediaUris)
+    fun createPost(text: String, mediaUris: List<Uri> = emptyList(), clientPostId: String = java.util.UUID.randomUUID().toString()) = residentCoordinator.createPost(text, mediaUris, clientPostId)
     fun submitSupportRequest(title: String, detail: String) = residentCoordinator.submitSupportRequest(title, detail)
     fun loadSupportCaseMessages(caseId: String) = residentCoordinator.loadSupportCaseMessages(caseId)
     fun refreshAssignedSupportCases() = residentCoordinator.refreshAssignedSupportCases()

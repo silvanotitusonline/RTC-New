@@ -88,7 +88,7 @@ internal fun CommunityScreen(
     guidelinesAccepted: Boolean?,
     onAcceptGuidelines: () -> Unit,
     onDismissCommunityMessage: () -> Unit,
-    onCreatePost: (String, List<Uri>) -> Unit,
+    onCreatePost: (String, List<Uri>, String) -> Unit,
     onSaveDraft: (String) -> Unit,
     onDiscardDraft: () -> Unit,
     onOpenPost: (CommunityPost) -> Unit,

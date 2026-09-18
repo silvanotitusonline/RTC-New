@@ -121,15 +121,13 @@ def test_notification_permission_launch_is_guarded_at_the_api_33_action_boundary
     assert 'notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)' in notification_dialog
 
 
-def test_home_quick_access_uses_truthful_directory_deep_links():
-    home = _function_body(HOME_SCREEN, 'HomeScreen', ['LiveDashboardMetrics', 'QuickAccessSection'])
-    quick_access = _function_body(HOME_COMPONENTS, 'QuickAccessSection', ['ContinueDraftCard'])
-    assert 'QuickAccessSection(' in HOME_SCREEN
-    assert 'onOpenDirectory = onOpenDirectory' in home
-    assert 'onOpenDirectory("projects")' in quick_access
-    assert 'onOpenDirectory("centres")' in quick_access
-    assert 'Text("Help")' in quick_access
-    assert 'Text("Customise")' not in quick_access
+def test_home_replaces_quick_access_events_and_next_steps_with_rtc_assistant():
+    home = _function_body(HOME_SCREEN, 'HomeScreen', ['LiveDashboardMetrics', 'HomeSection.NEXT_STEPS'])
+    assert 'ResidentAssistantCard(' in home
+    assert 'ResidentAssistantViewModel' in HOME_SCREEN
+    assert 'QuickAccessSection(' not in home
+    assert 'CommunityEventsWeeklySummarySection(' not in home
+    assert 'SectionHeader("Next steps"' not in home
 
 
 def test_home_renderer_uses_only_compiled_validated_sections_and_default_fallback():

@@ -33,19 +33,16 @@ class InteractiveOnboardingTutorialTest {
     fun `onboarding highlighted features map to correct routes`() {
         val communitySnapshotRoute = RtcRoute.HOME
         val marketplaceRoute = RtcRoute.MARKETPLACE_HOME
-        val mapRoute = RtcRoute.EXPLORE
 
         assertEquals("resident_home", communitySnapshotRoute)
         assertEquals("community/marketplace", marketplaceRoute)
-        assertEquals("resident_explore", mapRoute)
     }
 
     @Test
-    fun `tutorial steps correspond to the 3 highlighted features in order`() {
-        val steps = listOf("Community Snapshot", "Marketplace", "Map")
-        assertEquals(3, steps.size)
+    fun `tutorial steps correspond to the remaining highlighted features in order`() {
+        val steps = listOf("Community Snapshot", "Marketplace")
+        assertEquals(2, steps.size)
         assertEquals("Community Snapshot", steps[0])
         assertEquals("Marketplace", steps[1])
-        assertEquals("Map", steps[2])
     }
 }

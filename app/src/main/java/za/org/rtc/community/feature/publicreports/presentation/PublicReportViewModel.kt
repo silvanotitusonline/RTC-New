@@ -71,6 +71,15 @@ class PublicReportViewModel @Inject constructor(
     private var commentsCursorId: String? = null
     private var feedInitialized = false
 
+    init {
+        viewModelScope.launch {
+            repository.dashboardUpdates.collect { dashboard ->
+                dashboard ?: return@collect
+                _feed.update { it.copy(dashboard = dashboard) }
+            }
+        }
+    }
+
     fun loadInitial(initialScope: PublicReportScope = PublicReportScope.VERIFIED) {
         if (feedInitialized) {
             if (_feed.value.filters.effectiveScope != initialScope) setScope(initialScope)

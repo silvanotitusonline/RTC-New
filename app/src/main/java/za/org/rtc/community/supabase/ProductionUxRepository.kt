@@ -871,7 +871,7 @@ class ProductionUxRepository @Inject constructor(
     }
 
     @SuppressLint("UnsafeOptInUsageError")
-    suspend fun createCommunityPost(text: String, mediaUris: List<Uri> = emptyList()): Result<String> = runCatching {
+    suspend fun createCommunityPost(text: String, mediaUris: List<Uri> = emptyList(), clientPostId: String = UUID.randomUUID().toString()): Result<String> = runCatching {
         val cleanText = text.trim()
         require(cleanText.length <= 280) { "A Community post must contain at most 280 characters." }
         require(mediaUris.size <= MAX_MEDIA_PER_POST) { "A Community post can contain at most 10 photos or videos." }
@@ -879,7 +879,10 @@ class ProductionUxRepository @Inject constructor(
         val authorId = authenticatedUserId()
         val draftId = supabase.postgrest.rpc(
             "create_community_post_draft",
-            buildJsonObject { put("p_body", cleanText) },
+            buildJsonObject {
+                put("p_body", cleanText)
+                put("p_client_post_id", clientPostId)
+            },
         ).decodeSingle<String>()
         try {
             mediaUris.forEachIndexed { index, uri ->

@@ -118,7 +118,6 @@ data class HomeLayout(
                 HomeSection.QUICK_ACCESS,
                 HomeSection.CONTINUE_DRAFT,
                 HomeSection.PENDING_SYNC,
-                HomeSection.NEXT_STEPS,
                 HomeSection.LATEST_UPDATES,
                 HomeSection.HELP,
             ),

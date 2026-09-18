@@ -16,6 +16,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import za.org.rtc.community.core.RtcSession
 import za.org.rtc.community.ui.components.RtcCard
@@ -35,7 +37,12 @@ fun AccountHubScreen(
     RtcScreenScaffold {
         item { RtcSectionHeader("Account", "Identity, marketplace, support and settings.") }
         item {
-            RtcCard {
+            RtcCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = "Open resident profile" },
+                onClick = onOpenProviderProfile,
+            ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.small)) {
                     ProfileAvatar(session = session)
                     Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {

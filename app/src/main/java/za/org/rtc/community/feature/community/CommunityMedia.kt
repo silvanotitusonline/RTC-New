@@ -73,6 +73,7 @@ import coil.request.ImageRequest
 import coil.request.videoFrameMillis
 import java.time.Instant
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import za.org.rtc.community.ui.media.RtcMedia3VideoPlayer
 import za.org.rtc.community.core.MediaItem
 import za.org.rtc.community.core.MediaKind
@@ -347,6 +348,7 @@ private fun RecoverableSignedImage(
         refreshing = true
         failed = false
         scope.launch {
+            if (!explicit) delay(350)
             val refreshed = onRefreshUrl(mediaId)
             refreshing = false
             if (refreshed.isNullOrBlank()) {

@@ -44,7 +44,6 @@ fun LiveSyncStatusBanner(
     onManualSync: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isSyncing by isSyncingFlow.collectAsStateWithLifecycle()
     val lastSyncedEpoch by lastSyncedEpochFlow.collectAsStateWithLifecycle()
     val syncCount by syncCountFlow.collectAsStateWithLifecycle()
 
@@ -77,13 +76,11 @@ fun LiveSyncStatusBanner(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(
-                            if (isSyncing) Color(0xFFFFB300) else Color(0xFF4CAF50)
-                        )
+                        .background(Color(0xFF4CAF50))
                 )
 
                 Text(
-                    text = if (isSyncing) "Updating system across all users..." else "System Live • Synced at $formattedTime (#$syncCount)",
+                    text = "System Live • Synced at $formattedTime (#$syncCount)",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
                     maxLines = 1
                 )

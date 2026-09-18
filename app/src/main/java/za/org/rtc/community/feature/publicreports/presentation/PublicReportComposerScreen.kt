@@ -1,5 +1,6 @@
 package za.org.rtc.community.feature.publicreports.presentation
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -53,6 +56,7 @@ fun PublicReportComposerScreen(
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     var showDiscardDialog by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
 
     val isDirty = state.title.isNotBlank() || state.description.isNotBlank() || state.exactAddress.isNotBlank() || state.evidence.isNotEmpty()
     BackHandler(enabled = isDirty) {
@@ -83,7 +87,20 @@ fun PublicReportComposerScreen(
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        uris.take(PublicReportValidation.EVIDENCE_MAX).forEach(viewModel::addEvidence)
+        uris.take(PublicReportValidation.EVIDENCE_MAX).forEach { uri ->
+            // OpenMultipleDocuments grants a persistable read permission when the provider
+            // supports it. Retain it before staging so a recreated Activity can still read the
+            // content:// URI instead of failing with an IllegalStateException later.
+            if (uri.scheme == "content") {
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                }
+            }
+            viewModel.addEvidence(uri)
+        }
     }
     if (state.guidelinesVersion != guidelinesVersion && guidelinesVersion.isNotBlank()) {
         viewModel.setGuidelines(state.guidelinesAccepted, guidelinesVersion)
@@ -155,22 +172,29 @@ fun PublicReportComposerScreen(
                         isError = state.description.isNotEmpty() && !hasMinDescription,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
                     )
-                    Text("When did it start?")
-                    TextButton(onClick = { viewModel.setStartedAt(null) }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(if (state.startedUnknown) "Not sure" else "Use Not sure")
-                    }
-                    Text("Category")
-                    Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
-                        state.categories.forEach { category ->
-                            val selected = state.categoryId == category.id
-                            FilterChip(
-                                selected = selected,
-                                onClick = { viewModel.setCategory(category.id) },
-                                label = { Text(category.label) },
-                                leadingIcon = if (selected) {
-                                    { Icon(Icons.Default.Check, contentDescription = "Selected", modifier = Modifier.size(16.dp)) }
-                                } else null,
-                            )
+                    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(RtcSpacing.standard),
+                            verticalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText),
+                        ) {
+                            Text("When did it start?", fontWeight = FontWeight.SemiBold)
+                            TextButton(onClick = { viewModel.setStartedAt(null) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                                Text(if (state.startedUnknown) "Not sure" else "Use Not sure")
+                            }
+                            Text("Category", fontWeight = FontWeight.SemiBold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
+                                state.categories.forEach { category ->
+                                    val selected = state.categoryId == category.id
+                                    FilterChip(
+                                        selected = selected,
+                                        onClick = { viewModel.setCategory(category.id) },
+                                        label = { Text(category.label) },
+                                        leadingIcon = if (selected) {
+                                            { Icon(Icons.Default.Check, contentDescription = "Selected", modifier = Modifier.size(16.dp)) }
+                                        } else null,
+                                    )
+                                }
+                            }
                         }
                     }
                     Text("Urgency")

@@ -355,7 +355,7 @@ fun MarketplaceNearMeMapView(
                         modifier = Modifier.size(16.dp),
                     )
                     Text(
-                        text = if (!locality.isNullOrBlank()) "Map · $locality" else "Nearby Community Map",
+                        text = if (!locality.isNullOrBlank()) "Map · $locality" else "Nearby business map",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     )
                 }

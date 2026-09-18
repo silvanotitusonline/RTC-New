@@ -15,12 +15,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import za.org.rtc.community.core.HomeLayout
 import za.org.rtc.community.core.HomeSection
-import za.org.rtc.community.core.MainDestination
 import za.org.rtc.community.core.NoticeStatus
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.CompositionLocalProvider
@@ -31,13 +33,14 @@ import za.org.rtc.community.ui.components.NoticeCard
 import za.org.rtc.community.ui.components.PendingSyncIndicator
 import za.org.rtc.community.ui.components.ResidentPullToRefresh
 import za.org.rtc.community.ui.components.SectionHeader
-import za.org.rtc.community.ui.components.SupportCaseCard
 import za.org.rtc.community.ui.config.HomeImageWidgetCard
 import za.org.rtc.community.ui.config.HomeRenderItem
 import za.org.rtc.community.ui.config.renderItems
 import za.org.rtc.community.ui.home.HomeRouteContract
 import za.org.rtc.community.ui.theme.RtcHomeDashboard
 import za.org.rtc.community.ui.theme.RtcSpacing
+import za.org.rtc.community.feature.support.ResidentAssistantCard
+import za.org.rtc.community.feature.support.ResidentAssistantViewModel
 
 @Composable
 internal fun HomeScreen(contract: HomeRouteContract) {
@@ -45,13 +48,11 @@ internal fun HomeScreen(contract: HomeRouteContract) {
     val actions = contract.actions
     val layout = state.layout
     val name = state.displayName
-    val cases = state.cases
     val notices = state.notices
     val readingMode = state.readingMode
     val draft = state.draft
     val pendingSyncCount = state.pendingSyncCount
     val onRefresh = actions.onRefresh
-    val onNavigate = actions.onNavigate
     val onOpenDirectory = actions.onOpenDirectory
     val onOpenNotice = actions.onOpenNotice
     val onResumeDraft = actions.onResumeDraft
@@ -60,6 +61,8 @@ internal fun HomeScreen(contract: HomeRouteContract) {
     val resolvedLayout = remember(layout) { HomeLayout.validatedOrDefault(layout) }
     val renderItems = remember(resolvedLayout) { resolvedLayout.renderItems() }
     val listState = rememberLazyListState()
+    val assistantViewModel: ResidentAssistantViewModel = hiltViewModel()
+    val assistantState by assistantViewModel.state.collectAsStateWithLifecycle()
     ResidentPullToRefresh(
         isRefreshing = state.isRefreshing || state.publicReports.refreshing,
         onRefresh = onRefresh,
@@ -102,18 +105,11 @@ internal fun HomeScreen(contract: HomeRouteContract) {
                             }
                             HomeSection.QUICK_ACCESS -> item(key = "home_quick_access") {
                                 androidx.compose.foundation.layout.Box(modifier = Modifier.parallaxScrollItem(index = 2, rate = 0.05f)) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) {
-                                        QuickAccessSection(
-                                            onNavigate = onNavigate,
-                                            onOpenDirectory = onOpenDirectory,
-                                            onHelp = onHelp,
-                                        )
-                                        CommunityEventsWeeklySummarySection(
-                                            events = state.events,
-                                            onNavigateToCalendar = { onNavigate(MainDestination.EXPLORE) },
-                                            onToggleRsvp = { eventId -> actions.onToggleEventRsvp?.invoke(eventId) }
-                                        )
-                                    }
+                                    ResidentAssistantCard(
+                                        state = assistantState,
+                                        onDraftChange = assistantViewModel::updateDraft,
+                                        onAsk = assistantViewModel::ask,
+                                    )
                                 }
                             }
                         HomeSection.CONTINUE_DRAFT -> draft?.let { savedDraft ->
@@ -126,12 +122,7 @@ internal fun HomeScreen(contract: HomeRouteContract) {
                                 PendingSyncIndicator(pendingSyncCount, "Local changes sync when connected.")
                             }
                         }
-                        HomeSection.NEXT_STEPS -> {
-                            item(key = "home_next_steps_header") {
-                                SectionHeader("Next steps", "View support") { onNavigate(MainDestination.SUPPORT) }
-                            }
-                            items(cases.take(2), key = { "home_case_${it.id}" }) { SupportCaseCard(it) }
-                        }
+                        HomeSection.NEXT_STEPS -> Unit
                         HomeSection.LATEST_UPDATES -> {
                             item(key = "home_latest_updates_header") {
                                 SectionHeader("Official updates", "View all") { onOpenDirectory("notices") }

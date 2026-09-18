@@ -59,12 +59,13 @@ internal fun PostComposer(
     draft: LocalDraft?,
     onDismiss: () -> Unit,
     isSubmitting: Boolean,
-    onSubmit: (String, List<Uri>) -> Unit,
+    onSubmit: (String, List<Uri>, String) -> Unit,
     onSaveDraft: (String) -> Unit,
     onDiscardDraft: () -> Unit,
 ) {
     var composer by remember { mutableStateOf(CommunityComposerState(body = draft?.body.orEmpty())) }
     var isSubmitted by remember { mutableStateOf(false) }
+    val clientPostId = rememberSaveable { UUID.randomUUID().toString() }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var cameraChooserOpen by rememberSaveable { mutableStateOf(false) }
     var leaveConfirmationOpen by rememberSaveable { mutableStateOf(false) }
@@ -114,7 +115,8 @@ internal fun PostComposer(
     }
 
     fun requestClose() {
-        if (composer.isDirty) leaveConfirmationOpen = true else onDismiss()
+        if (isSubmitted || isSubmitting) onDismiss()
+        else if (composer.isDirty) leaveConfirmationOpen = true else onDismiss()
     }
 
     ModalBottomSheet(onDismissRequest = ::requestClose, sheetState = rememberModalBottomSheetState()) {
@@ -186,6 +188,7 @@ internal fun PostComposer(
                         onSubmit(
                             composer.body,
                             composer.attachments.map { Uri.parse(it.uri) },
+                            clientPostId,
                         )
                     },
                     enabled = !isSubmitting && (composer.body.trim().isNotEmpty() || composer.attachments.isNotEmpty()),

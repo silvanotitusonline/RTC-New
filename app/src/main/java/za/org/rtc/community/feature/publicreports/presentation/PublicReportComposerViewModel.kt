@@ -80,12 +80,16 @@ class PublicReportComposerViewModel @Inject constructor(
 
     private val draftTitle = savedStateHandle.get<String>("draft_title").orEmpty()
     private val draftDesc = savedStateHandle.get<String>("draft_desc") ?: descriptionPrefill
+    private val draftPublicLocation = savedStateHandle.get<String>("draft_public_location").orEmpty()
+    private val draftExactAddress = savedStateHandle.get<String>("draft_exact_address").orEmpty()
 
     private val _state = MutableStateFlow(
         PublicReportComposerState(
             clientRequestId = retainedId,
             title = draftTitle,
             description = draftDesc,
+            publicLocationLabel = draftPublicLocation,
+            exactAddress = draftExactAddress,
         ),
     )
     val state = _state.asStateFlow()
@@ -113,8 +117,17 @@ class PublicReportComposerViewModel @Inject constructor(
     fun setCategory(id: String) = _state.update { it.copy(categoryId = id) }
     fun setUrgency(value: PublicReportUrgency) = _state.update { it.copy(urgency = value) }
     fun setIdentity(value: PublicReportIdentityMode) = _state.update { it.copy(identityMode = value) }
-    fun setPublicLocation(value: String) = _state.update { it.copy(publicLocationLabel = value.take(PublicReportValidation.LOCATION_MAX)) }
-    fun setExactAddress(value: String) = _state.update { it.copy(exactAddress = value.take(PublicReportValidation.ADDRESS_MAX)) }
+    fun setPublicLocation(value: String) {
+        val trimmed = value.take(PublicReportValidation.LOCATION_MAX)
+        savedStateHandle["draft_public_location"] = trimmed
+        _state.update { it.copy(publicLocationLabel = trimmed) }
+    }
+
+    fun setExactAddress(value: String) {
+        val trimmed = value.take(PublicReportValidation.ADDRESS_MAX)
+        savedStateHandle["draft_exact_address"] = trimmed
+        _state.update { it.copy(exactAddress = trimmed) }
+    }
     fun setCannotProvideEvidence(value: Boolean) = _state.update { it.copy(cannotProvideEvidence = value) }
     fun setNoEvidenceReason(value: String) = _state.update { it.copy(noEvidenceReason = value.take(PublicReportValidation.EXCEPTION_MAX)) }
     fun setGuidelines(accepted: Boolean, version: String) = _state.update { it.copy(guidelinesAccepted = accepted, guidelinesVersion = version) }

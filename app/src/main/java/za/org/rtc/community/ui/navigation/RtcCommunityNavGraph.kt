@@ -478,6 +478,8 @@ internal fun RtcCommunityNavGraph(
                 onRefresh = viewModel::refreshLiveContent,
                 onHelp = { navController.navigateOverlay(RtcRoute.HELP) },
                 onMarketplace = { navController.navigateOverlay(it) },
+                onOpenProfile = { navController.navigateOverlay(RtcRoute.MY_WORK) },
+                onOpenNotifications = { navController.navigateOverlay(RtcRoute.NOTIFICATIONS) },
             )
         }
         composable(RtcRoute.NOTIFICATIONS) {
