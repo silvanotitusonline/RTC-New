@@ -110,6 +110,9 @@ jobs:
       - name: Run source regression contracts
         run: python3 tools/tests/run_contract_tests.py
 
+      - name: Validate Supabase RPC authorization manifest
+        run: python3 tools/security/verify_rpc_authorization_manifest.py
+
       - name: Run shared Edge authorization tests
         run: deno test supabase/functions/_shared/auth_test.ts
 

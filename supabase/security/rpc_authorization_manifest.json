@@ -1,0 +1,99 @@
+{
+  "manifest_version": 1,
+  "scope": "public RPC authorization boundary",
+  "policy": "Every SECURITY DEFINER function exposed through the public schema must have an explicit caller classification. Anonymous execution is reserved for intentionally public read-only responses.",
+  "anonymous_security_definer_allowlist": [
+    {
+      "name": "civic_report_categories_v1",
+      "identity_arguments": "",
+      "classification": "public-read",
+      "reason": "Public civic-report category catalogue"
+    },
+    {
+      "name": "civic_report_comment_page_v1",
+      "identity_arguments": "p_report_id uuid, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_limit integer",
+      "classification": "public-read",
+      "reason": "Public comments for a public civic report"
+    },
+    {
+      "name": "civic_report_dashboard_v1",
+      "identity_arguments": "",
+      "classification": "public-read",
+      "reason": "Public civic-report dashboard projection"
+    },
+    {
+      "name": "civic_report_dashboard_v2",
+      "identity_arguments": "",
+      "classification": "public-read",
+      "reason": "Public civic-report dashboard projection"
+    },
+    {
+      "name": "civic_report_evidence_public_v1",
+      "identity_arguments": "p_report_id uuid",
+      "classification": "public-read",
+      "reason": "Public evidence projection for a public civic report"
+    },
+    {
+      "name": "civic_report_get_v1",
+      "identity_arguments": "p_report_id uuid",
+      "classification": "public-read",
+      "reason": "Public civic-report detail projection"
+    },
+    {
+      "name": "civic_report_page_v1",
+      "identity_arguments": "p_status text, p_urgency text, p_category_slug text, p_verified boolean, p_sort text, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_limit integer, p_evaluated_at timestamp with time zone",
+      "classification": "public-read",
+      "reason": "Public civic-report feed projection"
+    },
+    {
+      "name": "civic_report_page_v2",
+      "identity_arguments": "p_scope text, p_urgency text, p_category_slug text, p_sort text, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_limit integer, p_evaluated_at timestamp with time zone",
+      "classification": "public-read",
+      "reason": "Public civic-report feed projection"
+    },
+    {
+      "name": "civic_report_timeline_v1",
+      "identity_arguments": "p_report_id uuid",
+      "classification": "public-read",
+      "reason": "Public civic-report status timeline projection"
+    },
+    {
+      "name": "ui_configuration_effective_global",
+      "identity_arguments": "",
+      "classification": "public-read",
+      "reason": "Published global UI configuration projection"
+    }
+  ],
+  "rpc_only_tables": [
+    "access_role_audit_events",
+    "access_role_change_requests",
+    "access_session_controls",
+    "admin_privacy_analytics_activity_events",
+    "admin_privacy_analytics_daily_totals",
+    "api_rate_limits",
+    "app_error_logs",
+    "conversation_members",
+    "conversations",
+    "messages",
+    "moderation_appeals",
+    "notifications",
+    "official_notice_lifecycle_events",
+    "operational_control_events",
+    "operational_controls",
+    "operational_incidents",
+    "operational_service_events",
+    "operational_work_assignment_events",
+    "operational_work_items",
+    "post_likes",
+    "service_centre_booking_events",
+    "service_centre_booking_messages",
+    "service_centre_bookings",
+    "service_centre_provider_profiles",
+    "trending_hashtags"
+  ],
+  "required_rpc_only_table_boundary": {
+    "rls_enabled": true,
+    "direct_grants": [],
+    "required_migration": "20260918001000_close_advisor_rpc_only_table_access.sql"
+  }
+}
