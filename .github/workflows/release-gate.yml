@@ -20,5 +20,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install source-contract Python dependencies
+        run: python3 -m pip install --disable-pip-version-check --no-input Pillow==11.3.0
       - name: Run release gate
         run: ./tools/tests/run_release_gate.sh
