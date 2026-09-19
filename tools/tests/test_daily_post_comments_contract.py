@@ -151,3 +151,24 @@ def test_daily_post_load_runner_requires_staging_objects_and_discovers_fixture()
     assert "where state = 'PUBLISHED'" in load_test
     assert "No published Daily Post fixture" in load_test
     assert "select c.id, c.post_id, c.state, c.created_at" in load_test
+
+
+def test_daily_post_rest_load_runner_is_bounded_and_non_production_only():
+    load_test = (ROOT / "tools/tests/run_daily_post_rest_load_test.py").read_text()
+    assert "LOAD_CLIENTS" in load_test
+    assert "LOAD_REQUESTS" in load_test
+    assert "refusing REST load test against the production project" in load_test
+    assert "daily_post_comments_page_v2" in load_test
+    assert "daily_post_comments" in load_test
+    assert "BASE_URL.endswith(\"/rest/v1\")" in load_test
+
+
+def test_daily_post_drift_deployment_is_idempotent_and_service_role_only():
+    migration = (ROOT / "supabase/migrations/20260919111500_daily_post_count_drift_check_deploy.sql").read_text()
+    assert "create table if not exists public.daily_post_count_drift_events" in migration
+    assert "create unique index if not exists daily_post_count_drift_open_idx" in migration
+    assert "create or replace function public.daily_post_count_drift_check_v1()" in migration
+    assert "revoke all on function public.daily_post_count_drift_check_v1()" in migration
+    assert "grant execute on function public.daily_post_count_drift_check_v1()" in migration
+    assert "to service_role" in migration
+    assert "cron.schedule" in migration
