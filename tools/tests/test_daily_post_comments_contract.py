@@ -139,3 +139,15 @@ def test_daily_post_operational_health_and_release_gate_are_source_controlled():
     assert 'daily_post_audit_events_actor_idx' in migration
     assert 'run_contract_tests.py' in release_gate
     assert 'refusing production load test' in load_test
+
+
+def test_daily_post_load_runner_requires_staging_objects_and_discovers_fixture():
+    load_test = (ROOT / "tools/tests/run_daily_post_load_test.sh").read_text()
+    assert "SUPABASE_TEST_DB_URL" in load_test
+    assert "SUPABASE_TEST_PROJECT_REF" in load_test
+    assert "PGSSLMODE=\"${PGSSLMODE:-require}\"" in load_test
+    assert "to_regclass('public.daily_posts')" in load_test
+    assert "to_regprocedure('public.daily_post_count_drift_check_v1()')" in load_test
+    assert "where state = 'PUBLISHED'" in load_test
+    assert "No published Daily Post fixture" in load_test
+    assert "select c.id, c.post_id, c.state, c.created_at" in load_test
