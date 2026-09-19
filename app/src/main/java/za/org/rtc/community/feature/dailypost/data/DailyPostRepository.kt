@@ -6,10 +6,13 @@ import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -208,16 +211,23 @@ class RoomDailyPostRepository @Inject constructor(
         val channel = supabase.realtime.channel("daily-post-comments-$articleId")
         val changeFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
             table = "daily_post_comments"
-            filter = "post_id=eq.$articleId"
         }
-        val job = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            changeFlow.collect { trySend(Unit).isSuccess }
+        val job = CoroutineScope(Dispatchers.IO).launch {
+            changeFlow.collect { action ->
+                val postId = when (action) {
+                    is PostgresAction.Insert -> action.record["post_id"]?.jsonPrimitive?.content
+                    is PostgresAction.Update -> action.record["post_id"]?.jsonPrimitive?.content
+                    is PostgresAction.Delete -> action.oldRecord["post_id"]?.jsonPrimitive?.content
+                    else -> null
+                }
+                if (postId == articleId) trySend(Unit).isSuccess
+            }
         }
         runCatching { channel.subscribe() }
             .onFailure { close(it) }
         awaitClose {
             job.cancel()
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            CoroutineScope(Dispatchers.IO).launch {
                 runCatching { channel.unsubscribe() }
             }
         }

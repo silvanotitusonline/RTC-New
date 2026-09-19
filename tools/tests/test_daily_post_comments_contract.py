@@ -94,7 +94,8 @@ def test_daily_post_realtime_subscription_is_post_scoped_and_route_owned():
     view_model = (ROOT / "app/src/main/java/za/org/rtc/community/feature/dailypost/ui/DailyPostViewModel.kt").read_text()
     nav = NAV.read_text()
     assert 'channel("daily-post-comments-$articleId")' in repository
-    assert 'filter = "post_id=eq.$articleId"' in repository
+    assert 'postId == articleId' in repository
+    assert 'action.record["post_id"]' in repository
     assert 'postgresChangeFlow<PostgresAction>' in repository
     assert 'debounce(250)' in view_model
     assert 'stopObservingComments()' in view_model
