@@ -257,32 +257,38 @@ class RoomDailyPostRepository @Inject constructor(
         )
     }
 
-    override suspend fun deleteComment(commentId: String) = withRpcMetrics("comment_delete") {
-        supabase.postgrest.rpc(
-            "daily_post_comment_delete_v1",
-            buildJsonObject { put("p_comment_id", commentId) },
-        )
+    override suspend fun deleteComment(commentId: String) {
+        withRpcMetrics("comment_delete") {
+            supabase.postgrest.rpc(
+                "daily_post_comment_delete_v1",
+                buildJsonObject { put("p_comment_id", commentId) },
+            )
+        }
     }
 
-    override suspend fun moderateComment(commentId: String, reason: String) = withRpcMetrics("comment_moderate") {
-        supabase.postgrest.rpc(
-            "daily_post_comment_moderate_v1",
-            buildJsonObject {
-                put("p_comment_id", commentId)
-                put("p_reason", reason.trim())
-            },
-        )
+    override suspend fun moderateComment(commentId: String, reason: String) {
+        withRpcMetrics("comment_moderate") {
+            supabase.postgrest.rpc(
+                "daily_post_comment_moderate_v1",
+                buildJsonObject {
+                    put("p_comment_id", commentId)
+                    put("p_reason", reason.trim())
+                },
+            )
+        }
     }
 
-    override suspend fun reportComment(commentId: String, reasonCode: String, detail: String) = withRpcMetrics("comment_report") {
-        supabase.postgrest.rpc(
-            "daily_post_comment_report_v1",
-            buildJsonObject {
-                put("p_comment_id", commentId)
-                put("p_reason_code", reasonCode)
-                put("p_detail", detail.trim())
-            },
-        )
+    override suspend fun reportComment(commentId: String, reasonCode: String, detail: String) {
+        withRpcMetrics("comment_report") {
+            supabase.postgrest.rpc(
+                "daily_post_comment_report_v1",
+                buildJsonObject {
+                    put("p_comment_id", commentId)
+                    put("p_reason_code", reasonCode)
+                    put("p_detail", detail.trim())
+                },
+            )
+        }
     }
 
     private suspend fun <T> withRpcMetrics(rpcName: String, operation: suspend () -> T): T {
