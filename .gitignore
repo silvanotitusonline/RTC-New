@@ -39,3 +39,6 @@ __pycache__/
 qa/appetize/node_modules/
 qa/appetize/playwright-report/
 qa/appetize/test-results/
+
+# Local non-production database credentials
+tools/tests/.env.daily-post-staging
