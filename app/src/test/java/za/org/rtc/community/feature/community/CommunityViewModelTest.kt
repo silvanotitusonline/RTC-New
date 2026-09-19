@@ -312,6 +312,8 @@ class CommunityViewModelTest {
 
         override suspend fun updateComment(commentId: String, body: String): Result<Unit> = updates.removeFirst()
 
+        override suspend fun updatePost(postId: String, body: String, category: String): Result<Unit> = Result.success(Unit)
+
         override suspend fun deleteComment(commentId: String): Result<Unit> = deletes.removeFirst()
 
         override suspend fun deletePost(postId: String): Result<Unit> = postDeletes.removeFirst()
