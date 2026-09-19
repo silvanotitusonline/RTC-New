@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -192,15 +193,17 @@ class RoomDailyPostRepository @Inject constructor(
         limit: Int,
     ): DailyPostCommentPage {
         val boundedLimit = limit.coerceIn(1, 200)
-        val rows = supabase.postgrest.rpc(
-            "daily_post_comments_page_v1",
-            buildJsonObject {
-                put("p_post_id", articleId)
-                afterCreatedAt?.let { put("p_after_created_at", it) }
-                afterId?.let { put("p_after_id", it) }
-                put("p_limit", boundedLimit)
-            },
-        ).decodeList<DailyPostCommentRemoteRow>()
+        val rows = withRpcMetrics("comments_page") {
+            supabase.postgrest.rpc(
+                "daily_post_comments_page_v1",
+                buildJsonObject {
+                    put("p_post_id", articleId)
+                    afterCreatedAt?.let { put("p_after_created_at", it) }
+                    afterId?.let { put("p_after_id", it) }
+                    put("p_limit", boundedLimit)
+                },
+            ).decodeList<DailyPostCommentRemoteRow>()
+        }
         return DailyPostCommentPage(
             comments = rows.map { it.toDomain() },
             hasMore = rows.size == boundedLimit,
@@ -233,7 +236,7 @@ class RoomDailyPostRepository @Inject constructor(
         }
     }
 
-    override suspend fun createComment(articleId: String, body: String, parentId: String?): String =
+    override suspend fun createComment(articleId: String, body: String, parentId: String?): String = withRpcMetrics("comment_create") {
         supabase.postgrest.rpc(
             "daily_post_comment_create_v1",
             buildJsonObject {
@@ -242,6 +245,7 @@ class RoomDailyPostRepository @Inject constructor(
                 parentId?.let { put("p_parent_id", it) }
             },
         ).decodeSingle<String>()
+    }
 
     override suspend fun updateComment(commentId: String, body: String) {
         supabase.postgrest.rpc(
@@ -253,14 +257,14 @@ class RoomDailyPostRepository @Inject constructor(
         )
     }
 
-    override suspend fun deleteComment(commentId: String) {
+    override suspend fun deleteComment(commentId: String) = withRpcMetrics("comment_delete") {
         supabase.postgrest.rpc(
             "daily_post_comment_delete_v1",
             buildJsonObject { put("p_comment_id", commentId) },
         )
     }
 
-    override suspend fun moderateComment(commentId: String, reason: String) {
+    override suspend fun moderateComment(commentId: String, reason: String) = withRpcMetrics("comment_moderate") {
         supabase.postgrest.rpc(
             "daily_post_comment_moderate_v1",
             buildJsonObject {
@@ -270,7 +274,7 @@ class RoomDailyPostRepository @Inject constructor(
         )
     }
 
-    override suspend fun reportComment(commentId: String, reasonCode: String, detail: String) {
+    override suspend fun reportComment(commentId: String, reasonCode: String, detail: String) = withRpcMetrics("comment_report") {
         supabase.postgrest.rpc(
             "daily_post_comment_report_v1",
             buildJsonObject {
@@ -279,6 +283,36 @@ class RoomDailyPostRepository @Inject constructor(
                 put("p_detail", detail.trim())
             },
         )
+    }
+
+    private suspend fun <T> withRpcMetrics(rpcName: String, operation: suspend () -> T): T {
+        val startedAt = System.nanoTime()
+        return try {
+            operation().also { recordRpcMetric(rpcName, startedAt, "SUCCESS", null) }
+        } catch (error: Throwable) {
+            val outcome = when {
+                error is TimeoutCancellationException -> "TIMEOUT"
+                error.message?.contains("Authentication", ignoreCase = true) == true ||
+                    error.message?.contains("permission", ignoreCase = true) == true -> "AUTHORIZATION_FAILURE"
+                else -> "ERROR"
+            }
+            recordRpcMetric(rpcName, startedAt, outcome, error.message)
+            throw error
+        }
+    }
+
+    private suspend fun recordRpcMetric(rpcName: String, startedAt: Long, outcome: String, error: String?) {
+        runCatching {
+            supabase.postgrest.rpc(
+                "daily_post_rpc_metric_record_v1",
+                buildJsonObject {
+                    put("p_rpc_name", rpcName)
+                    put("p_duration_ms", ((System.nanoTime() - startedAt) / 1_000_000L).toInt())
+                    put("p_outcome", outcome)
+                    error?.takeIf { it.isNotBlank() }?.let { put("p_error_code", it.take(120)) }
+                },
+            )
+        }
     }
 
     private fun DailyPostArticle.toDraftPayload(existingId: String?) = buildJsonObject {

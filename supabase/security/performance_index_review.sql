@@ -21,7 +21,7 @@ with foreign_keys as (
     exists (
       select 1
       from pg_index i
-        and i.indrelid = fk.child_oid
+      where i.indrelid = fk.child_oid
         and i.indisvalid
         and i.indisready
         and (i.indkey::smallint[] @> fk.constrained_columns::smallint[])

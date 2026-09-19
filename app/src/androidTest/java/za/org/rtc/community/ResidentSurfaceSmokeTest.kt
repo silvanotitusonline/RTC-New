@@ -89,7 +89,7 @@ class ResidentSurfaceSmokeTest {
                     guidelinesAccepted = true,
                     onAcceptGuidelines = {},
                     onDismissCommunityMessage = {},
-                    onCreatePost = { _, _ -> },
+                    onCreatePost = { _, _, _ -> },
                     onSaveDraft = {},
                     onDiscardDraft = {},
                     onOpenPost = {},
@@ -167,6 +167,8 @@ class ResidentSurfaceSmokeTest {
         override suspend fun createComment(postId: String, body: String, parentId: String?): Result<Unit> = Result.success(Unit)
 
         override suspend fun updateComment(commentId: String, body: String): Result<Unit> = Result.success(Unit)
+
+        override suspend fun updatePost(postId: String, body: String, category: String): Result<Unit> = Result.success(Unit)
 
         override suspend fun deleteComment(commentId: String): Result<Unit> = Result.success(Unit)
 

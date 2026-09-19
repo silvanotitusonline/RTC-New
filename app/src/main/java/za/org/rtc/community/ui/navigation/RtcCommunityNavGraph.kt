@@ -630,6 +630,7 @@ internal fun RtcCommunityNavGraph(
                 }
             }
             val selectedArticle by dailyPostViewModel.selectedArticle.collectAsStateWithLifecycle()
+            val dailyPostLiveStatus by dailyPostViewModel.commentsLiveStatus.collectAsStateWithLifecycle()
             DailyPostDetailScreen(
                 article = selectedArticle,
                 onBack = { navController.popBackStack() },
@@ -646,6 +647,7 @@ internal fun RtcCommunityNavGraph(
                 comments = dailyPostComments,
                 commentsLoading = dailyPostCommentsLoading,
                 commentsHasMore = dailyPostCommentsHasMore,
+                liveUpdatesAvailable = dailyPostLiveStatus != DailyPostViewModel.LiveUpdateStatus.UNAVAILABLE,
                 pendingCommentId = dailyPostCommentPendingId,
                 currentUserId = session.id,
                 canModerateComments = session.role == UserRole.MODERATOR || session.role == UserRole.SYSTEM_ADMIN,

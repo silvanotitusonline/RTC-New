@@ -113,3 +113,29 @@ def test_daily_post_moderation_and_cursor_contracts_are_bounded():
     assert 'limit.coerceIn(1, 200)' in repository
     assert 'commentsHasMore' in view_model or '_commentsHasMore' in view_model
     assert 'distinctBy { it.id }' in view_model
+
+
+def test_daily_post_operational_health_and_release_gate_are_source_controlled():
+    repository = REPOSITORY.read_text()
+    view_model = VIEW_MODEL.read_text()
+    detail = DETAIL.read_text()
+    migration = (ROOT / "supabase/migrations/20260919098000_daily_post_operational_health.sql").read_text()
+    release_gate = (ROOT / "tools/tests/run_release_gate.sh").read_text()
+    load_test = (ROOT / "tools/tests/run_daily_post_load_test.sh").read_text()
+    assert 'withRpcMetrics("comments_page")' in repository
+    for rpc in ("comment_create", "comment_delete", "comment_moderate", "comment_report"):
+        assert f'withRpcMetrics("{rpc}")' in repository
+    assert 'AUTHORIZATION_FAILURE' in repository
+    assert 'LiveUpdateStatus.UNAVAILABLE' in view_model
+    assert 'liveUpdatesAvailable' in detail
+    for function_name in (
+        'daily_post_rpc_metric_record_v1', 'daily_post_rpc_health_v1',
+        'daily_post_report_queue_v1', 'daily_post_report_transition_v1',
+        'daily_post_report_summary_v1', 'daily_post_count_drift_check_v1',
+    ):
+        assert function_name in migration
+    assert 'daily_post_comment_reports_reporter_idx' in migration
+    assert 'daily_post_comment_reports_reviewed_by_idx' in migration
+    assert 'daily_post_audit_events_actor_idx' in migration
+    assert 'run_contract_tests.py' in release_gate
+    assert 'refusing production load test' in load_test

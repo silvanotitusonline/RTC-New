@@ -16,6 +16,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +24,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 import za.org.rtc.community.MainActivity
 import za.org.rtc.community.R
 import za.org.rtc.community.feature.dailypost.data.DailyPostRepository
@@ -39,6 +42,8 @@ class DailyPostViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val syncEngine: za.org.rtc.community.core.sync.SystemUpdateSyncEngine = za.org.rtc.community.core.sync.SystemUpdateSyncEngine(),
 ) : ViewModel() {
+
+    enum class LiveUpdateStatus { CONNECTING, LIVE, UNAVAILABLE }
 
     val publishedArticles: StateFlow<List<DailyPostArticle>> = repository
         .observePublishedArticles()
@@ -74,6 +79,9 @@ class DailyPostViewModel @Inject constructor(
     private val _commentsHasMore = MutableStateFlow(false)
     val commentsHasMore: StateFlow<Boolean> = _commentsHasMore.asStateFlow()
 
+    private val _commentsLiveStatus = MutableStateFlow(LiveUpdateStatus.CONNECTING)
+    val commentsLiveStatus: StateFlow<LiveUpdateStatus> = _commentsLiveStatus.asStateFlow()
+
     private var commentRealtimeJob: Job? = null
 
     init {
@@ -106,7 +114,13 @@ class DailyPostViewModel @Inject constructor(
         commentRealtimeJob?.cancel()
         commentRealtimeJob = viewModelScope.launch {
             repository.observeCommentChanges(articleId)
+                .onStart { _commentsLiveStatus.value = LiveUpdateStatus.CONNECTING }
+                .onEach { _commentsLiveStatus.value = LiveUpdateStatus.LIVE }
                 .debounce(250)
+                .catch {
+                    _commentsLiveStatus.value = LiveUpdateStatus.UNAVAILABLE
+                    _statusMessage.value = "Live comment updates are unavailable. Use refresh to check for new comments."
+                }
                 .collectLatest { loadCommentsInternal(articleId, showLoading = false, reset = true) }
         }
     }

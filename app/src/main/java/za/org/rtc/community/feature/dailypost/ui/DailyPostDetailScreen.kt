@@ -69,6 +69,7 @@ fun DailyPostDetailScreen(
     comments: List<DailyPostComment> = emptyList(),
     commentsLoading: Boolean = false,
     commentsHasMore: Boolean = false,
+    liveUpdatesAvailable: Boolean = true,
     pendingCommentId: String? = null,
     currentUserId: String? = null,
     canModerateComments: Boolean = false,
@@ -443,6 +444,26 @@ fun DailyPostDetailScreen(
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                if (!liveUpdatesAvailable) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                "Live updates unavailable. Comments may be stale.",
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Button(onClick = onRefreshComments) { Text("Refresh") }
+                        }
+                    }
+                }
 
                 DailyPostCommentsSection(
                     articleId = article.id,
