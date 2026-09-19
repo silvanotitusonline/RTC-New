@@ -2,6 +2,12 @@ package za.org.rtc.community.feature.dailypost.data
 
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import io.github.jan.supabase.realtime.realtime
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.SerialName
@@ -39,10 +45,12 @@ interface DailyPostRepository {
         afterId: String? = null,
         limit: Int = 100,
     ): DailyPostCommentPage
+    fun observeCommentChanges(articleId: String): Flow<Unit>
     suspend fun createComment(articleId: String, body: String, parentId: String? = null): String
     suspend fun updateComment(commentId: String, body: String)
     suspend fun deleteComment(commentId: String)
     suspend fun moderateComment(commentId: String, reason: String)
+    suspend fun reportComment(commentId: String, reasonCode: String, detail: String)
 }
 
 @Serializable
@@ -196,6 +204,25 @@ class RoomDailyPostRepository @Inject constructor(
         )
     }
 
+    override fun observeCommentChanges(articleId: String): Flow<Unit> = callbackFlow {
+        val channel = supabase.realtime.channel("daily-post-comments-$articleId")
+        val changeFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+            table = "daily_post_comments"
+            filter = "post_id=eq.$articleId"
+        }
+        val job = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            changeFlow.collect { trySend(Unit).isSuccess }
+        }
+        runCatching { channel.subscribe() }
+            .onFailure { close(it) }
+        awaitClose {
+            job.cancel()
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                runCatching { channel.unsubscribe() }
+            }
+        }
+    }
+
     override suspend fun createComment(articleId: String, body: String, parentId: String?): String =
         supabase.postgrest.rpc(
             "daily_post_comment_create_v1",
@@ -229,6 +256,17 @@ class RoomDailyPostRepository @Inject constructor(
             buildJsonObject {
                 put("p_comment_id", commentId)
                 put("p_reason", reason.trim())
+            },
+        )
+    }
+
+    override suspend fun reportComment(commentId: String, reasonCode: String, detail: String) {
+        supabase.postgrest.rpc(
+            "daily_post_comment_report_v1",
+            buildJsonObject {
+                put("p_comment_id", commentId)
+                put("p_reason_code", reasonCode)
+                put("p_detail", detail.trim())
             },
         )
     }

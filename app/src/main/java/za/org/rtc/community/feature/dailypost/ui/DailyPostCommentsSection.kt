@@ -60,6 +60,7 @@ fun DailyPostCommentsSection(
     onUpdate: (String, String) -> Unit,
     onDelete: (String) -> Unit,
     onModerate: (String, String) -> Unit,
+    onReport: (String, String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var composerText by remember(articleId) { mutableStateOf("") }
@@ -68,13 +69,15 @@ fun DailyPostCommentsSection(
     var deleteTargetId by remember { mutableStateOf<String?>(null) }
     var moderateTargetId by remember { mutableStateOf<String?>(null) }
     var moderationReason by remember { mutableStateOf("") }
+    var reportTargetId by remember { mutableStateOf<String?>(null) }
+    var reportDetail by remember { mutableStateOf("") }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("Comments", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
                 Text(
-                    text = if (totalCount == 0) "Join the conversation respectfully." else "$totalCount comment${if (totalCount == 1) "" else "s"} in this article",
+                    text = if (totalCount == 0) "Join the conversation respectfully." else "$totalCount visible comment${if (totalCount == 1) "" else "s"} in this article",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -146,6 +149,7 @@ fun DailyPostCommentsSection(
                     onEdit = { editingCommentId = comment.id; composerText = comment.body; replyToCommentId = null },
                     onDelete = { deleteTargetId = comment.id },
                     onModerate = { moderateTargetId = comment.id; moderationReason = "" },
+                    onReport = { reportTargetId = comment.id; reportDetail = "" },
                 )
             }
             if (hasMore) {
@@ -186,6 +190,28 @@ fun DailyPostCommentsSection(
             dismissButton = { TextButton(onClick = { moderateTargetId = null }, enabled = pendingCommentId == null) { Text("Cancel") } },
         )
     }
+
+    reportTargetId?.let { targetId ->
+        AlertDialog(
+            onDismissRequest = { if (pendingCommentId == null) reportTargetId = null },
+            title = { Text("Report comment") },
+            text = {
+                OutlinedTextField(
+                    value = reportDetail,
+                    onValueChange = { if (it.length <= 1000) reportDetail = it },
+                    label = { Text("Why should this be reviewed?") },
+                    supportingText = { Text("${reportDetail.length}/1000") },
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onReport(targetId, "OTHER", reportDetail.trim()); reportTargetId = null },
+                    enabled = pendingCommentId == null,
+                ) { Text("Report") }
+            },
+            dismissButton = { TextButton(onClick = { reportTargetId = null }, enabled = pendingCommentId == null) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable
@@ -198,6 +224,7 @@ private fun DailyPostCommentRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onModerate: () -> Unit,
+    onReport: () -> Unit,
 ) {
     val isOwner = comment.authorId == currentUserId
     Card(
@@ -230,6 +257,9 @@ private fun DailyPostCommentRow(
                 }
                 if (canModerate) {
                     TextButton(onClick = onModerate, enabled = !isPending) { Icon(Icons.Filled.Flag, contentDescription = null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Hide") }
+                }
+                if (!isOwner) {
+                    TextButton(onClick = onReport, enabled = !isPending) { Icon(Icons.Filled.Flag, contentDescription = null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Report") }
                 }
             }
         }

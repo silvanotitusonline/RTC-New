@@ -78,6 +78,7 @@ fun DailyPostDetailScreen(
     onUpdateComment: (String, String) -> Unit = { _, _ -> },
     onDeleteComment: (String) -> Unit = {},
     onModerateComment: (String, String) -> Unit = { _, _ -> },
+    onReportComment: (String, String, String) -> Unit = { _, _, _ -> },
 ) {
     if (article == null) {
         Scaffold(
@@ -458,6 +459,7 @@ fun DailyPostDetailScreen(
                     onUpdate = onUpdateComment,
                     onDelete = onDeleteComment,
                     onModerate = onModerateComment,
+                    onReport = onReportComment,
                 )
             }
         }

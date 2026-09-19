@@ -14,6 +14,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +74,8 @@ class DailyPostViewModel @Inject constructor(
     private val _commentsHasMore = MutableStateFlow(false)
     val commentsHasMore: StateFlow<Boolean> = _commentsHasMore.asStateFlow()
 
+    private var commentRealtimeJob: Job? = null
+
     init {
         viewModelScope.launch {
             runCatching {
@@ -95,6 +100,20 @@ class DailyPostViewModel @Inject constructor(
 
     fun refreshComments(articleId: String) {
         viewModelScope.launch { loadCommentsInternal(articleId, showLoading = false, reset = true) }
+    }
+
+    fun observeComments(articleId: String) {
+        commentRealtimeJob?.cancel()
+        commentRealtimeJob = viewModelScope.launch {
+            repository.observeCommentChanges(articleId)
+                .debounce(250)
+                .collectLatest { loadCommentsInternal(articleId, showLoading = false, reset = true) }
+        }
+    }
+
+    fun stopObservingComments() {
+        commentRealtimeJob?.cancel()
+        commentRealtimeJob = null
     }
 
     fun loadOlderComments(articleId: String) {
@@ -188,6 +207,20 @@ class DailyPostViewModel @Inject constructor(
         }
     }
 
+    fun reportComment(articleId: String, commentId: String, reasonCode: String, detail: String) {
+        viewModelScope.launch {
+            _commentPendingId.value = commentId
+            runCatching {
+                repository.reportComment(commentId, reasonCode, detail)
+                _statusMessage.value = "Report submitted for moderation review."
+            }.onFailure { error ->
+                _statusMessage.value = error.message?.takeIf { it.isNotBlank() }
+                    ?: "The report could not be submitted."
+            }
+            _commentPendingId.value = null
+        }
+    }
+
     private suspend fun loadCommentsInternal(
         articleId: String,
         showLoading: Boolean = true,
@@ -206,6 +239,11 @@ class DailyPostViewModel @Inject constructor(
                     ?: "Comments could not be loaded. Pull to try again."
             }
         if (showLoading) _commentsLoading.value = false
+    }
+
+    override fun onCleared() {
+        stopObservingComments()
+        super.onCleared()
     }
 
     fun publishArticle(article: DailyPostArticle, onSuccess: () -> Unit = {}) {

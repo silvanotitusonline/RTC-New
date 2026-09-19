@@ -194,7 +194,7 @@ def test_community_upload_recovery_is_scoped_to_the_authenticated_owner():
     assert '@ColumnInfo(name = "owner_user_id") val ownerUserId: String? = null' in database
     assert "LocalDraftEntity::class" in database and "UploadOutboxEntity::class" in database
     # Schema advanced beyond the original v3/v6 recovery surface; require a current version and forward migrations.
-    assert "version = 9" in database or "version = 8" in database or "version = 7" in database or "version = 6" in database
+    assert any(f"version = {version}" in database for version in (11, 10, 9, 8, 7, 6))
     assert "RTC_DATABASE_MIGRATION_1_2" in database
     assert "RTC_DATABASE_MIGRATION_2_3" in database
     assert "ALTER TABLE community_upload_outbox ADD COLUMN owner_user_id TEXT" in database

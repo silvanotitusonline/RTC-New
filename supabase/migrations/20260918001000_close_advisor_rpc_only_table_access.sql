@@ -28,7 +28,8 @@ revoke all on table
   public.service_centre_booking_messages,
   public.service_centre_bookings,
   public.service_centre_provider_profiles,
-  public.trending_hashtags
+  public.trending_hashtags,
+  public.daily_post_comment_reports
 from public, anon, authenticated;
 
 commit;

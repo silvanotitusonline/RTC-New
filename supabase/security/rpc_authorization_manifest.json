@@ -93,7 +93,8 @@
     "service_centre_booking_messages",
     "service_centre_bookings",
     "service_centre_provider_profiles",
-    "trending_hashtags"
+    "trending_hashtags",
+    "daily_post_comment_reports"
   ],
   "required_rpc_only_table_boundary": {
     "rls_enabled": true,

@@ -51,8 +51,64 @@ def test_daily_post_detail_has_composer_and_owner_moderator_actions():
 def test_daily_post_comments_refresh_while_article_is_open_and_cache_migrates():
     nav = NAV.read_text()
     database = DATABASE.read_text()
-    assert "delay(15_000)" in nav
-    assert "refreshComments(articleId)" in nav
+    repository = REPOSITORY.read_text()
+    migration = (ROOT / "supabase/migrations/20260919090000_daily_post_comments_realtime_and_visible_count.sql").read_text()
+    assert "observeComments(articleId)" in nav
+    assert "stopObservingComments()" in nav
+    assert "observeCommentChanges" in repository
+    assert "daily_post_comments" in repository
+    assert "daily_post_comment_count_sync" in migration
+    assert "UPDATE" in migration
+    assert "state = 'VISIBLE'" in migration
     assert "onLoadOlderComments" in nav
     assert "RTC_DATABASE_MIGRATION_10_11" in database
     assert "commentCount" in database
+
+
+def test_daily_post_comment_reporting_is_authenticated_rate_limited_and_rpc_only():
+    repository = REPOSITORY.read_text()
+    comments = COMMENTS.read_text()
+    detail = (ROOT / "app/src/main/java/za/org/rtc/community/feature/dailypost/ui/DailyPostDetailScreen.kt").read_text()
+    migration = (ROOT / "supabase/migrations/20260919095000_daily_post_comment_reporting.sql").read_text()
+    manifest = (ROOT / "supabase/security/rpc_authorization_manifest.json").read_text()
+    assert 'daily_post_comment_report_v1' in repository
+    assert 'onReportComment' in detail
+    assert 'Report comment' in comments
+    assert "auth.uid() is null" in migration
+    assert "recent_count >= 10" in migration
+    assert "daily_post_comment_reports_rpc_only" in migration
+    assert '"daily_post_comment_reports"' in manifest
+
+
+def test_daily_post_comment_reads_match_visible_count_contract():
+    migration = (ROOT / "supabase/migrations/20260919096000_daily_post_comment_visible_read_boundary.sql").read_text()
+    assert "c.state = 'VISIBLE'" in migration
+    assert "daily_post_comments_page_v1" in migration
+    assert "daily_post_comments_page_v2" in migration
+    assert "p_after_created_at" in migration
+    assert "p_before_created_at" in migration
+
+
+def test_daily_post_realtime_subscription_is_post_scoped_and_route_owned():
+    repository = REPOSITORY.read_text()
+    view_model = (ROOT / "app/src/main/java/za/org/rtc/community/feature/dailypost/ui/DailyPostViewModel.kt").read_text()
+    nav = NAV.read_text()
+    assert 'channel("daily-post-comments-$articleId")' in repository
+    assert 'filter = "post_id=eq.$articleId"' in repository
+    assert 'postgresChangeFlow<PostgresAction>' in repository
+    assert 'debounce(250)' in view_model
+    assert 'stopObservingComments()' in view_model
+    assert 'awaitCancellation()' in nav
+    assert 'finally' in nav
+
+
+def test_daily_post_moderation_and_cursor_contracts_are_bounded():
+    repository = REPOSITORY.read_text()
+    view_model = (ROOT / "app/src/main/java/za/org/rtc/community/feature/dailypost/ui/DailyPostViewModel.kt").read_text()
+    assert 'daily_post_comment_moderate_v1' in repository
+    assert 'daily_post_comment_delete_v1' in repository
+    assert 'p_after_created_at' in repository
+    assert 'p_after_id' in repository
+    assert 'limit.coerceIn(1, 200)' in repository
+    assert 'commentsHasMore' in view_model or '_commentsHasMore' in view_model
+    assert 'distinctBy { it.id }' in view_model

@@ -58,8 +58,8 @@ def main() -> int:
             fail(f"anonymous allowlist entry is not read-only by description: {entry['name']}")
 
     tables = manifest.get("rpc_only_tables", [])
-    if len(tables) != 25 or len(tables) != len(set(tables)):
-        fail("RPC-only table list must contain 25 unique tables")
+    if len(tables) != 26 or len(tables) != len(set(tables)):
+        fail("RPC-only table list must contain 26 unique tables")
     for table in tables:
         if not re.fullmatch(r"[a-z0-9_]+", table):
             fail(f"unsafe table name: {table}")

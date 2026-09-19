@@ -21,7 +21,7 @@ def test_rpc_authorization_manifest_is_validated_by_the_checked_in_checker():
         text=True,
     )
     assert result.returncode == 0, result.stderr or result.stdout
-    assert "25 RPC-only tables" in result.stdout
+    assert "26 RPC-only tables" in result.stdout
 
 
 def test_manifest_has_only_explicit_public_read_anonymous_entries():

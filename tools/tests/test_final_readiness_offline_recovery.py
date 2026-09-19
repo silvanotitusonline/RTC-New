@@ -22,8 +22,8 @@ def test_local_drafts_are_account_scoped_with_forward_room_migration():
     assert 'DROP TABLE local_drafts' in database
     assert 'ALTER TABLE local_drafts_v3 RENAME TO local_drafts' in database
     assert 'INSERT INTO local_drafts_v3' not in database
-    # Current production schema is version 9 after subsequent cache/media migrations.
-    assert 'version = 9' in database or 'version = 8' in database or 'version = 7' in database or 'version = 6' in database
+    # Current production schema is version 11 after subsequent cache/media migrations.
+    assert any(f'version = {version}' in database for version in (11, 10, 9, 8, 7, 6))
 
     assert 'import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_2_3' in module
     assert 'RTC_DATABASE_MIGRATION_1_2' in module and 'RTC_DATABASE_MIGRATION_2_3' in module

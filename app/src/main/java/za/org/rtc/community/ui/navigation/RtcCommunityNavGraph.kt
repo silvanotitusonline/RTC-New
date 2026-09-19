@@ -17,7 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.awaitCancellation
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -621,10 +621,12 @@ internal fun RtcCommunityNavGraph(
         ) { entry ->
             val articleId = entry.arguments?.getString("articleId").orEmpty()
             androidx.compose.runtime.LaunchedEffect(articleId) {
-                dailyPostViewModel.loadArticleById(articleId)
-                while (true) {
-                    delay(15_000)
-                    dailyPostViewModel.refreshComments(articleId)
+                try {
+                    dailyPostViewModel.loadArticleById(articleId)
+                    dailyPostViewModel.observeComments(articleId)
+                    awaitCancellation()
+                } finally {
+                    dailyPostViewModel.stopObservingComments()
                 }
             }
             val selectedArticle by dailyPostViewModel.selectedArticle.collectAsStateWithLifecycle()
@@ -653,6 +655,7 @@ internal fun RtcCommunityNavGraph(
                 onUpdateComment = { commentId, body -> dailyPostViewModel.updateComment(articleId, commentId, body) },
                 onDeleteComment = { commentId -> dailyPostViewModel.deleteComment(articleId, commentId) },
                 onModerateComment = { commentId, reason -> dailyPostViewModel.moderateComment(articleId, commentId, reason) },
+                onReportComment = { commentId, reasonCode, detail -> dailyPostViewModel.reportComment(articleId, commentId, reasonCode, detail) },
             )
         }
     }
