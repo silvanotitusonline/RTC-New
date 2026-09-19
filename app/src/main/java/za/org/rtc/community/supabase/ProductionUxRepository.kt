@@ -1286,6 +1286,16 @@ class ProductionUxRepository @Inject constructor(
         remote.orEmpty()
     }
 
+    suspend fun moderationActivity(
+        limit: Int = 100,
+        offset: Int = 0,
+    ): Result<List<AdministrativeActivityEvent>> = runCatching {
+        supabase.postgrest.rpc("moderation_list_activity", buildJsonObject {
+            put("p_limit", limit.coerceIn(1, 200))
+            put("p_offset", offset.coerceAtLeast(0))
+        }).decodeList<AdministrativeActivityEvent>()
+    }
+
     suspend fun operationalIncidents(): Result<List<OperationalIncident>> = runCatching {
         val remote = runCatching {
             supabase.postgrest.rpc("ops_list_incidents").decodeList<OperationalIncident>()

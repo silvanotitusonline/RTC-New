@@ -30,8 +30,11 @@ data class DailyPostEntity(
     val publishedAtEpochMillis: Long,
     val readTimeMinutes: Int,
     val reactionsCount: Int,
+    val commentCount: Int = 0,
     val viewerHasLiked: Boolean,
     val isPublished: Boolean,
+    val pushEnabled: Boolean = false,
+    val previewPopupEnabled: Boolean = true,
 ) {
     fun toDomain(): DailyPostArticle {
         val highlights = runCatching {
@@ -55,8 +58,11 @@ data class DailyPostEntity(
             publishedAtEpochMillis = publishedAtEpochMillis,
             readTimeMinutes = readTimeMinutes,
             reactionsCount = reactionsCount,
+            commentCount = commentCount,
             viewerHasLiked = viewerHasLiked,
             isPublished = isPublished,
+            pushEnabled = pushEnabled,
+            previewPopupEnabled = previewPopupEnabled,
         )
     }
 
@@ -80,8 +86,11 @@ data class DailyPostEntity(
                 publishedAtEpochMillis = article.publishedAtEpochMillis,
                 readTimeMinutes = article.readTimeMinutes,
                 reactionsCount = article.reactionsCount,
+                commentCount = article.commentCount,
                 viewerHasLiked = article.viewerHasLiked,
                 isPublished = article.isPublished,
+                pushEnabled = article.pushEnabled,
+                previewPopupEnabled = article.previewPopupEnabled,
             )
         }
     }
@@ -106,6 +115,12 @@ interface DailyPostDao {
 
     @Query("DELETE FROM daily_post_articles WHERE id = :id")
     suspend fun deleteArticle(id: String)
+
+    @Query("DELETE FROM daily_post_articles WHERE isPublished = 1 AND id NOT IN (:ids)")
+    suspend fun deletePublishedNotIn(ids: List<String>)
+
+    @Query("DELETE FROM daily_post_articles WHERE isPublished = 1")
+    suspend fun deleteAllPublished()
 
     @Query("UPDATE daily_post_articles SET reactionsCount = reactionsCount + CASE WHEN viewerHasLiked = 1 THEN -1 ELSE 1 END, viewerHasLiked = CASE WHEN viewerHasLiked = 1 THEN 0 ELSE 1 END WHERE id = :id")
     suspend fun toggleLike(id: String)

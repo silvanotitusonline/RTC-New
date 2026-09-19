@@ -60,8 +60,31 @@ data class DailyPostArticle(
     val publishedAtEpochMillis: Long = System.currentTimeMillis(),
     val readTimeMinutes: Int = 3,
     val reactionsCount: Int = 0,
+    val commentCount: Int = 0,
     val viewerHasLiked: Boolean = false,
     val isPublished: Boolean = true,
+    val pushEnabled: Boolean = false,
+    val previewPopupEnabled: Boolean = true,
+)
+
+@Serializable
+data class DailyPostComment(
+    val id: String,
+    val postId: String,
+    val authorId: String,
+    val authorName: String = "Community member",
+    val body: String,
+    val parentId: String? = null,
+    val depth: Int = 0,
+    val state: String = "VISIBLE",
+    val moderationReason: String? = null,
+    val createdAtEpochMillis: Long = System.currentTimeMillis(),
+    val updatedAtEpochMillis: Long = createdAtEpochMillis,
+)
+
+data class DailyPostCommentPage(
+    val comments: List<DailyPostComment>,
+    val hasMore: Boolean,
 )
 
 fun calculateEstimatedReadingTimeMinutes(

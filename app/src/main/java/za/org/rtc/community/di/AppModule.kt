@@ -30,6 +30,8 @@ import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_5_6
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_6_7
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_7_8
 import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_8_9
+import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_9_10
+import za.org.rtc.community.data.local.RTC_DATABASE_MIGRATION_10_11
 import za.org.rtc.community.feature.dailypost.data.DailyPostDao
 import za.org.rtc.community.feature.dailypost.data.DailyPostRepository
 import za.org.rtc.community.feature.dailypost.data.RoomDailyPostRepository
@@ -77,6 +79,8 @@ object AppModule {
                 RTC_DATABASE_MIGRATION_6_7,
                 RTC_DATABASE_MIGRATION_7_8,
                 RTC_DATABASE_MIGRATION_8_9,
+                RTC_DATABASE_MIGRATION_9_10,
+                RTC_DATABASE_MIGRATION_10_11,
             )
             .fallbackToDestructiveMigration(true)
             .build()

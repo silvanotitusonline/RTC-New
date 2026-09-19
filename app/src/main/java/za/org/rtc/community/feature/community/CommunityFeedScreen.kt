@@ -46,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -101,12 +102,15 @@ internal fun CommunityScreen(
 ) {
     val feedState by communityViewModel.feedState.collectAsStateWithLifecycle()
     val pendingLikeIds by communityViewModel.pendingLikeIds.collectAsStateWithLifecycle()
+    val pendingPostIds by communityViewModel.pendingPostIds.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf("Latest") }
     var searchQueryInput by rememberSaveable { mutableStateOf("") }
     var composerOpen by rememberSaveable { mutableStateOf(false) }
     var guidelinesOpen by rememberSaveable { mutableStateOf(false) }
     var resumeComposerAfterGuidelines by rememberSaveable { mutableStateOf(false) }
     var initialComposerHandled by rememberSaveable { mutableStateOf(false) }
+    var editingPost by remember { mutableStateOf<CommunityPost?>(null) }
+    var deletingPost by remember { mutableStateOf<CommunityPost?>(null) }
     val isPostWorking = communityActionUi.action == CommunityAction.POST && communityActionUi.isWorking
 
     fun requestPost() {
@@ -372,12 +376,9 @@ internal fun CommunityScreen(
                 if (index >= displayPosts.lastIndex - 2 && feedState.hasMore && !feedState.appendLoading && feedState.appendError == null) {
                     LaunchedEffect(post.id, feedState.nextCursor) { communityViewModel.loadNextPage() }
                 }
-                val isPostOwner = session != null && (
-                    post.authorId == session.id ||
-                    (session.displayName.isNotBlank() && post.author == session.displayName) ||
-                    (session.handle.isNotBlank() && post.handle == session.handle) ||
-                    session.role in setOf(UserRole.SYSTEM_ADMIN, UserRole.MODERATOR)
-                )
+                // The server is authoritative, and the UI must not infer ownership
+                // from mutable display names, handles, or staff roles.
+                val isPostOwner = session != null && post.authorId == session.id
                 val isUnread = post.id in feedState.unreadPostIds
                 CommunityPostCard(
                     post = post,
@@ -391,7 +392,9 @@ internal fun CommunityScreen(
                     onRepost = communityViewModel::repostPost,
                     onBookmark = communityViewModel::toggleBookmark,
                     onSharePost = onSharePost,
-                    onDeletePost = { postId -> communityViewModel.deletePost(postId) },
+                    onEditPost = { editingPost = it },
+                    onDeletePost = { postId -> deletingPost = post },
+                    canEdit = isPostOwner && !post.isLocked && isPostWithinEditWindow(post.createdAt),
                     canDelete = isPostOwner,
                     onRefreshMediaUrl = communityViewModel::refreshMediaUrl,
                     isLikePending = post.id in pendingLikeIds,
@@ -439,7 +442,35 @@ internal fun CommunityScreen(
             onAccept = onAcceptGuidelines,
         )
     }
+    editingPost?.let { post ->
+        CommunityPostEditorDialog(
+            post = post,
+            saving = post.id in pendingPostIds,
+            onDismiss = { if (post.id !in pendingPostIds) editingPost = null },
+            onSave = { body ->
+                communityViewModel.updatePost(post, body) { editingPost = null }
+            },
+        )
+    }
+    deletingPost?.let { post ->
+        AlertDialog(
+            onDismissRequest = { if (post.id !in pendingPostIds) deletingPost = null },
+            title = { Text("Delete post?") },
+            text = { Text("This permanently removes the post, its comments, reactions, media records, and feed entries. This cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = { communityViewModel.deletePost(post.id) { deletingPost = null } },
+                    enabled = post.id !in pendingPostIds,
+                ) { Text(if (post.id in pendingPostIds) "Deleting…" else "Delete permanently") }
+            },
+            dismissButton = { TextButton(onClick = { deletingPost = null }, enabled = post.id !in pendingPostIds) { Text("Cancel") } },
+        )
+    }
 }
+
+internal fun isPostWithinEditWindow(createdAt: String): Boolean = runCatching {
+    java.time.Instant.parse(createdAt).isAfter(java.time.Instant.now().minusSeconds(60 * 60))
+}.getOrDefault(false)
 
 @Composable
 private fun ComposerCard(onClick: () -> Unit) {

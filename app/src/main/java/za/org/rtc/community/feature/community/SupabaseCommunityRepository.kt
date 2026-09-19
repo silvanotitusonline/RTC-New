@@ -238,26 +238,36 @@ class SupabaseCommunityRepository @Inject constructor(
         Unit
     }
 
+    override suspend fun updatePost(postId: String, body: String, category: String): Result<Unit> = runCatching {
+        val cleanBody = body.trim()
+        require(cleanBody.length in 1..280) { "A post must contain 1 to 280 characters." }
+        supabase.postgrest.rpc(
+            function = "edit_community_post",
+            parameters = buildJsonObject {
+                put("p_post_id", postId)
+                put("p_body", cleanBody)
+                put("p_category_slug", category)
+            },
+        )
+        val cached = cachedPostDao.getPostById(postId)
+        if (cached != null) {
+            cachedPostDao.insertPost(cached.copy(content = cleanBody))
+        }
+        Unit
+    }
+
     override suspend fun deletePost(postId: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc(
+            function = "delete_community_post",
+            parameters = buildJsonObject { put("p_post_id", postId) },
+        )
+        // The RPC is the source of truth. Remove all local projections only
+        // after it succeeds so a failed request cannot hide a live post.
         cachedPostDao.deletePost(postId)
         cachedCommentDao.deleteCommentsForPost(postId)
         syncEngine.triggerSystemWideUpdate(
             za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.PostDeleted(postId)
         )
-        runCatching {
-            supabase.from("community_posts").delete {
-                filter { eq("id", postId) }
-            }
-        }.onFailure {
-            supabase.from("community_posts").update(
-                buildJsonObject {
-                    put("state", "DELETED_BY_AUTHOR")
-                    put("deleted_at", Instant.now(clock).toString())
-                }
-            ) {
-                filter { eq("id", postId) }
-            }
-        }
         Unit
     }
 

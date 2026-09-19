@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Share
@@ -34,7 +35,9 @@ fun CommunityPostCard(
     onRepost: (String) -> Unit = {},
     onBookmark: (String) -> Unit = {},
     onSharePost: (CommunityPost) -> Unit = {},
+    onEditPost: ((CommunityPost) -> Unit)? = null,
     onDeletePost: ((String) -> Unit)? = null,
+    canEdit: Boolean = false,
     canDelete: Boolean = false,
     onRefreshMediaUrl: (suspend (String) -> String?)? = null,
     isLikePending: Boolean = false,
@@ -53,9 +56,18 @@ fun CommunityPostCard(
         timestampLabel = timestampLabel,
         isUnread = isUnread,
         headerTrailing = {
-            if (canDelete && onDeletePost != null) {
-                IconButton(onClick = { onDeletePost(post.id) }) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete post")
+            if ((canEdit && onEditPost != null) || (canDelete && onDeletePost != null)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (canEdit && onEditPost != null) {
+                        IconButton(onClick = { onEditPost(post) }) {
+                            Icon(Icons.Filled.Edit, contentDescription = "Edit post")
+                        }
+                    }
+                    if (canDelete && onDeletePost != null) {
+                        IconButton(onClick = { onDeletePost(post.id) }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Delete post")
+                        }
+                    }
                 }
             }
         },

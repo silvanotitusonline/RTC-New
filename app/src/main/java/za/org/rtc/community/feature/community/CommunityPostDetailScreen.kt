@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
@@ -116,6 +118,7 @@ internal fun CommunityPostDetailScreen(
 ) {
     val detailState by communityViewModel.detailState.collectAsStateWithLifecycle()
     val pendingLikeIds by communityViewModel.pendingLikeIds.collectAsStateWithLifecycle()
+    val pendingPostIds by communityViewModel.pendingPostIds.collectAsStateWithLifecycle()
     val activePost = detailState.post
     val activeComments = detailState.comments
     var newComment by rememberSaveable(postId) { mutableStateOf(commentDraft?.body.orEmpty()) }
@@ -131,6 +134,8 @@ internal fun CommunityPostDetailScreen(
     val standardEmojis = listOf("❤️", "👍", "💡", "🔥", "🙏", "🙌")
     var moderatingCommentId by rememberSaveable(postId) { mutableStateOf<String?>(null) }
     var moderationReason by rememberSaveable(postId) { mutableStateOf("") }
+    var editPostOpen by rememberSaveable(postId) { mutableStateOf(false) }
+    var deletePostOpen by rememberSaveable(postId) { mutableStateOf(false) }
     val canModerateComments = session.role in setOf(
         UserRole.CONTENT_EDITOR,
         UserRole.MODERATOR,
@@ -245,6 +250,18 @@ internal fun CommunityPostDetailScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(activePost.author, fontWeight = FontWeight.Bold)
                             Text("${activePost.handle} · ${relativeTimeLabel(activePost.createdAt)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        val canEditPost = activePost.authorId == session.id &&
+                            !activePost.isLocked && isPostWithinEditWindow(activePost.createdAt)
+                        if (canEditPost) {
+                            IconButton(onClick = { editPostOpen = true }) {
+                                Icon(Icons.Filled.Edit, contentDescription = "Edit post")
+                            }
+                        }
+                        if (activePost.authorId == session.id) {
+                            IconButton(onClick = { deletePostOpen = true }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Delete post")
+                            }
                         }
                         if (activePost.isOfficial) Text("Staff", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                     }
@@ -650,6 +667,28 @@ internal fun CommunityPostDetailScreen(
             onConfirm = { reason ->
                 communityViewModel.moderateComment(activePost.id, commentId, reason)
             },
+        )
+    }
+    if (editPostOpen) {
+        CommunityPostEditorDialog(
+            post = activePost,
+            saving = activePost.id in pendingPostIds,
+            onDismiss = { if (activePost.id !in pendingPostIds) editPostOpen = false },
+            onSave = { body -> communityViewModel.updatePost(activePost, body) { editPostOpen = false } },
+        )
+    }
+    if (deletePostOpen) {
+        AlertDialog(
+            onDismissRequest = { if (activePost.id !in pendingPostIds) deletePostOpen = false },
+            title = { Text("Delete post?") },
+            text = { Text("This permanently removes the post, its comments, reactions, media records, and feed entries. This cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = { communityViewModel.deletePost(activePost.id) { deletePostOpen = false } },
+                    enabled = activePost.id !in pendingPostIds,
+                ) { Text(if (activePost.id in pendingPostIds) "Deleting…" else "Delete permanently") }
+            },
+            dismissButton = { TextButton(onClick = { deletePostOpen = false }, enabled = activePost.id !in pendingPostIds) { Text("Cancel") } },
         )
     }
 }

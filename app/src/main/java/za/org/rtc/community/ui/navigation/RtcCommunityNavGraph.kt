@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -108,6 +109,10 @@ internal fun RtcCommunityNavGraph(
     val communityActionUi by viewModel.communityActionUi.collectAsStateWithLifecycle()
     val dailyPostViewModel: DailyPostViewModel = hiltViewModel()
     val dailyPosts by dailyPostViewModel.publishedArticles.collectAsStateWithLifecycle()
+    val dailyPostComments by dailyPostViewModel.comments.collectAsStateWithLifecycle()
+    val dailyPostCommentsLoading by dailyPostViewModel.commentsLoading.collectAsStateWithLifecycle()
+    val dailyPostCommentPendingId by dailyPostViewModel.commentPendingId.collectAsStateWithLifecycle()
+    val dailyPostCommentsHasMore by dailyPostViewModel.commentsHasMore.collectAsStateWithLifecycle()
 
     val reducedMotion = LocalReducedMotion.current
 
@@ -617,6 +622,10 @@ internal fun RtcCommunityNavGraph(
             val articleId = entry.arguments?.getString("articleId").orEmpty()
             androidx.compose.runtime.LaunchedEffect(articleId) {
                 dailyPostViewModel.loadArticleById(articleId)
+                while (true) {
+                    delay(15_000)
+                    dailyPostViewModel.refreshComments(articleId)
+                }
             }
             val selectedArticle by dailyPostViewModel.selectedArticle.collectAsStateWithLifecycle()
             DailyPostDetailScreen(
@@ -631,7 +640,19 @@ internal fun RtcCommunityNavGraph(
                     }
                     val shareIntent = android.content.Intent.createChooser(sendIntent, "Share Daily Post")
                     context.startActivity(shareIntent)
-                }
+                },
+                comments = dailyPostComments,
+                commentsLoading = dailyPostCommentsLoading,
+                commentsHasMore = dailyPostCommentsHasMore,
+                pendingCommentId = dailyPostCommentPendingId,
+                currentUserId = session.id,
+                canModerateComments = session.role == UserRole.MODERATOR || session.role == UserRole.SYSTEM_ADMIN,
+                onRefreshComments = { dailyPostViewModel.refreshComments(articleId) },
+                onLoadOlderComments = { dailyPostViewModel.loadOlderComments(articleId) },
+                onCreateComment = { body, parentId -> dailyPostViewModel.submitComment(articleId, body, parentId) },
+                onUpdateComment = { commentId, body -> dailyPostViewModel.updateComment(articleId, commentId, body) },
+                onDeleteComment = { commentId -> dailyPostViewModel.deleteComment(articleId, commentId) },
+                onModerateComment = { commentId, reason -> dailyPostViewModel.moderateComment(articleId, commentId, reason) },
             )
         }
     }

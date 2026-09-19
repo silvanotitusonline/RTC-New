@@ -293,6 +293,8 @@ class RtcRepository @Inject constructor(
     val systemHealth: StateFlow<List<SystemHealthStatus>> = _systemHealth.asStateFlow()
     private val _administrativeActivity = MutableStateFlow<List<AdministrativeActivityEvent>>(emptyList())
     val administrativeActivity: StateFlow<List<AdministrativeActivityEvent>> = _administrativeActivity.asStateFlow()
+    private val _moderationActivity = MutableStateFlow<List<AdministrativeActivityEvent>>(emptyList())
+    val moderationActivity: StateFlow<List<AdministrativeActivityEvent>> = _moderationActivity.asStateFlow()
     private val _moderationQueue = MutableStateFlow<List<ModerationQueueItem>>(emptyList())
     val moderationQueue: StateFlow<List<ModerationQueueItem>> = _moderationQueue.asStateFlow()
     private val _moderationAppeals = MutableStateFlow<List<ModerationAppeal>>(emptyList())
@@ -568,6 +570,7 @@ class RtcRepository @Inject constructor(
         _operationalIncidents.value = emptyList()
         _systemHealth.value = emptyList()
         _administrativeActivity.value = emptyList()
+        _moderationActivity.value = emptyList()
         _moderationQueue.value = emptyList()
         _moderationAppeals.value = emptyList()
         _editorialNotices.value = emptyList()
@@ -1096,6 +1099,9 @@ class RtcRepository @Inject constructor(
             emptyList()
         }
         _moderationAppeals.value = productionUxRepository.moderationAppeals().getOrElse {
+            emptyList()
+        }
+        _moderationActivity.value = productionUxRepository.moderationActivity().getOrElse {
             emptyList()
         }
 

@@ -31,6 +31,9 @@ class CommunityViewModel @Inject constructor(
     private val _pendingLikeIds = MutableStateFlow<Set<String>>(emptySet())
     val pendingLikeIds = _pendingLikeIds.asStateFlow()
 
+    private val _pendingPostIds = MutableStateFlow<Set<String>>(emptySet())
+    val pendingPostIds = _pendingPostIds.asStateFlow()
+
     private var refreshGeneration = 0L
     private var detailGeneration = 0L
 
@@ -217,7 +220,42 @@ class CommunityViewModel @Inject constructor(
         }
     }
 
+    fun updatePost(post: CommunityPost, body: String, onUpdated: () -> Unit = {}) {
+        if (post.id in _pendingPostIds.value) return
+        val cleanBody = body.trim()
+        if (cleanBody.isBlank() || cleanBody.length > 280) return
+        _pendingPostIds.value = _pendingPostIds.value + post.id
+        updatePostEverywhere(post.id) { current ->
+            current.copy(content = cleanBody, editedAt = Instant.now().toString())
+        }
+        _feedState.value = _feedState.value.copy(mutationError = null)
+        _detailState.value = _detailState.value.copy(message = null, isSuccess = false)
+        viewModelScope.launch {
+            repository.updatePost(post.id, cleanBody, post.category)
+                .onSuccess {
+                    refreshFeed(initial = false)
+                    if (_detailState.value.post?.id == post.id) loadPostDetail(post.id)
+                    onUpdated()
+                }
+                .onFailure {
+                    updatePostEverywhere(post.id) { post }
+                    _feedState.value = _feedState.value.copy(
+                        mutationError = "Post could not be updated. It may be outside the edit window."
+                    )
+                    if (_detailState.value.post?.id == post.id) {
+                        _detailState.value = _detailState.value.copy(
+                            message = "Post could not be updated. It may be outside the edit window.",
+                            isSuccess = false,
+                        )
+                    }
+                }
+            _pendingPostIds.value = _pendingPostIds.value - post.id
+        }
+    }
+
     fun deletePost(postId: String, onDeleted: () -> Unit = {}) {
+        if (postId in _pendingPostIds.value) return
+        _pendingPostIds.value = _pendingPostIds.value + postId
         val originalItems = _feedState.value.items
         val originalIndex = originalItems.indexOfFirst { it.id == postId }
         val originalPost = if (originalIndex >= 0) originalItems[originalIndex] else null
@@ -258,6 +296,7 @@ class CommunityViewModel @Inject constructor(
                         )
                     }
                 }
+            _pendingPostIds.value = _pendingPostIds.value - postId
         }
     }
 

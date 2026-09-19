@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import za.org.rtc.community.feature.dailypost.domain.DailyPostArticle
+import za.org.rtc.community.feature.dailypost.domain.DailyPostComment
 import za.org.rtc.community.feature.dailypost.domain.DailyPostTemplateStyle
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -65,6 +66,18 @@ fun DailyPostDetailScreen(
     onBack: () -> Unit,
     onToggleLike: (String) -> Unit,
     onShare: (DailyPostArticle) -> Unit,
+    comments: List<DailyPostComment> = emptyList(),
+    commentsLoading: Boolean = false,
+    commentsHasMore: Boolean = false,
+    pendingCommentId: String? = null,
+    currentUserId: String? = null,
+    canModerateComments: Boolean = false,
+    onRefreshComments: () -> Unit = {},
+    onLoadOlderComments: () -> Unit = {},
+    onCreateComment: (String, String?) -> Unit = { _, _ -> },
+    onUpdateComment: (String, String) -> Unit = { _, _ -> },
+    onDeleteComment: (String) -> Unit = {},
+    onModerateComment: (String, String) -> Unit = { _, _ -> },
 ) {
     if (article == null) {
         Scaffold(
@@ -427,6 +440,25 @@ fun DailyPostDetailScreen(
                         Text("Share")
                     }
                 }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                DailyPostCommentsSection(
+                    articleId = article.id,
+                    comments = comments,
+                    totalCount = article.commentCount,
+                    loading = commentsLoading,
+                    hasMore = commentsHasMore,
+                    pendingCommentId = pendingCommentId,
+                    currentUserId = currentUserId,
+                    canModerate = canModerateComments,
+                    onRefresh = onRefreshComments,
+                    onLoadOlder = onLoadOlderComments,
+                    onCreate = onCreateComment,
+                    onUpdate = onUpdateComment,
+                    onDelete = onDeleteComment,
+                    onModerate = onModerateComment,
+                )
             }
         }
     }

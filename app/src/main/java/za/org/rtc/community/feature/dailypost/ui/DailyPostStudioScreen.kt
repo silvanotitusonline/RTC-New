@@ -60,6 +60,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -123,6 +124,8 @@ fun DailyPostStudioScreen(
     var authorRole by remember { mutableStateOf(adminRoleName) }
     var quoteText by remember { mutableStateOf("") }
     var quoteAuthor by remember { mutableStateOf("") }
+    var pushEnabled by remember { mutableStateOf(false) }
+    var previewPopupEnabled by remember { mutableStateOf(true) }
     val highlights = remember { mutableStateListOf<String>() }
     var newHighlightInput by remember { mutableStateOf("") }
     // Dynamic calculation of estimated reading time
@@ -145,6 +148,8 @@ fun DailyPostStudioScreen(
         authorRole = article.authorRole
         quoteText = article.quoteText.orEmpty()
         quoteAuthor = article.quoteAuthor.orEmpty()
+        pushEnabled = article.pushEnabled
+        previewPopupEnabled = article.previewPopupEnabled
         highlights.clear()
         highlights.addAll(article.keyHighlights)
         selectedStudioTab = 0
@@ -163,6 +168,8 @@ fun DailyPostStudioScreen(
         authorRole = adminRoleName
         quoteText = ""
         quoteAuthor = ""
+        pushEnabled = false
+        previewPopupEnabled = true
         highlights.clear()
         editorMode = 0
     }
@@ -191,6 +198,8 @@ fun DailyPostStudioScreen(
             reactionsCount = 0,
             viewerHasLiked = false,
             isPublished = true,
+            pushEnabled = pushEnabled,
+            previewPopupEnabled = previewPopupEnabled,
         )
     }
 
@@ -546,6 +555,46 @@ fun DailyPostStudioScreen(
                             )
                         }
 
+                        Text("6. RESIDENT NOTIFICATION", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Black))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Push notification", fontWeight = FontWeight.Bold)
+                                        Text("Queue the official headline and summary for resident delivery after publication.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Switch(checked = pushEnabled, onCheckedChange = { pushEnabled = it })
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("In-app preview popup", fontWeight = FontWeight.Bold)
+                                        Text("Show the new article preview in the resident feed when available.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Switch(checked = previewPopupEnabled, onCheckedChange = { previewPopupEnabled = it })
+                                }
+                                if (pushEnabled) {
+                                    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surface) {
+                                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text("NOTIFICATION PREVIEW", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black), color = MaterialTheme.colorScheme.primary)
+                                            Text(if (title.isBlank()) "Article headline" else title, fontWeight = FontWeight.Bold, maxLines = 2)
+                                            Text((if (subtitle.isBlank()) content else subtitle).ifBlank { "Add a summary to preview the notification." }, style = MaterialTheme.typography.bodySmall, maxLines = 3, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // ACTION BUTTONS
@@ -612,9 +661,13 @@ fun DailyPostStudioScreen(
                                 }
                                 Button(
                                     onClick = {
-                                        viewModel.publishArticle(currentArticlePreview) {
-                                            onOpenPublishedPost(currentArticlePreview)
-                                            resetForm()
+                                        if (title.isBlank() || content.isBlank()) {
+                                            scope.launch { snackbarHostState.showSnackbar("Add a headline and article content before publishing.") }
+                                        } else {
+                                            viewModel.publishArticle(currentArticlePreview) {
+                                                onOpenPublishedPost(currentArticlePreview)
+                                                resetForm()
+                                            }
                                         }
                                     },
                                     shape = RoundedCornerShape(10.dp)

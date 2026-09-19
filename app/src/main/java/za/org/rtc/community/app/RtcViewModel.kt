@@ -82,6 +82,7 @@ class RtcViewModel @Inject constructor(
     val operationalIncidents = repository.operationalIncidents
     val systemHealth = repository.systemHealth
     val administrativeActivity = repository.administrativeActivity
+    val moderationActivity = repository.moderationActivity
     val moderationQueue = repository.moderationQueue
     val moderationAppeals = repository.moderationAppeals
     val editorialNotices = repository.editorialNotices

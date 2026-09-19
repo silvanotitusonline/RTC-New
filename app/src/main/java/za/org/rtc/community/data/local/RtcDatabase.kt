@@ -472,6 +472,19 @@ val RTC_DATABASE_MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+val RTC_DATABASE_MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE daily_post_articles ADD COLUMN pushEnabled INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE daily_post_articles ADD COLUMN previewPopupEnabled INTEGER NOT NULL DEFAULT 1")
+    }
+}
+
+val RTC_DATABASE_MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE daily_post_articles ADD COLUMN commentCount INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [
         LocalDraftEntity::class,
@@ -484,7 +497,7 @@ val RTC_DATABASE_MIGRATION_8_9 = object : Migration(8, 9) {
         CachedUserProfileEntity::class,
         za.org.rtc.community.feature.dailypost.data.DailyPostEntity::class,
     ],
-    version = 9,
+    version = 11,
     exportSchema = false,
 )
 abstract class RtcDatabase : RoomDatabase() {

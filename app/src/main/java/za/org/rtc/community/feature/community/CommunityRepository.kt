@@ -21,6 +21,8 @@ interface CommunityRepository {
 
     suspend fun deleteComment(commentId: String): Result<Unit>
 
+    suspend fun updatePost(postId: String, body: String, category: String): Result<Unit>
+
     suspend fun deletePost(postId: String): Result<Unit>
 
     suspend fun moderateComment(commentId: String, reason: String): Result<Unit>

@@ -24,8 +24,10 @@ import za.org.rtc.community.MainActivity
 import za.org.rtc.community.R
 import za.org.rtc.community.feature.dailypost.data.DailyPostRepository
 import za.org.rtc.community.feature.dailypost.domain.DailyPostArticle
+import za.org.rtc.community.feature.dailypost.domain.DailyPostComment
 import za.org.rtc.community.feature.dailypost.domain.calculateEstimatedReadingTimeMinutes
 import za.org.rtc.community.notifications.RTC_COMMUNITY_UPDATES_CHANNEL
+import java.time.Instant
 import javax.inject.Inject
 
 @HiltViewModel
@@ -57,6 +59,29 @@ class DailyPostViewModel @Inject constructor(
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
+    private val _comments = MutableStateFlow<List<DailyPostComment>>(emptyList())
+    val comments: StateFlow<List<DailyPostComment>> = _comments.asStateFlow()
+
+    private val _commentsLoading = MutableStateFlow(false)
+    val commentsLoading: StateFlow<Boolean> = _commentsLoading.asStateFlow()
+
+    private val _commentPendingId = MutableStateFlow<String?>(null)
+    val commentPendingId: StateFlow<String?> = _commentPendingId.asStateFlow()
+
+    private val _commentsHasMore = MutableStateFlow(false)
+    val commentsHasMore: StateFlow<Boolean> = _commentsHasMore.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            runCatching {
+                repository.refreshPublishedArticles()
+                repository.refreshAllArticles()
+            }.onFailure {
+                _statusMessage.value = "Daily Posts are offline. Showing the last synchronized content."
+            }
+        }
+    }
+
     fun selectArticle(article: DailyPostArticle?) {
         _selectedArticle.value = article
     }
@@ -64,47 +89,165 @@ class DailyPostViewModel @Inject constructor(
     fun loadArticleById(id: String) {
         viewModelScope.launch {
             _selectedArticle.value = repository.getArticle(id)
+            loadCommentsInternal(id, reset = true)
         }
+    }
+
+    fun refreshComments(articleId: String) {
+        viewModelScope.launch { loadCommentsInternal(articleId, showLoading = false, reset = true) }
+    }
+
+    fun loadOlderComments(articleId: String) {
+        if (!_commentsHasMore.value || _commentPendingId.value != null) return
+        viewModelScope.launch {
+            val last = _comments.value.lastOrNull() ?: return@launch
+            loadCommentsInternal(
+                articleId = articleId,
+                showLoading = false,
+                reset = false,
+                afterCreatedAt = Instant.ofEpochMilli(last.createdAtEpochMillis).toString(),
+                afterId = last.id,
+            )
+        }
+    }
+
+    fun submitComment(articleId: String, body: String, parentId: String? = null, onSuccess: () -> Unit = {}) {
+        val cleanBody = body.trim()
+        if (cleanBody.isBlank() || cleanBody.length > 2000) {
+            _statusMessage.value = "Comments must contain between 1 and 2,000 characters."
+            return
+        }
+        viewModelScope.launch {
+            _commentPendingId.value = "new"
+            runCatching {
+                repository.createComment(articleId, cleanBody, parentId)
+                loadCommentsInternal(articleId, showLoading = false, reset = true)
+                _statusMessage.value = "Comment posted."
+                onSuccess()
+            }.onFailure { error ->
+                _statusMessage.value = error.message?.takeIf { it.isNotBlank() }
+                    ?: "The comment could not be posted. Nothing was changed."
+            }
+            _commentPendingId.value = null
+        }
+    }
+
+    fun updateComment(articleId: String, commentId: String, body: String, onSuccess: () -> Unit = {}) {
+        val cleanBody = body.trim()
+        if (cleanBody.isBlank() || cleanBody.length > 2000) {
+            _statusMessage.value = "Comments must contain between 1 and 2,000 characters."
+            return
+        }
+        viewModelScope.launch {
+            _commentPendingId.value = commentId
+            runCatching {
+                repository.updateComment(commentId, cleanBody)
+                loadCommentsInternal(articleId, showLoading = false, reset = true)
+                _statusMessage.value = "Comment updated."
+                onSuccess()
+            }.onFailure { error ->
+                _statusMessage.value = error.message?.takeIf { it.isNotBlank() }
+                    ?: "The comment could not be updated."
+            }
+            _commentPendingId.value = null
+        }
+    }
+
+    fun deleteComment(articleId: String, commentId: String) {
+        viewModelScope.launch {
+            _commentPendingId.value = commentId
+            runCatching {
+                repository.deleteComment(commentId)
+                loadCommentsInternal(articleId, showLoading = false, reset = true)
+                _statusMessage.value = "Comment removed."
+            }.onFailure { error ->
+                _statusMessage.value = error.message?.takeIf { it.isNotBlank() }
+                    ?: "The comment could not be removed."
+            }
+            _commentPendingId.value = null
+        }
+    }
+
+    fun moderateComment(articleId: String, commentId: String, reason: String) {
+        val cleanReason = reason.trim()
+        if (cleanReason.length < 3) {
+            _statusMessage.value = "A moderation reason is required."
+            return
+        }
+        viewModelScope.launch {
+            _commentPendingId.value = commentId
+            runCatching {
+                repository.moderateComment(commentId, cleanReason)
+                loadCommentsInternal(articleId, showLoading = false, reset = true)
+                _statusMessage.value = "Comment hidden and recorded for moderation audit."
+            }.onFailure { error ->
+                _statusMessage.value = error.message?.takeIf { it.isNotBlank() }
+                    ?: "The comment could not be moderated."
+            }
+            _commentPendingId.value = null
+        }
+    }
+
+    private suspend fun loadCommentsInternal(
+        articleId: String,
+        showLoading: Boolean = true,
+        reset: Boolean,
+        afterCreatedAt: String? = null,
+        afterId: String? = null,
+    ) {
+        if (showLoading) _commentsLoading.value = true
+        runCatching { repository.loadComments(articleId, afterCreatedAt, afterId, limit = 100) }
+            .onSuccess { page ->
+                _comments.value = if (reset) page.comments else (_comments.value + page.comments).distinctBy { it.id }
+                _commentsHasMore.value = page.hasMore
+            }
+            .onFailure { error ->
+                _statusMessage.value = error.message?.takeIf { it.isNotBlank() }
+                    ?: "Comments could not be loaded. Pull to try again."
+            }
+        if (showLoading) _commentsLoading.value = false
     }
 
     fun publishArticle(article: DailyPostArticle, onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
-            val estimatedReadTime = calculateEstimatedReadingTimeMinutes(
-                title = article.title,
-                subtitle = article.subtitle,
-                content = article.content,
-                keyHighlights = article.keyHighlights
-            )
-            val articleToPublish = article.copy(
-                isPublished = true,
-                readTimeMinutes = estimatedReadTime,
-                publishedAtEpochMillis = System.currentTimeMillis()
-            )
-            repository.publishArticle(articleToPublish)
-            _statusMessage.value = "Article successfully published to Daily Post!"
-            syncEngine.triggerSystemWideUpdate(
-                za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.DailyPostPublished(articleToPublish.id, articleToPublish.title)
-            )
-            triggerPublishNotification(articleToPublish)
-            onSuccess()
+            runCatching {
+                val estimatedReadTime = calculateEstimatedReadingTimeMinutes(
+                    title = article.title,
+                    subtitle = article.subtitle,
+                    content = article.content,
+                    keyHighlights = article.keyHighlights
+                )
+                val articleToPublish = article.copy(readTimeMinutes = estimatedReadTime)
+                val published = repository.publishArticle(articleToPublish)
+                _statusMessage.value = "Article published and synchronized to the Daily Post feed."
+                syncEngine.triggerSystemWideUpdate(
+                    za.org.rtc.community.core.sync.SystemUpdateSyncEngine.SystemUpdateEvent.DailyPostPublished(published.id, published.title)
+                )
+                triggerPublishNotification(published)
+                onSuccess()
+            }.onFailure { error ->
+                _statusMessage.value = error.message?.takeIf { it.isNotBlank() }
+                    ?: "The article could not be published. Nothing was changed."
+            }
         }
     }
 
     fun saveDraft(article: DailyPostArticle, onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
-            val estimatedReadTime = calculateEstimatedReadingTimeMinutes(
-                title = article.title,
-                subtitle = article.subtitle,
-                content = article.content,
-                keyHighlights = article.keyHighlights
-            )
-            val draftToSave = article.copy(
-                isPublished = false,
-                readTimeMinutes = estimatedReadTime
-            )
-            repository.saveArticle(draftToSave)
-            _statusMessage.value = "Draft saved successfully."
-            onSuccess()
+            runCatching {
+                val estimatedReadTime = calculateEstimatedReadingTimeMinutes(
+                    title = article.title,
+                    subtitle = article.subtitle,
+                    content = article.content,
+                    keyHighlights = article.keyHighlights
+                )
+                repository.saveArticle(article.copy(isPublished = false, readTimeMinutes = estimatedReadTime))
+                _statusMessage.value = "Draft saved to the editorial workspace."
+                onSuccess()
+            }.onFailure { error ->
+                _statusMessage.value = error.message?.takeIf { it.isNotBlank() }
+                    ?: "The draft could not be saved. Nothing was changed."
+            }
         }
     }
 
@@ -141,11 +284,14 @@ class DailyPostViewModel @Inject constructor(
 
     fun deleteArticle(id: String) {
         viewModelScope.launch {
-            repository.deleteArticle(id)
-            if (_selectedArticle.value?.id == id) {
-                _selectedArticle.value = null
+            runCatching {
+                repository.deleteArticle(id)
+                if (_selectedArticle.value?.id == id) _selectedArticle.value = null
+                _statusMessage.value = "Article archived and removed from the resident feed."
+            }.onFailure { error ->
+                _statusMessage.value = error.message?.takeIf { it.isNotBlank() }
+                    ?: "The article could not be archived."
             }
-            _statusMessage.value = "Article deleted."
         }
     }
 

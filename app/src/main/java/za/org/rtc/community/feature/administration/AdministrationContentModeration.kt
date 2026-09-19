@@ -34,6 +34,7 @@ import za.org.rtc.community.app.RtcViewModel
 import za.org.rtc.community.core.LocalDraft
 import za.org.rtc.community.core.UserRole
 import za.org.rtc.community.feature.community.CommunityActionFeedback
+import za.org.rtc.community.feature.community.relativeTimeLabel
 import za.org.rtc.community.ui.components.PurposefulEmptyState
 import za.org.rtc.community.ui.components.RtcScreenScaffold
 import za.org.rtc.community.ui.components.RtcSectionHeader
@@ -139,6 +140,7 @@ internal fun ModerationDashboard(
     val session by viewModel.session.collectAsStateWithLifecycle()
     val reports by viewModel.moderationQueue.collectAsStateWithLifecycle()
     val appeals by viewModel.moderationAppeals.collectAsStateWithLifecycle()
+    val activity by viewModel.moderationActivity.collectAsStateWithLifecycle()
     val operationsUi by viewModel.operationsUi.collectAsStateWithLifecycle()
     var decisionReason by rememberSaveable { mutableStateOf("") }
     if (session.role !in setOf(UserRole.MODERATOR, UserRole.SYSTEM_ADMIN)) {
@@ -169,6 +171,18 @@ internal fun ModerationDashboard(
                 }
             }
         }
+        item { Text("Community moderation audit", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (activity.isEmpty()) item { Text("No post lifecycle or moderation activity is available in the retained audit window.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(activity, key = { it.id }) { event ->
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(RtcSpacing.small), verticalArrangement = Arrangement.spacedBy(RtcSpacing.relatedText)) {
+                    Text(event.eventType.replace('_', ' '), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text("${event.outcome ?: "RECORDED"} · ${event.actorEmail} · ${relativeTimeLabel(event.occurredAt)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    event.targetLabel?.let { Text("Target: $it", style = MaterialTheme.typography.bodySmall) }
+                    event.details?.let { Text("Reason: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+            }
+        }
     }
 }
 
@@ -181,7 +195,7 @@ private fun ModerationReportCard(report: za.org.rtc.community.core.ModerationQue
             Text("Reported by a Community member: ${report.reportDetail}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("${report.reportCount} independent report(s) · ${report.postState.replace('_', ' ').lowercase().replaceFirstChar(Char::titlecase)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) { OutlinedButton(enabled = !working && reasonReady, onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Dismiss") }; OutlinedButton(enabled = !working && reasonReady, onClick = onLock, modifier = Modifier.weight(1f)) { Text("Lock") } }
-            Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) { Button(enabled = !working && reasonReady, onClick = onHide, modifier = Modifier.weight(1f)) { Text("Hide") }; Button(enabled = !working && reasonReady, onClick = onRemove, modifier = Modifier.weight(1f)) { Text("Remove") } }
+            Row(horizontalArrangement = Arrangement.spacedBy(RtcSpacing.compact)) { Button(enabled = !working && reasonReady, onClick = onHide, modifier = Modifier.weight(1f)) { Text("Hide") }; Button(enabled = !working && reasonReady, onClick = onRemove, modifier = Modifier.weight(1f)) { Text("Remove permanently") } }
         }
     }
 }
